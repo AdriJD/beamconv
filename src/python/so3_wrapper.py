@@ -17,8 +17,8 @@ class CtypesEnum(enum.IntEnum):
     def from_param(cls, obj):
         return int(obj)
 
-
-libiw = np.ctypeslib.load_library("../c/libso3f", ".")
+libpath = '/mn/stornext/u3/adriaand/cmb_beams/src/c/'
+libiw = np.ctypeslib.load_library("libso3f", libpath)
 
 # **********************************************************************
 # Types
