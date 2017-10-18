@@ -1,6 +1,9 @@
 '''
 This script takes a asymmetric beam, Planck alms and calculates
-tods using healpy.
+tods using healpy. Compared to the so3 (or ssht) implementation,
+where a single complex inverse transform is needed per s, here
+we have to use two real transforms that both work on s <= 0 
+since healpy does not allow for complex signals directly.
 '''
 
 import matplotlib
@@ -10,56 +13,39 @@ import numpy as np
 import spider_analysis as sa
 import spider_analysis.map as sam
 import healpy as hp
-import time
 import os
 import sys
 sys.path.insert(0, './../../src/python')
 import so3_tools as so3t
 
-#plt.style.use('ggplot')
+plt.style.use('ggplot')
 matplotlib.rcParams['agg.path.chunksize'] = 10000
 
 ana_dir = '/mn/stornext/d8/ITA/spider/adri/analysis/20171013_asym_centroid/'
 
 fwhm = 300
-lmax = 100
-mmax = 100
+lmax = 200
+mmax = 200
 nside = 256
 
-az_off = 14
-el_off = 3
+# Specify detector offset
+az_off = 5
+el_off = 20
 
-# placeholder for quickbeam output
-blm_jon = np.zeros((lmax + 1, lmax + 1), dtype=np.complex128)
-blm_jon[:,0] = hp.sphtfunc.gauss_beam(np.radians(fwhm / 60.), lmax=lmax, pol=False)
-ell = np.arange(lmax+1, dtype=float)
-
-blm = np.zeros(hp.Alm.getsize(lmax, mmax=lmax), dtype=np.complex128)
-blmm2 = blm.copy()
-# convert to healpix format
-lm = hp.Alm.getlm(lmax)
-for idx in xrange(blm.size):
-    blm[idx] = blm_jon[lm[0][idx], lm[1][idx]]
-    try:
-        blmm2[idx] = blm_jon[lm[0][idx], lm[1][idx] - 2] # NOTE THAT THIS IS DANGEROUS WITH ASYM BEAMS
-    except IndexError:
-        pass
-
-# scalar E and B beam
+# Create Gaussian beam
+blm, blmm2 = so3t.gauss_blm(fwhm, lmax, pol=True)
 blmE = -blmm2 / 2.
 blmB = -1j * blmm2 / 2.
 
+# Get Planck alms
 alm = sam.get_planck_alm(100, lmax=2000, coord='C', pol=True)
-alm = (alm[0] * 1., alm[1] * 0., alm[2] * 0.)
-bell = sam.hfi_beam(100)
+alm = (alm[0] * 1., alm[1] * 1., alm[2] * 1.)
+
 # Deconvolve Planck beam
+bell = sam.hfi_beam(100)
 alm = sam.smoothalm(alm, beam=1/bell[0:2000+1], inplace=True)
 alm = so3t.trunc_alm(alm, lmax)
 fl_map = hp.alm2map(alm, nside)
-
-# Convert the E and B alms to spin \pm 2 alms.
-almp2 = -1 * (alm[1] + 1j * alm[2])
-almm2 = -1 * (alm[1] - 1j * alm[2])
 
 # smooth source map
 fl_map_sm = sam.smoothing(fl_map, fwhm=np.radians(fwhm / 60.))
@@ -72,6 +58,8 @@ unimap_opts = dict(default_latest=True, source_map=fl_map_sm,
                    polang='trpns_pol_angles_measured')
 M = sa.UnifileMap(**unimap_opts)
 sopts = M.hwp_partition(event='full_flight', index_mode='sync')
+
+# Only consider a small part of the first HWP event
 sopts[0].update({'end': 87344020, 'start': 87333300})
 sopts = [sopts[0]]
 
@@ -90,7 +78,6 @@ pa_ff = test_tod.copy()
 chan = 'x2r23c06'
 cal = M.get_cal(channels=chan)
 
-t2 = time.time()
 
 # Get pointing and spider_tools tod
 c_idx = 0
@@ -99,7 +86,7 @@ for sidx, sopt in enumerate(sopts):
     sopt_nohwp = sopt.copy()
     sopt_nohwp.pop('hwpidx', None)
     sopt_nohwp.pop('hwpang', None)
-
+                
     # Update centroids
     M.update_sim_offsets(sim_az=az_off, sim_el=el_off, channels=chan)
     M.update_hwp(hwpang=sopt['hwpang'],
@@ -110,21 +97,22 @@ for sidx, sopt in enumerate(sopts):
     M.default_sim_hwp_mueller()
     M.default_hwp_mueller() # not important
 
+    # Get spider_tools version of tod
     chunk_len = M.get_sample_count(spf=20, start=sopt['start'],
                                    end=sopt['end'], index_mode='sync')
     test_tod[c_idx:chunk_len+c_idx] = M.to_tod(chan,
                                                **sopt)[0] # (nchan, nsamp)
 
-    # Save pointing
+    # Save boresight pointing
     q_bore = M.depo['q_bore']
     ra_bore, dec_bore, pa_bore = M.quat2radecpa(q_bore)
-
-    hwpang = M.get_hwpang(channels=chan)
-    polang =  M.get_sim_polang(channels=chan)
 
     ra_ff[c_idx:chunk_len+c_idx] = ra_bore
     dec_ff[c_idx:chunk_len+c_idx] = dec_bore
     pa_ff[c_idx:chunk_len+c_idx] = pa_bore
+
+    hwpang = M.get_hwpang(channels=chan)
+    polang =  M.get_sim_polang(channels=chan)
 
     c_idx += chunk_len
 
@@ -139,15 +127,19 @@ else:
 
 # compensate for rotation along phi (angle)
 pa_off = angle # option 3
-print pa_off
+
 hp.rotate_alm([blm, blmE, blmB], pa_off, (radius), -angle, lmax=lmax,  mmax=lmax)
 
 def radec2ind_hp(ra, dec, nside):
+    '''
+    Turn qpoint ra and dec output into healpix
+    ring map indices. Note, modifies ra and dec
+    currently in-place.
+    '''
+
 
     # Get indices
     ra *= (np.pi / 180.)
-#    ra *= -1.
-#    ra += 2 * np.pi
     ra = np.mod(ra, 2 * np.pi, out=ra)
 
     # convert from latitude to colatitude
@@ -156,7 +148,7 @@ def radec2ind_hp(ra, dec, nside):
     dec += np.pi / 2.
     dec = np.mod(dec, np.pi, out=dec)
 
-    pix = hp.ang2pix(nside, dec, ra)
+    pix = hp.ang2pix(nside, dec, ra, nest=False)
 
     return pix
 
@@ -164,28 +156,25 @@ pix = radec2ind_hp(ra_ff, dec_ff, nside)
 sim_tod = np.zeros(ra_ff.size, dtype='float64')
 sim_tod2 = np.zeros(ra_ff.size, dtype=np.complex128)
 
-# first T
+# Unpolarized sky and beam first
 N = mmax + 1
-t1 = time.time()
-#func_r = np.zeros(L*(2*L-1), dtype='float64')
-func_r = np.zeros(12*nside**2, dtype='float64')
-func = np.zeros((2*N-1, 12*nside**2), dtype=np.complex128) # all spin spheres
+func_r = np.zeros(12*nside**2, dtype='float64') # real sphere for s=0 
+func = np.zeros((N, 12*nside**2), dtype=np.complex128) # s <=0 spin spheres
 
-start = 0 
-for n in xrange(N):
+start = 0
+for n in xrange(N): # note n is s
     end = lmax + 1 - n
     if n == 0: # scalar transform
-        flmn = hp.almxfl(alm[0], np.conj(blm[start:start+end]), inplace=False)
-        func_r = hp.alm2map(flmn, nside)
-        func[N+n-1,:] = func_r
 
-    else: # These are only n > 0 (since alm * conj(bls) is real)
+        flmn = hp.almxfl(alm[0], blm[start:start+end], inplace=False)
+        func_r = hp.alm2map(flmn, nside)
+        func[n,:] = func_r
+
+    else: # spin transforms
 
         bell = np.zeros(lmax+1, dtype=np.complex128)
-#        bell[n:] = np.conj(blm[start:start+end])
-        
         # spin n beam
-        bell[n:] =blm[start:start+end]
+        bell[n:] = blm[start:start+end]
 
         flmn = hp.almxfl(alm[0], bell, inplace=False)
         flmmn = hp.almxfl(alm[0], np.conj(bell), inplace=False)
@@ -193,54 +182,114 @@ for n in xrange(N):
         flmnp = - (flmn + flmmn) / 2.
         flmnm = 1j * (flmn - flmmn) / 2.
         spinmaps = hp.alm2map_spin([flmnp, flmnm], nside, n, lmax, lmax)
-        func[N+n-1, :] = spinmaps[0] + 1j * spinmaps[1]
-
+        func[n,:] = spinmaps[0] + 1j * spinmaps[1]
 
     start += end
 
-    
-
-#sim_tod += func_r[indices]
 for n in xrange(N):
-#    if n == 0:
-#        continue
-    if n == 0: #avoid expais since its 1
-        sim_tod += np.real(func[N+n-1][pix])
+
+    if n == 0: #avoid expais since its one anyway
+        sim_tod += np.real(func[n][pix])
 
     else:
-        exppais = np.exp(1j * n * np.radians(pa_ff))
-        sim_tod += np.real(func[N+n-1,:][pix] * exppais + \
-                               np.conj(func[N+n-1,:][pix] * exppais))
+#        exppais = np.exp(1j * n * np.radians(pa_ff))
+#        sim_tod += np.real(func[n,:][pix] * exppais + \
+#                               np.conj(func[n,:][pix] * exppais))
+
+        # Cleaner way to do the above
+        sim_tod += 2 * np.real(func[n,:][pix]) * np.cos(n * np.radians(pa_ff))
+        sim_tod -= 2 * np.imag(func[n,:][pix]) * np.sin(n * np.radians(pa_ff))
+
+
 
 # Pol
-start = 0 
+func = np.zeros((2*N-1, 12*nside**2), dtype=np.complex128) # all spin spheres
+# convert E and B beams to spin pm2
+blmp2 = -1 * (blmE + 1j * blmB)
+blmm2 = -1 * (blmE - 1j * blmB)
+
+almp2 = -1 * (alm[1] + 1j * alm[2])
+almm2 = -1 * (alm[1] - 1j * alm[2])
+
+start = 0
+#for nidx, n in enumerate(xrange(-N+1, N)):
 for n in xrange(N):
-    end = lmax + 1 - n
+    end = lmax + 1 - np.abs(n)
 
-    if n == 0: # scalar transform
-        flmn = hp.almxfl(alm[0], np.conj(blm[start:start+end]), inplace=False)
-        func_r = hp.alm2map(flmn, nside)
-        func[N+n-1,:] = func_r
+    bellp2 = np.zeros(lmax+1, dtype=np.complex128)
+    bellm2 = bellp2.copy()
 
-    else: # These are only n > 0 (since alm * conj(bls) is real)
+    bellp2[np.abs(n):] = blmp2[start:start+end]
+    bellm2[np.abs(n):] = blmm2[start:start+end]
 
-        bell = np.zeros(lmax+1, dtype=np.complex128)
-#        bell[n:] = np.conj(blm[start:start+end])
-        
-        # spin n beam
-        bell[n:] =blm[start:start+end]
+    s_flm_p = hp.almxfl(almp2, bellm2, inplace=False) + \
+        hp.almxfl(almm2, np.conj(bellm2), inplace=False)
+    s_flm_p /= -2.
 
-        flmn = hp.almxfl(alm[0], bell, inplace=False)
-        flmmn = hp.almxfl(alm[0], np.conj(bell), inplace=False)
 
-        flmnp = - (flmn + flmmn) / 2.
-        flmnm = 1j * (flmn - flmmn) / 2.
-        spinmaps = hp.alm2map_spin([flmnp, flmnm], nside, n, lmax, lmax)
-        func[N+n-1, :] = spinmaps[0] + 1j * spinmaps[1]
+    s_flm_m = hp.almxfl(almp2, bellm2, inplace=False) - \
+        hp.almxfl(almm2, np.conj(bellm2), inplace=False)
+    s_flm_m *= 1j / 2.
 
+    if n == 0: # see https://healpix.jpl.nasa.gov/html/subroutinesnode12.htm
+        spinmaps = [hp.alm2map(-s_flm_p, nside), 0] 
+
+    else:
+        spinmaps = hp.alm2map_spin([s_flm_p, s_flm_m], nside, n, lmax, lmax)
+
+    func[N+n-1,:] = spinmaps[0] + 1j * spinmaps[1] # positive spin
 
     start += end
 
+print func
+hwpang = sopt['hwpang'][M.fpu_index(chan, single=True)]
+
+
+for nidx, n in enumerate(xrange(-N+1, N)):
+    exppais = np.exp(1j * n * np.radians(pa_ff))
+    sim_tod2 += func[nidx][pix] * exppais 
+
+func *= 0
+# Pol pt 2
+
+start = 0
+for n in xrange(N):
+    end = lmax + 1 - np.abs(n)
+
+    bellp2 = np.zeros(lmax+1, dtype=np.complex128)
+    bellm2 = bellp2.copy()
+
+    bellp2[np.abs(n):] = blmp2[start:start+end]
+    bellm2[np.abs(n):] = blmm2[start:start+end]
+
+    s_flm_p = hp.almxfl(almm2, bellp2, inplace=False) + \
+        hp.almxfl(almp2, np.conj(bellp2), inplace=False)
+    s_flm_p /= -2.
+
+    s_flm_m = hp.almxfl(almm2, bellp2, inplace=False) - \
+        hp.almxfl(almp2, np.conj(bellp2), inplace=False)
+    s_flm_m *= 1j / 2.
+
+    if n == 0: # see https://healpix.jpl.nasa.gov/html/subroutinesnode12.htm
+        spinmaps = [0, hp.alm2map(-s_flm_m, nside)] # works
+
+
+    else:
+        spinmaps = hp.alm2map_spin([s_flm_p, s_flm_m], nside, n, lmax, lmax)
+
+    func[N-n-1,:] = spinmaps[0] - 1j * spinmaps[1] # negative spin
+
+    start += end
+
+
+hwpang = sopt['hwpang'][M.fpu_index(chan, single=True)]
+
+for nidx, n in enumerate(xrange(-N+1, N)):
+    exppais = np.exp(1j * n * np.radians(pa_ff))
+    sim_tod2 += func[nidx][pix] * exppais 
+
+expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
+sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
 
 
 samples = np.arange(pa_ff.size)
@@ -275,8 +324,14 @@ ax[1].legend()
 fig.savefig(ana_dir+'tods_'+chan+'.png')
 plt.close()
 
-
+ell = np.arange(lmax+1, dtype=float)
 plt.figure()
 plt.plot(ell, blm[0:lmax+1])
 plt.savefig(ana_dir+'bell.png')
 plt.close()
+
+
+
+
+sys.exit()
+
