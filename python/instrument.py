@@ -423,10 +423,12 @@ class ScanStrategy(qp.QMap, Instrument):
 
             start += end
 
-    def scan(self, q_off, nside, start, end):
+    def scan(self, az_off, el_off, nside, start, end):
         '''
         Combine the pointing and spinmaps into a tod.
         '''
+
+        q_off = self.det_offset(az_off, el_off, 0)
 
         chunk_len = end - start
         delta_ct = np.arange(chunk_len)
@@ -439,7 +441,6 @@ class ScanStrategy(qp.QMap, Instrument):
                                       q_hwp=None, sindec=False, 
                                       return_pa=True)
         pix = tools.radec2ind_hp(ra, dec, nside)
-
         
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
