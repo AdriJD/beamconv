@@ -75,7 +75,7 @@ def gauss_blm(fwhm, lmax, pol=False):
     pol : bool, optional
         Also return spin -2 blm that represents
         the spin -2 part of the copolarized pol
-        beam.
+        beam (spin +2 part is zero).
 
     Returns
     -------
@@ -105,6 +105,78 @@ def gauss_blm(fwhm, lmax, pol=False):
         return blm, blmm2
     else:
         return blm
+
+def get_copol_blm(blm, normalize=False, deconv_q=False):
+    '''
+    Create the spin \pm 2 coefficients of a unpolarized
+    beam, assuming a co-polarized beam. See Hivon, Ponthieu
+    2016.
+
+    Arguments
+    ---------
+    blm : array-like
+        Healpix-ordered blm array for unpolarized beam.
+        Requires lmax=mmax
+    normalize : bool
+        Normalize unpolarized beam to monopole
+    deconv_q : bool
+        Divide blm by sqrt(4 pi / (2 ell + 1)) before 
+        computing spin harmonic coefficients
+
+    Returns
+    -------
+    blm, blmm2, blmp2 : tuple of array-like
+        The spin \pm 2 harmonic coefficients of the
+        co-polarized beam.
+    '''
+
+    # normalize beams and extract spin-m2 beams
+    lmax = hp.Alm.getlmax(blm.size)
+    lm = hp.Alm.getlm(lmax)
+    getidx = hp.Alm.getidx
+
+    if deconv_q:
+        blm *= 2 * np.sqrt(np.pi / (2 * lm[0] + 1))
+    if normalize:
+        blm /= blm[0]
+
+    blmm2 = np.zeros(blm.size, dtype=np.complex128)
+    blmp2 = np.zeros(blm.size, dtype=np.complex128)
+
+    for m in xrange(lmax+1): # loop over spin -2 m's
+        start = getidx(lmax, m, m)
+        if m < lmax:
+            end = getidx(lmax, m+1, m+1)
+        else:
+            start = end
+        if m == 0:
+            #+2 here because spin-2, so we can't have nonzero ell=1 bins
+            blmm2[start+2:end] = np.conj(blm[2*lmax+1:3*lmax])
+
+            blmp2[start+2:end] = blm[2*lmax+1:3*lmax]
+
+        elif m == 1:
+            #+1 here because spin-2, so we can't have nonzero ell=1 bins
+            blmm2[start+1:end] = -np.conj(blm[start+1:end])
+
+            blmp2[start+2:end] = blm[3*lmax:4*lmax-2]
+
+        else:
+            start_0 = getidx(lmax, m-2, m-2) # spin-0 start and end
+            end_0 = getidx(lmax, m-1, m-1)
+
+            blmm2[start:end] = blm[start_0+2:end_0]
+
+            start_p0 = getidx(lmax, m+2, m+2)
+            if m + 2 > lmax:
+                # stop filling blmp2
+                continue
+            end_p0 = getidx(lmax, m+3, m+3)
+
+            blmp2[start+2:end] = blm[start_p0:end_p0]
+            
+    return blm, blmm2, blmp2
+    
 
 def extract_func_kwargs(func, kwargs, pop=False, others_ok=True, warn=False):
     """
@@ -151,7 +223,7 @@ def radec2ind_hp(ra, dec, nside):
     '''
     Turn qpoint ra and dec output into healpix ring-order
     map indices. Note, currently modifies ra and dec in-place.
-    
+
     Arguments
     ---------
     ra : array-like
@@ -160,7 +232,7 @@ def radec2ind_hp(ra, dec, nside):
         Declination in degrees.
     nside : int
         nside parameter of healpy map.
-        
+
     Returns
     -------
     pix : array-like
