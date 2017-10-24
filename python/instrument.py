@@ -12,7 +12,7 @@ class Instrument(object):
     Initialize a (ground-based) telescope and specify its properties.
     '''
 
-    def __init__(self, lat=None, lon=None, s_pole=False, atacama=False,
+    def __init__(self, lat=None, lon=None, location='spole',
                  ghost_dc=0.):
         '''
         Set location of telescope on earth.
@@ -36,10 +36,11 @@ class Instrument(object):
         self.lat = lat
         self.lon = lon
 
-        if s_pole:
+        if location == 'spole':
             self.lat = -89.9
             self.lon = 169.15
-        elif atacama:
+
+        elif location == 'atacama':
             self.lat = -22.96
             self.lon = -67.79
 
@@ -270,8 +271,8 @@ class ScanStrategy(qp.QMap, Instrument):
     def constant_el_scan(self, ra0, dec0, az_throw, scan_speed,
                          start, end, el_off=None, vel_prf='triangle'):
         '''
-        Let boresight scan back and forth in azimuth starting 
-        from point in ra, dec, while keeping elevation constant. 
+        Let boresight scan back and forth in azimuth starting
+        from point in ra, dec, while keeping elevation constant.
 
         Arguments
         ---------
@@ -298,22 +299,22 @@ class ScanStrategy(qp.QMap, Instrument):
         ctime = start + delta_ct
 
         # use qpoint to find az, el corresponding to ra0, el0
-#        az0, el0, _ = super(ScanStrategy, self).radec2azel(ra0, dec0, 0, 
+#        az0, el0, _ = super(ScanStrategy, self).radec2azel(ra0, dec0, 0,
 #                        self.lon, self.lat, ctime[0])
-#        az0, el0, _ = super(ScanStrategy, self).radec2azel(ra0, dec0, 0, 
+#        az0, el0, _ = super(ScanStrategy, self).radec2azel(ra0, dec0, 0,
 #                                            self.lon, self.lat, ctime[0])
-#        az0, el0, _ = qp.QPoint.radec2azel(self, ra0, dec0, 0, 
+#        az0, el0, _ = qp.QPoint.radec2azel(self, ra0, dec0, 0,
 #                                            self.lon, self.lat, ctime[0])
 
-        az0, el0, _ = self.radec2azel(ra0, dec0, 0, 
+        az0, el0, _ = self.radec2azel(ra0, dec0, 0,
                                        self.lon, self.lat, ctime[0])
 
         # Scan
         if vel_prf is 'triangle':
             scan_period = 2 * az_throw / float(scan_speed) # in deg.
             az = np.arcsin(np.sin(2 * np.pi * delta_ct / scan_period / self.fsamp))
-            az *= az_throw / (np.pi) 
-            az += az0            
+            az *= az_throw / (np.pi)
+            az += az0
 
         # return quaternion with ra, dec, pa
         if el_off:
@@ -327,7 +328,7 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
         Compute convolution of map with different spin modes
         of the beam. Computed per spin, so creates spinmmap
-        for every s<= 0 for T and for every s for pol. 
+        for every s<= 0 for T and for every s for pol.
 
         Arguments
         ---------
@@ -404,22 +405,22 @@ class ScanStrategy(qp.QMap, Instrument):
                 hp.almxfl(almp2, np.conj(bellp2), inplace=False)
             ms_flm_m *= 1j / 2.
 
-            if n == 0: 
+            if n == 0:
                 spinmaps = [hp.alm2map(-ps_flm_p, nside),
-                            hp.alm2map(-ms_flm_m, nside)] 
+                            hp.alm2map(-ms_flm_m, nside)]
 
-                self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1] 
+                self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             else:
                 # positive spin
                 spinmaps = hp.alm2map_spin([ps_flm_p, ps_flm_m],
                                            nside, n, lmax, lmax)
-                self.func_c[self.N+n-1,:] = spinmaps[0] + 1j * spinmaps[1] 
+                self.func_c[self.N+n-1,:] = spinmaps[0] + 1j * spinmaps[1]
 
                 # negative spin
                 spinmaps = hp.alm2map_spin([ms_flm_p, ms_flm_m],
                                            nside, n, lmax, lmax)
-                self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1] 
+                self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             start += end
 
@@ -438,14 +439,14 @@ class ScanStrategy(qp.QMap, Instrument):
         sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
 
         ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore,
-                                      q_hwp=None, sindec=False, 
+                                      q_hwp=None, sindec=False,
                                       return_pa=True)
         pix = tools.radec2ind_hp(ra, dec, nside)
-        
+
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
             exppais = np.exp(1j * n * np.radians(pa))
-            sim_tod2 += self.func_c[nidx][pix] * exppais 
+            sim_tod2 += self.func_c[nidx][pix] * exppais
 
             if n == 0: #avoid expais since its one anyway
                 sim_tod += np.real(self.func[n][pix])
@@ -466,6 +467,6 @@ class ScanStrategy(qp.QMap, Instrument):
 
 #b2 = Instrument(lon=10, lat=10)
 b2 = ScanStrategy(1*356*24*3600, 100, atacama=False, s_pole=True)
-b2.constant_el_scan(0, 0, 50, 10, 0, 60*100, el_off=0) 
+b2.constant_el_scan(0, 0, 50, 10, 0, 60*100, el_off=0)
 #print b2.__mro__
 
