@@ -12,29 +12,24 @@ class Instrument(object):
     Initialize a (ground-based) telescope and specify its properties.
     '''
 
-    def __init__(self, lat=None, lon=None, location='spole',
+    def __init__(self, location='spole', lat=None, lon=None,
                  ghost_dc=0.):
         '''
         Set location of telescope on earth.
 
         Arguments
         ---------
-        lon : float
+        location : str, optional
+            Predefined locations. Current options:
+                spole    : (lat=-89.9, lon=169.15)
+                atacama  : (lat=-22.96, lon=-67.79)
+        lon : float, optional
             Longitude in degrees
-        lat : float
+        lat : float, optional
             Latitude in degrees
-        s_pole : bool, optional
-            init telescope at predefinied south pole location.
-            (lat=-89.9, lon=169.15)
-        atacama : bool, optional
-            init telescope at predefined atacama desert location.
-            (lat=-22.96, lon=-67.79)
-        ghost_dc : float
+        ghost_dc : float, optional
             Ghost level. Not implemented yet.
         '''
-
-        self.lat = lat
-        self.lon = lon
 
         if location == 'spole':
             self.lat = -89.9
@@ -43,6 +38,11 @@ class Instrument(object):
         elif location == 'atacama':
             self.lat = -22.96
             self.lon = -67.79
+
+        if lat:
+            self.lat = lat
+        if lon:
+            self.lon = lon
 
         if not self.lat or not self.lon:
             raise ValueError('Specify location of telescope')
@@ -144,18 +144,26 @@ class ScanStrategy(qp.QMap, Instrument):
         # Initialize the instrument and qpoint.
 #        super(ScanStrategy, self).__init__(**instr_kw)
         Instrument.__init__(self, **instr_kw)
-        qp.QPoint.__init__(self, fast_math=True)
+#        qp.QPoint.__init__(self, fast_math=True)
+        qp.QMap.__init__(self, fast_math=True)
 
         ctime_kw = tools.extract_func_kwargs(self.set_ctime, kwargs)
         self.set_ctime(**ctime_kw)
 
-        self.set_mission_len(duration)
         self.set_sample_rate(sample_rate)
+        self.set_mission_len(duration)
 
-        self.instr_rot = None
-        self.hwp_mod = None
+
+ #       self.instr_rot = None
+ #       self.hwp_mod = None
+
         self.rot_dict = {}
         self.hwp_dict = {}
+        self.set_instr_rot()
+        self.set_hwp_mod()
+
+        self.set_nsides(tools.extract_func_kwargs(self.set_nsides,
+                                                  kwargs))
 
     def __del__(self):
         '''
@@ -164,6 +172,7 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 #        super(ScanStrategy, self).__del__()
         self.__del__
+
 
     def set_ctime(self, ctime0=None):
         '''
@@ -202,8 +211,26 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         self.mlen = duration
-
-    def set_instr_rot(self, period, angles=None, sequence=None):
+        self.nsamp = int(self.mlen * self.fsamp)
+        
+    def set_nsides(self, nside_spin=256, nside_out=256):
+        '''
+        Set the nside parameter of the spin maps that are
+        scanned and the output maps.
+        
+        Arguments
+        ---------
+        nside_spin : int
+            Nside of spin maps
+        nside_out : int
+            Nside of output maps.
+        '''
+        
+        self.nside_spin = nside_spin
+        self.nside_out = nside_out
+        
+    def set_instr_rot(self, period=None, start_ang=None,
+                      angles=None, sequence=None):
         '''
         Have the instrument periodically rotate around
         the boresight.
@@ -212,6 +239,8 @@ class ScanStrategy(qp.QMap, Instrument):
         ---------
         period : float
             Rotation period in seconds.
+        start_ang : float, optional
+            Starting angle of the instrument in deg
         angles : array-like, optional
             Set of rotation angles. If not set, use
             45 degree steps.
@@ -220,14 +249,18 @@ class ScanStrategy(qp.QMap, Instrument):
             cycle through angles.
         '''
 
-        if self.hwp_mod:
-            self.hwp_mod = False
+#        if self.hwp_mod:
+#            self.hwp_mod = False
 
-        self.instr_rot = True
+#        self.instr_rot = True
+        self.rot_dict['period'] = period
+        self.rot_dict['start_ang'] = start_ang
+        self.rot_dict['remainder'] = 0
         self.rot_dict['angles'] = angles
         self.rot_dict['indices'] = sequence
 
-    def set_hwp_mod(self, freq=0., period=None, start_ang=None,
+    def set_hwp_mod(self, mode=None,
+                    freq=None,  start_ang=None,
                     angles=None, sequence=None, reflectivity=None):
         '''
         Modulate the polarized sky signal using a stepped or
@@ -235,14 +268,12 @@ class ScanStrategy(qp.QMap, Instrument):
 
         Arguments
         ---------
+        mode : str
+            Either "stepped" or "continuous"
         freq : float, optional
-            Use a continuously rotation HWP with this
-            frequency in Hz.
-        period : float, optional
-            Use a stepped HWP with this rotation period
-            in sec.
+            Rotation or step frequency in Hz
         start_ang : float, optional
-            Starting angle for the HWP in deg.
+            Starting angle for the HWP in deg
         angles : array-like, optional
             Rotation angles for stepped HWP. If not set,
             use 22.5 degree steps.
@@ -250,26 +281,112 @@ class ScanStrategy(qp.QMap, Instrument):
             Index array for angles array. If left None,
             cycle through angles.
         reflectivity : float, optional
-            Not yet implemented.
+            Not yet implemented
         '''
 
-        if not freq and not period:
+        if  freq and not period:
             raise ValueError('Pick either cont. rotation (freq) '
                              'or stepped (period)')
 
-        if self.instr_rot:
-            self.instr_rot = False
+#        if self.instr_rot:
+#            self.instr_rot = False
 
-        self.hwp_mod = True
+#        self.hwp_mod = True
+        self.hwp_dict['mode'] = mode
         self.hwp_dict['freq'] = freq
-        self.hwp_dict['period'] = period
         self.hwp_dict['angles'] = angles
         self.hwp_dict['start_ang'] = start_ang
         self.hwp_dict['indices'] = sequence
         self.hwp_dict['reflectivity'] = reflectivity
 
+    def partition_mission(self, chunksize):
+        '''
+        Divide up the mission in equal-sized chunks
+        of nsample = chunksize. (final chunk can be
+        smaller).
+
+        Arguments
+        ---------
+        chunksize : int
+            Chunk size in samples
+
+        Returns
+        -------
+        chunks : list of dicts
+            Dictionary with start and end of each
+            chunk
+        '''
+        nsamp = self.nsamp
+        print nsamp
+        chunksize = nsamp if chunksize >= nsamp else chunksize
+        nchunks = int(np.ceil(nsamp / float(chunksize)))
+        chunks = []
+        start = 0
+
+        for chunk in xrange(nchunks):
+            end = start + chunksize - 1
+            end = nsamp if end >= nsamp else end
+            chunks.append(dict(start=start, end=end))
+            start += chunksize 
+
+        return chunks
+
+    def subpart_chunk(self, chunk):
+        '''
+        Sub-partition a chunk into sub-chunks given 
+        by the instrument rotation period (only
+        when it is smaller than the chunk size).
+
+        Arguments
+        ---------
+        chunk : dict
+            Chunk dict containing start and end sample
+            indices.
+
+        Returns
+        -------
+        subchunks : list of dicts
+            List of subchunk dicts that contain
+            start and end sample indices.
+        '''
+
+        period = self.rot_dict['period']
+
+        if not period:
+        # No instrument rotation, so no need for subchunks
+            return [chunk]
+
+        rot_chunk_size = period * self.fsamp
+        chunksize = chunk['end'] - chunk['start'] + 1
+        
+        if rot_chunk_size > chunksize:
+            raise ValueError('Cannot have rotation period '
+                             'larger than chunk size.')
+
+        nchunks = int(np.ceil(chunksize / rot_chunk_size))
+        
+        subchunks = []
+        start = chunk['start']
+
+        for sidx, subchunk in enumerate(xrange(nchunks)):
+            if sidx == 0 and self.rot_dict['remainder'] != 0:
+                end = int(start + self.rot_dict['remainder'] - 1)
+            else:
+                end = int(start + rot_chunk_size - 1)
+            
+            if end >= chunk['end']:
+                self.rot_dict['remainder'] = end - chunk['end'] + 1
+                end = chunk['end']
+
+
+            subchunks.append(dict(start=start, end=end))
+            start += int(rot_chunk_size)
+                
+        return subchunks
+
     def constant_el_scan(self, ra0, dec0, az_throw, scan_speed,
-                         start, end, el_off=None, vel_prf='triangle'):
+                         el_off=None, vel_prf='triangle', 
+                         start=None, end=None):
         '''
         Let boresight scan back and forth in azimuth starting
         from point in ra, dec, while keeping elevation constant.
@@ -284,14 +401,15 @@ class ScanStrategy(qp.QMap, Instrument):
             Scan width in azimuth (in degrees)
         scan_speed : float
             Max scan speed in degrees per second
+        el_off : float, optional
+            Offset in elevation (in degrees)
+        vel_prf : str
+            Velocity profile. Current options:
+                triangle : Triangle wave with total width=az_throw
         start : int
             Starting sample
         end : int
             End at this sample
-        el_off : float, optional
-            Offset in elevation (in degrees)
-        vel_prf : str
-            Velocity profile: "triangle" for triangle wave
         '''
 
         chunk_len = end - start
@@ -324,7 +442,52 @@ class ScanStrategy(qp.QMap, Instrument):
 
         self.q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
 
-    def get_spinmaps(self, alm, blm, max_spin, nside):
+
+    def scan(self, az_off=None, el_off=None, start=None, end=None):
+        '''
+        Combine the pointing and spinmaps into a tod.
+        '''
+
+        q_off = self.det_offset(az_off, el_off, 0)
+
+        chunk_len = end - start
+        delta_ct = np.arange(chunk_len)
+        ctime = start + delta_ct
+
+        sim_tod = np.zeros(ctime.size, dtype='float64')
+        sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
+
+
+        # more efficient if you do bore2pix, i.e. skip
+        # the allocation of ra, dec, pa etc.
+        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore,
+                                      q_hwp=None, sindec=False,
+                                      return_pa=True)
+        pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
+
+        # More efficient if you first use complex tod to do pol
+        # case, then just add the unpolarized tod to the complex
+        # one, i.e. only allocate sin_tod2, not sim_tod as well.
+
+        for nidx, n in enumerate(xrange(-self.N+1, self.N)):
+
+            exppais = np.exp(1j * n * np.radians(pa))
+            sim_tod2 += self.func_c[nidx][pix] * exppais
+
+            if n == 0: #avoid expais since its one anyway
+                sim_tod += np.real(self.func[n][pix])
+
+            if n > 0:
+                sim_tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * np.radians(pa))
+                sim_tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * np.radians(pa))
+
+        # load up hwp and polang arrays
+        # combine polarized and unpolarized tods
+#        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
+#        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
+        self.sim_tod = sim_tod
+
+    def get_spinmaps(self, alm, blm, max_spin=5):
         '''
         Compute convolution of map with different spin modes
         of the beam. Computed per spin, so creates spinmmap
@@ -336,15 +499,17 @@ class ScanStrategy(qp.QMap, Instrument):
             Tuple containing alm, almE and almB
         blm : tuple of array-like
             Tuple containing blm, blmp2 and blmm2
-        max_spin : int
+        max_spin : int, optional
             Maximum spin value describing the beam
         '''
 
         self.N = max_spin + 1
+        nside = self.nside_spin
         lmax = hp.Alm.getlmax(alm[0].size)
 
         # Unpolarized sky and beam first
-        self.func = np.zeros((self.N, 12*nside**2), dtype=np.complex128) # s <=0 spheres
+        self.func = np.zeros((self.N, 12*nside**2),
+                             dtype=np.complex128) # s <=0 spheres
 
         start = 0
         for n in xrange(self.N): # note n is s
@@ -424,49 +589,19 @@ class ScanStrategy(qp.QMap, Instrument):
 
             start += end
 
-    def scan(self, az_off, el_off, nside, start, end):
-        '''
-        Combine the pointing and spinmaps into a tod.
-        '''
+def tod2map(self):
 
+        # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
-
-        chunk_len = end - start
-        delta_ct = np.arange(chunk_len)
-        ctime = start + delta_ct
-
-        sim_tod = np.zeros(ctime.size, dtype='float64')
-        sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
-
-        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore,
-                                      q_hwp=None, sindec=False,
-                                      return_pa=True)
-        pix = tools.radec2ind_hp(ra, dec, nside)
-
-        for nidx, n in enumerate(xrange(-self.N+1, self.N)):
-
-            exppais = np.exp(1j * n * np.radians(pa))
-            sim_tod2 += self.func_c[nidx][pix] * exppais
-
-            if n == 0: #avoid expais since its one anyway
-                sim_tod += np.real(self.func[n][pix])
-
-            if n > 0:
-                sim_tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * np.radians(pa))
-                sim_tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * np.radians(pa))
-
-        # load up hwp and polang arrays
-        # combine polarized and unpolarized tods
-#        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
-#        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
+        self.from_tod(q_off, tod=self.sim_tod)
 
 
-    def tod2map(self):
-        # note that we need QMap not QPoint for this.
-        pass
 
-#b2 = Instrument(lon=10, lat=10)
-b2 = ScanStrategy(1*356*24*3600, 100, atacama=False, s_pole=True)
-b2.constant_el_scan(0, 0, 50, 10, 0, 60*100, el_off=0)
-#print b2.__mro__
+b2 = ScanStrategy(30*24*3600, 20, location='spole')
+chunks = b2.partition_mission(3600*20)
+print chunks[0]
+b2.set_instr_rot(1000)
+for chunk in chunks[0:2]:
+    subchunks = b2.subpart_chunk(chunk)
+    print subchunks
 
