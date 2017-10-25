@@ -162,7 +162,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.set_instr_rot()
         self.set_hwp_mod()
 
-        self.set_nsides(tools.extract_func_kwargs(self.set_nsides,
+        self.set_nsides(**tools.extract_func_kwargs(self.set_nsides,
                                                   kwargs))
 
     def __del__(self):
@@ -317,7 +317,7 @@ class ScanStrategy(qp.QMap, Instrument):
             chunk
         '''
         nsamp = self.nsamp
-        print nsamp
+
         chunksize = nsamp if chunksize >= nsamp else chunksize
         nchunks = int(np.ceil(nsamp / float(chunksize)))
         chunks = []
@@ -413,24 +413,21 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         chunk_len = end - start
-        delta_ct = np.arange(chunk_len)
-        ctime = start + delta_ct
+#        delta_ct = np.arange(chunk_len)
+#        ctime = start + delta_ct
+        ctime = np.arange(start, end, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
 
         # use qpoint to find az, el corresponding to ra0, el0
-#        az0, el0, _ = super(ScanStrategy, self).radec2azel(ra0, dec0, 0,
-#                        self.lon, self.lat, ctime[0])
-#        az0, el0, _ = super(ScanStrategy, self).radec2azel(ra0, dec0, 0,
-#                                            self.lon, self.lat, ctime[0])
-#        az0, el0, _ = qp.QPoint.radec2azel(self, ra0, dec0, 0,
-#                                            self.lon, self.lat, ctime[0])
-
         az0, el0, _ = self.radec2azel(ra0, dec0, 0,
                                        self.lon, self.lat, ctime[0])
 
         # Scan
         if vel_prf is 'triangle':
             scan_period = 2 * az_throw / float(scan_speed) # in deg.
-            az = np.arcsin(np.sin(2 * np.pi * delta_ct / scan_period / self.fsamp))
+            az = np.arcsin(np.sin(2 * np.pi * np.arange(chunk_len, dtype=int)\
+                                      / scan_period / self.fsamp))
             az *= az_throw / (np.pi)
             az += az0
 
@@ -448,26 +445,41 @@ class ScanStrategy(qp.QMap, Instrument):
         Combine the pointing and spinmaps into a tod.
         '''
 
+        # NOTE nicer if you give q_off directly instead of az_off, el_off
         q_off = self.det_offset(az_off, el_off, 0)
 
         chunk_len = end - start
-        delta_ct = np.arange(chunk_len)
-        ctime = start + delta_ct
+#        delta_ct = np.arange(chunk_len)
+#        ctime = start + delta_ct
 
+        ctime = np.arange(start, end, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
+
+        print ctime
+
+
+        print start
+        print end
+        print ctime.size
         sim_tod = np.zeros(ctime.size, dtype='float64')
         sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
 
+        q_start = np.mod(start, self.q_bore.shape[0]+1)
+        q_end = np.mod(end, self.q_bore.shape[0]+1)
+        print q_start, q_end
 
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc.
-        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore,
+        ra, dec, pa = self.bore2radec(q_off, ctime, 
+                                      self.q_bore[q_start:q_end],
                                       q_hwp=None, sindec=False,
                                       return_pa=True)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
 
         # More efficient if you first use complex tod to do pol
         # case, then just add the unpolarized tod to the complex
-        # one, i.e. only allocate sin_tod2, not sim_tod as well.
+        # one, i.e. only allocate sim_tod2, not sim_tod as well.
 
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
@@ -589,7 +601,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
             start += end
 
-def tod2map(self):
+    def tod2map(self):
 
         # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
@@ -597,11 +609,11 @@ def tod2map(self):
 
 
 
-b2 = ScanStrategy(30*24*3600, 20, location='spole')
-chunks = b2.partition_mission(3600*20)
-print chunks[0]
-b2.set_instr_rot(1000)
-for chunk in chunks[0:2]:
-    subchunks = b2.subpart_chunk(chunk)
-    print subchunks
+#b2 = ScanStrategy(30*24*3600, 20, location='spole')
+#chunks = b2.partition_mission(3600*20)
+#print chunks[0]
+#b2.set_instr_rot(1000)
+#for chunk in chunks[0:2]:
+#    subchunks = b2.subpart_chunk(chunk)
+#    print subchunks
 

@@ -252,3 +252,67 @@ def radec2ind_hp(ra, dec, nside):
     pix = hp.ang2pix(nside, dec, ra, nest=False)
 
     return pix
+
+def quat_left_mult(q2, q):
+    '''
+    Calculate q3 = q2 * q
+
+    Arguments
+    ---------
+    q2 : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+    q : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+
+    Returns
+    -------
+    q3 : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+    '''
+
+    q3 = np.zeros(4, dtype=float)
+    
+    q3[0] = q2[0]*q[0] - q2[1]*q[1] - q2[2]*q[2] - q2[3]*q[3]
+    q3[1] = q2[1]*q[0] + q2[0]*q[1] - q2[3]*q[2] + q2[2]*q[3]
+    q3[2] = q2[2]*q[0] + q2[3]*q[1] + q2[0]*q[2] - q2[1]*q[3]
+    q3[3] = q2[3]*q[0] - q2[2]*q[1] + q2[1]*q[2] + q2[0]*q[3]
+
+    return q3
+
+def quat_norm(q, inplace=False):
+    '''
+    Normalize a quaternion.
+
+    Arguments
+    ---------
+    q : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+
+    Returns
+    -------
+    qn : array-like
+        Float array of shape (4,), representing a 
+        normalized quaternion
+    '''
+    
+    if not inplace:
+        q = q.copy()
+    q /= np.sqrt(np.sum(q**2))
+
+    return q
+
+#import quaternion as qt
+#a = np.array([3,2,5,0])
+#b = np.array([3,2,5,2])
+#c = quat_left_mult(a, b)
+#print c
+#aq = qt.as_quat_array(a)
+#bq = qt.as_quat_array(a)
+#print aq * bq
+
+    
+#print quat_norm(c)
