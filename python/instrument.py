@@ -375,9 +375,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
         for sidx, subchunk in enumerate(xrange(nchunks)):
             if sidx == 0 and self.rot_dict['remainder'] != 0:
-                print 'case 1'
-                print self.rot_dict['remainder']
                 end = int(start + self.rot_dict['remainder'] - 0)
+
             else:
                 end = int(start + rot_chunk_size - 1)
             
@@ -477,12 +476,9 @@ class ScanStrategy(qp.QMap, Instrument):
             q_end = q_start + end - start
             
         else: # we know we're in the last big chunk
-            print 'beer'
             q_start = start - (len(self.chunks)-1) * nrml_len
             q_end = end - (len(self.chunks)-1) * nrml_len
                                         
-        print q_start, q_end
-            
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc.
         ra, dec, pa = self.bore2radec(q_off, ctime, 
@@ -622,17 +618,12 @@ class ScanStrategy(qp.QMap, Instrument):
         # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
         self.init_dest(nside=self.nside_out, pol=True, reset=True)
-#        print self.depo
 
         q_off = q_off[np.newaxis]
         tod = self.sim_tod[np.newaxis]
-        print tod.shape
-        print q_off.shape
-        vec, proj = self.from_tod(q_off, tod=tod)
-        print vec[0][np.where(vec[0])]
 
-        print self.depo['proj'][0]
-        print self.depo['proj'][0][np.where(self.depo['proj'][0])].size
+        vec, proj = self.from_tod(q_off, tod=tod, 
+                            mueller=np.asarray([[1,1,0,1]] * len(q_off)))
 
 #b2 = ScanStrategy(30*24*3600, 20, location='spole')
 #chunks = b2.partition_mission(3600*20)
