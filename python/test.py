@@ -16,9 +16,14 @@ blm, blmm2 = tools.gauss_blm(fwhm, lmax, pol=True)
 blm = tools.get_copol_blm(blm.copy())
 
 # South pole instrument
-b2 = ScanStrategy(2*60*60, # 2*60 min mission
+b2 = ScanStrategy(20*60*60, # 10*60 min mission
                   10, # 10 Hz sample rate
                   location='spole')
+
+#b2 = ScanStrategy(10*60, # 10*60 sec mission
+#                  10, # 10 Hz sample rate
+#                  location='spole')
+
 
 # calculate spinmaps 
 b2.get_spinmaps(alm, blm, 5)
@@ -30,8 +35,8 @@ el_off = b2.chn_pr_el
 
 b2.set_instr_rot(period=7*60) # Rotate instrument every 7 min
 
-chunks = b2.partition_mission(10000) # calculate tod in 10000 sample chunks
-
+chunks = b2.partition_mission(10*60*60*int(b2.fsamp)) # calculate tod in chunks of # samples
+print chunks
 for chunk in chunks:
     print chunk
     b2.constant_el_scan(-10, -57.5, 50, 1, **chunk) # this sets the boresight

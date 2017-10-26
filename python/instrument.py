@@ -5,6 +5,7 @@ import tools
 import os
 import sys
 import time
+import warnings
 
 
 class Instrument(object):
@@ -325,10 +326,11 @@ class ScanStrategy(qp.QMap, Instrument):
 
         for chunk in xrange(nchunks):
             end = start + chunksize - 1
-            end = nsamp if end >= nsamp else end
+            end = nsamp - 1 if end >= (nsamp - 1) else end
             chunks.append(dict(start=start, end=end))
             start += chunksize 
 
+        self.chunks = chunks
         return chunks
 
     def subpart_chunk(self, chunk):
@@ -360,8 +362,11 @@ class ScanStrategy(qp.QMap, Instrument):
         chunksize = chunk['end'] - chunk['start'] + 1
         
         if rot_chunk_size > chunksize:
-            raise ValueError('Cannot have rotation period '
-                             'larger than chunk size.')
+#            raise ValueError('Cannot have rotation period '
+#                             'larger than chunk size.')
+            warnings.warn(
+              'Rotation period*fsamp > chunk size: instrument is not rotated')
+            return [chunk]
 
         nchunks = int(np.ceil(chunksize / rot_chunk_size))
         
@@ -388,8 +393,8 @@ class ScanStrategy(qp.QMap, Instrument):
                          el_off=None, vel_prf='triangle', 
                          start=None, end=None):
         '''
-        Let boresight scan back and forth in azimuth starting
-        from point in ra, dec, while keeping elevation constant.
+        Let boresight scan back and forth in azimuth, starting 
+        centered at ra0, dec0, while keeping elevation constant.
 
         Arguments
         ---------
@@ -402,20 +407,20 @@ class ScanStrategy(qp.QMap, Instrument):
         scan_speed : float
             Max scan speed in degrees per second
         el_off : float, optional
-            Offset in elevation (in degrees)
+            Offset in elevation (in degrees). Defaults
+            to zero when left None.
         vel_prf : str
             Velocity profile. Current options:
-                triangle : Triangle wave with total width=az_throw
+                triangle : (default) triangle wave with total
+                           width=az_throw
         start : int
             Starting sample
         end : int
             End at this sample
         '''
 
-        chunk_len = end - start
-#        delta_ct = np.arange(chunk_len)
-#        ctime = start + delta_ct
-        ctime = np.arange(start, end, dtype=float)
+        chunk_len = end - start + 1 # Note, you end on "end"
+        ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
 
@@ -423,7 +428,7 @@ class ScanStrategy(qp.QMap, Instrument):
         az0, el0, _ = self.radec2azel(ra0, dec0, 0,
                                        self.lon, self.lat, ctime[0])
 
-        # Scan
+        # Scan boresight, note that it will slowly drift away from az0, el0
         if vel_prf is 'triangle':
             scan_period = 2 * az_throw / float(scan_speed) # in deg.
             az = np.arcsin(np.sin(2 * np.pi * np.arange(chunk_len, dtype=int)\
@@ -448,31 +453,35 @@ class ScanStrategy(qp.QMap, Instrument):
         # NOTE nicer if you give q_off directly instead of az_off, el_off
         q_off = self.det_offset(az_off, el_off, 0)
 
-        chunk_len = end - start
-#        delta_ct = np.arange(chunk_len)
-#        ctime = start + delta_ct
 
-        ctime = np.arange(start, end, dtype=float)
+        ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
 
-        print ctime
-
-
-        print start
-        print end
-        print ctime.size
         sim_tod = np.zeros(ctime.size, dtype='float64')
         sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
 
-        q_start = np.mod(start, self.q_bore.shape[0]+1)
-        q_end = np.mod(end, self.q_bore.shape[0]+1)
-        print q_start, q_end
+        # normal chunk len
+        nrml_len = self.chunks[0]['end'] - self.chunks[0]['start'] + 1
+        if len(self.chunks) > 1:
+            shrt_len = self.chunks[-1]['end'] - self.chunks[-1]['start'] + 1
+        else:
+            shrt_len = nrml_len
 
+        if self.q_bore.shape[0] == nrml_len:            
+            q_start = np.mod(start, nrml_len)
+            q_end = np.mod(end, nrml_len)
+
+        else: # we know we're in the last big chunk
+            q_start = start - (len(self.chunks)-1) * nrml_len
+            q_end = end - (len(self.chunks)-1) * nrml_len
+                                        
+        print q_start, q_end
+            
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc.
         ra, dec, pa = self.bore2radec(q_off, ctime, 
-                                      self.q_bore[q_start:q_end],
+                                      self.q_bore[q_start:q_end+1],
                                       q_hwp=None, sindec=False,
                                       return_pa=True)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
