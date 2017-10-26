@@ -24,13 +24,13 @@ matplotlib.rcParams['agg.path.chunksize'] = 10000
 ana_dir = '/mn/stornext/d8/ITA/spider/adri/analysis/20171013_asym_centroid/'
 
 fwhm = 300
-lmax = 200
-mmax = 200
+lmax = 100
+mmax = 100
 nside = 256
 
 # Specify detector offset
-az_off = 5
-el_off = 20
+az_off = 15
+el_off = -7
 
 # Create Gaussian beam
 blm, blmm2 = so3t.gauss_blm(fwhm, lmax, pol=True)
@@ -39,7 +39,7 @@ blmB = -1j * blmm2 / 2.
 
 # Get Planck alms
 alm = sam.get_planck_alm(100, lmax=2000, coord='C', pol=True)
-alm = (alm[0] * 1., alm[1] * 1., alm[2] * 1.)
+alm = (alm[0] * 0., alm[1] * 1., alm[2] * 1.)
 
 # Deconvolve Planck beam
 bell = sam.hfi_beam(100)
@@ -167,8 +167,11 @@ for n in xrange(N): # note n is s
     if n == 0: # scalar transform
 
         flmn = hp.almxfl(alm[0], blm[start:start+end], inplace=False)
-        func_r = hp.alm2map(flmn, nside)
-        func[n,:] = func_r
+#        func_r = hp.alm2map(flmn, nside)
+#        func[n,:] = func_r
+
+        func[n,:] += hp.alm2map(flmn, nside)
+#        func[n,:] = func_r
 
     else: # spin transforms
 
@@ -221,6 +224,11 @@ for n in xrange(N):
 
     bellp2[np.abs(n):] = blmp2[start:start+end]
     bellm2[np.abs(n):] = blmm2[start:start+end]
+    
+    print n
+    print bellm2
+    print bellp2
+    print np.array_equal(bellm2, np.conj(bellp2))
 
     s_flm_p = hp.almxfl(almp2, bellm2, inplace=False) + \
         hp.almxfl(almm2, np.conj(bellm2), inplace=False)
@@ -241,7 +249,6 @@ for n in xrange(N):
 
     start += end
 
-print func
 hwpang = sopt['hwpang'][M.fpu_index(chan, single=True)]
 
 
@@ -262,6 +269,11 @@ for n in xrange(N):
     bellp2[np.abs(n):] = blmp2[start:start+end]
     bellm2[np.abs(n):] = blmm2[start:start+end]
 
+    print n
+    print bellm2
+    print bellp2
+    print np.array_equal(bellm2, np.conj(bellp2))
+
     s_flm_p = hp.almxfl(almm2, bellp2, inplace=False) + \
         hp.almxfl(almp2, np.conj(bellp2), inplace=False)
     s_flm_p /= -2.
@@ -272,7 +284,6 @@ for n in xrange(N):
 
     if n == 0: # see https://healpix.jpl.nasa.gov/html/subroutinesnode12.htm
         spinmaps = [0, hp.alm2map(-s_flm_m, nside)] # works
-
 
     else:
         spinmaps = hp.alm2map_spin([s_flm_p, s_flm_m], nside, n, lmax, lmax)
