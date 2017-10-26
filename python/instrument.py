@@ -146,7 +146,10 @@ class ScanStrategy(qp.QMap, Instrument):
 #        super(ScanStrategy, self).__init__(**instr_kw)
         Instrument.__init__(self, **instr_kw)
 #        qp.QPoint.__init__(self, fast_math=True)
-        qp.QMap.__init__(self, fast_math=True)
+        qp.QMap.__init__(self, nside=256, pol=True, fast_math=True,
+                         mean_aber=True, accuracy='low')
+#                         fast_pix=True, interp_pix=True,
+#                         interp_missing=True)
 
         ctime_kw = tools.extract_func_kwargs(self.set_ctime, kwargs)
         self.set_ctime(**ctime_kw)
@@ -362,20 +365,19 @@ class ScanStrategy(qp.QMap, Instrument):
         chunksize = chunk['end'] - chunk['start'] + 1
         
         if rot_chunk_size > chunksize:
-#            raise ValueError('Cannot have rotation period '
-#                             'larger than chunk size.')
             warnings.warn(
-              'Rotation period*fsamp > chunk size: instrument is not rotated')
+              'Rotation period * fsamp > chunk size: instrument is not rotated')
             return [chunk]
 
         nchunks = int(np.ceil(chunksize / rot_chunk_size))
-        
         subchunks = []
         start = chunk['start']
 
         for sidx, subchunk in enumerate(xrange(nchunks)):
             if sidx == 0 and self.rot_dict['remainder'] != 0:
-                end = int(start + self.rot_dict['remainder'] - 1)
+                print 'case 1'
+                print self.rot_dict['remainder']
+                end = int(start + self.rot_dict['remainder'] - 0)
             else:
                 end = int(start + rot_chunk_size - 1)
             
@@ -383,14 +385,13 @@ class ScanStrategy(qp.QMap, Instrument):
                 self.rot_dict['remainder'] = end - chunk['end'] + 1
                 end = chunk['end']
 
-
             subchunks.append(dict(start=start, end=end))
             start += int(rot_chunk_size)
                 
         return subchunks
 
     def constant_el_scan(self, ra0, dec0, az_throw, scan_speed,
-                         el_off=None, vel_prf='triangle', 
+                         el_step=None, vel_prf='triangle', 
                          start=None, end=None):
         '''
         Let boresight scan back and forth in azimuth, starting 
@@ -406,7 +407,7 @@ class ScanStrategy(qp.QMap, Instrument):
             Scan width in azimuth (in degrees)
         scan_speed : float
             Max scan speed in degrees per second
-        el_off : float, optional
+        el_step : float, optional
             Offset in elevation (in degrees). Defaults
             to zero when left None.
         vel_prf : str
@@ -437,13 +438,16 @@ class ScanStrategy(qp.QMap, Instrument):
             az += az0
 
         # return quaternion with ra, dec, pa
-        if el_off:
-            el = el0 + el_off * np.ones_like(az)
+        if el_step:
+            el = el0 + el_step * np.ones_like(az)
         else:
             el = el0 * np.ones_like(az)
 
         self.q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
 
+        # allocate sim_tod
+ #       self.sim_tod = np.zeros(chunk_len, dtype=float)
+        
 
     def scan(self, az_off=None, el_off=None, start=None, end=None):
         '''
@@ -470,9 +474,10 @@ class ScanStrategy(qp.QMap, Instrument):
 
         if self.q_bore.shape[0] == nrml_len:            
             q_start = np.mod(start, nrml_len)
-            q_end = np.mod(end, nrml_len)
-
+            q_end = q_start + end - start
+            
         else: # we know we're in the last big chunk
+            print 'beer'
             q_start = start - (len(self.chunks)-1) * nrml_len
             q_end = end - (len(self.chunks)-1) * nrml_len
                                         
@@ -507,6 +512,8 @@ class ScanStrategy(qp.QMap, Instrument):
 #        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
 #        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
         self.sim_tod = sim_tod
+
+        self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
 
     def get_spinmaps(self, alm, blm, max_spin=5):
         '''
@@ -610,13 +617,22 @@ class ScanStrategy(qp.QMap, Instrument):
 
             start += end
 
-    def tod2map(self):
+    def bin_tod(self, az_off, el_off):
 
         # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
-        self.from_tod(q_off, tod=self.sim_tod)
+        self.init_dest(nside=self.nside_out, pol=True, reset=True)
+#        print self.depo
 
+        q_off = q_off[np.newaxis]
+        tod = self.sim_tod[np.newaxis]
+        print tod.shape
+        print q_off.shape
+        vec, proj = self.from_tod(q_off, tod=tod)
+        print vec[0][np.where(vec[0])]
 
+        print self.depo['proj'][0]
+        print self.depo['proj'][0][np.where(self.depo['proj'][0])].size
 
 #b2 = ScanStrategy(30*24*3600, 20, location='spole')
 #chunks = b2.partition_mission(3600*20)
