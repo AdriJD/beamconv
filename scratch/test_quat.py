@@ -56,4 +56,4 @@ hp.mollview(testmap, coord='G')
 plt.savefig('img/test_quat.png')
 plt.close()
 
-Q.init_detarr(q_off)
+

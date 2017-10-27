@@ -253,7 +253,7 @@ class ScanStrategy(qp.QMap, Instrument):
             Default = 0 deg.
         angles : array-like, optional
             Set of rotation angles. If left None, use
-            45 degree steps.
+            45 degree steps. If set, ignores start_ang
         sequence : array-like, optional
             Index array for angles array. If left None,
             do cycle permuation through angles.
@@ -266,8 +266,13 @@ class ScanStrategy(qp.QMap, Instrument):
         self.rot_dict['period'] = period
         self.rot_dict['angle'] = start_ang
         self.rot_dict['remainder'] = 0
-        self.rot_dict['angles'] = angles
         self.rot_dict['indices'] = sequence
+
+        if angles is None:
+            angles = np.arange(start_ang, 360+start_ang, 45)
+            np.mod(angles, 360, out=angles)
+
+        self.angle_gen = tools.angle_gen(angles)
 
     def set_hwp_mod(self, mode=None,
                     freq=None,  start_ang=None,
@@ -450,6 +455,9 @@ class ScanStrategy(qp.QMap, Instrument):
 
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
+
+                # rotate instrument
+                self.rot_dict['angle'] = self.angle_gen.next()
 
                 # Cycling through detectors and scanning
                 for az_off, el_off in zip(az_offs.flatten(), el_offs.flatten()):

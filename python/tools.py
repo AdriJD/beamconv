@@ -253,6 +253,23 @@ def radec2ind_hp(ra, dec, nside):
 
     return pix
 
+def angle_gen(angles):
+    '''
+    Generator that yields cyclic permmuation 
+    of elements of input array.
+    
+    Arguments
+    ---------
+    angles : array-like
+        Array to be cycled through
+    '''
+
+    n = 0
+    while True:
+        yield angles[n]
+        n += 1
+        n = n % len(angles)
+
 def quat_left_mult(q2, q):
     '''
     Calculate q3 = q2 * q
@@ -406,3 +423,4 @@ def quat_conj_by(q, q2):
 #print np.conj(aq)
     
 #print quat_norm(c)
+
