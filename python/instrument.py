@@ -593,7 +593,7 @@ class ScanStrategy(qp.QMap, Instrument):
         # load up hwp and polang arrays
         # combine polarized and unpolarized tods
         hwp_ang = 0.
-        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
+        expm2 = np.exp(1j * (4 * np.radians(hwp_ang) + 2 * np.radians(polang)))
 #        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
 #        expm2 = 1.
         sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.

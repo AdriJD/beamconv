@@ -125,3 +125,4 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 if __name__ == '__main__':
 
     scan1(lmax=300, mmax=2, fwhm=2, az_throw=90, rot_period=3*60, dec0=-60)
+    
