@@ -8,13 +8,10 @@ import healpy as hp
 import tools
 from instrument import ScanStrategy
 
-lmax = 700
-mmax = 5   # assumed azimuthal bandlimit beams (symmetric in this example)
-fwhm = 40
-nside = 256
-
-def scan1(lmax=700, mmax=5, fwhm=40, nside=256):
+def scan1(lmax=700, mmax=5, fwhm=40, nside=256, rot_period=10*60):
     '''
+    Simulates a fraction of BICEP2-like scan strategy
+
     Arguments
     ---------
 
@@ -26,6 +23,9 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256):
         The beam FWHM in arcmin
     nside : int
         The nside value of the output map
+    rot_perio : int
+        The instrument rotation period [s]
+
 
     '''
 
@@ -39,7 +39,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256):
 
     # init scan strategy and instrument
     b2 = ScanStrategy(20*60*60, # mission duration in sec.
-                      10, # 10 Hz sample rate
+                      sample_rate=10, # 10 Hz sample rate
                       location='spole', # South pole instrument
                       )
 
@@ -55,7 +55,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256):
     az_off = b2.chn_pr_az
     el_off = b2.chn_pr_el
 
-    b2.set_instr_rot(period=10*60) # Rotate instrument (period in sec)
+    b2.set_instr_rot(period=rot_period) # Rotate instrument (period in sec)
 
     chunks = b2.partition_mission(int(60*60*b2.fsamp)) # calculate tod in chunks of # samples
 
@@ -64,12 +64,12 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256):
     proj = np.zeros((6, 12*b2.nside_out**2), dtype=float)
 
     for cidx, chunk in enumerate(chunks):
-        print('  Working on chunk {:03}: {:d}-{:d}:'.format(cidx,
+        print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
           chunk['start'], chunk['end']))
 
         # Make the boresight move
-        b2.constant_el_scan(-10, -57.5, 90, 1, el_step = 1 * (cidx % 50 - 25),
-                             **chunk)
+        b2.constant_el_scan(ra0=-10, dec0=-57.5, az_throw=90,
+          scan_speed=1, el_step=1*(cidx % 50 - 25), **chunk)
 
         # if required, loop over boresight rotations
         for subchunk in b2.subpart_chunk(chunk):
@@ -104,10 +104,9 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256):
     cls[3][cls[3]<=0.] *= -1.
     dell = ell * (ell + 1) / 2. / np.pi
     plt.figure()
-    plt.semilogy(ell, dell * cls[0], label='TT')
-    plt.semilogy(ell, dell * cls[1], label='EE')
-    plt.semilogy(ell, dell * cls[2], label='BB')
-    plt.semilogy(ell, dell * cls[3], label='TE')
+    for i, label in enumerate(['TT', 'EE', 'BB', 'TE']):
+      plt.semilogy(ell, dell * cls[i], label=label)
+
     plt.legend()
     plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
     plt.xlabel(r'Multipole [$\ell$]')

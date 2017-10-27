@@ -121,7 +121,7 @@ class ScanStrategy(qp.QMap, Instrument):
     azimuth, elevation, position and polarization angle.
     '''
 
-    def __init__(self, duration, sample_rate, **kwargs):
+    def __init__(self, duration, sample_rate=100, **kwargs):
         '''
         Initialize scan parameters
 
@@ -388,9 +388,10 @@ class ScanStrategy(qp.QMap, Instrument):
 
         return subchunks
 
-    def constant_el_scan(self, ra0, dec0, az_throw, scan_speed,
-                         el_step=None, vel_prf='triangle',
-                         start=None, end=None):
+    def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
+            scan_speed=1, el_step=None, vel_prf='triangle',
+            start=None, end=None):
+
         '''
         Let boresight scan back and forth in azimuth, starting
         centered at ra0, dec0, while keeping elevation constant.
