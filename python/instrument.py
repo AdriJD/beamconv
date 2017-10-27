@@ -122,8 +122,6 @@ class ScanStrategy(qp.QMap, Instrument):
     Given an instrument, create a scan strategy in terms of
     azimuth, elevation, position and polarization angle.
     '''
-    
-    _qp_version = (1, 10, 0)
 
     def __init__(self, duration, sample_rate=100, **kwargs):
         '''
@@ -138,23 +136,21 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         # extract Instrument class specific kwargs.
+#        instr_kw = tools.extract_func_kwargs(
+#                   super(ScanStrategy, self).__init__, kwargs)
         instr_kw = tools.extract_func_kwargs(
                    Instrument.__init__, kwargs)
+#        instr_kw = tools.extract_func_kwargs(
+#                   Instrument.__init__(self), kwargs)
 
         # Initialize the instrument and qpoint.
+#        super(ScanStrategy, self).__init__(**instr_kw)
         Instrument.__init__(self, **instr_kw)
-
-        # Checking qpoint version
-        if qp.version() < self._qp_version:
-            raise RuntimeError(
-                'qpoint version {} required, found version {}'.format(
-                    self._qp_version, qp.version()))
-
+#        qp.QPoint.__init__(self, fast_math=True)
         qp.QMap.__init__(self, nside=256, pol=True, fast_math=True,
                          mean_aber=True, accuracy='low')
 #                         fast_pix=True, interp_pix=True,
 #                         interp_missing=True)
-
 
         ctime_kw = tools.extract_func_kwargs(self.set_ctime, kwargs)
         self.set_ctime(**ctime_kw)
@@ -394,6 +390,30 @@ class ScanStrategy(qp.QMap, Instrument):
 
         return subchunks
 
+    def scan_intrument(verbose=True):
+        '''
+        Cycles through the scans requried to populate maps
+        '''
+        for cidx, chunk in enumerate(self.chunks):
+
+            print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
+                chunk['start'], chunk['end']))
+
+            # Make the boresight move
+            b2.constant_el_scan(ra0=-10, dec0=-57.5, az_throw=90,
+                scan_speed=1, el_step=1*(cidx % 50 - 25), **chunk)
+
+            # if required, loop over boresight rotations
+            for subchunk in b2.subpart_chunk(chunk):
+
+                # Do the actual scanning
+                b2.scan(az_off=az_off, el_off=el_off, **subchunk)
+                b2.bin_tod(az_off, el_off)
+
+            # this is a bit simplistic now, but works
+            vec += b2.depo['vec']
+            proj += b2.depo['proj']
+
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
             start=None, end=None):
@@ -453,6 +473,10 @@ class ScanStrategy(qp.QMap, Instrument):
         # allocate sim_tod
  #       self.sim_tod = np.zeros(chunk_len, dtype=float)
 
+    def allocate_maps(self):
+
+        self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
+        self.proj = np.zeros((3, 12*self.nside_out**2), dtype=float)
 
     def scan(self, az_off=None, el_off=None, start=None, end=None):
         '''
@@ -623,19 +647,16 @@ class ScanStrategy(qp.QMap, Instrument):
             start += end
 
     def bin_tod(self, az_off, el_off):
-        '''
-        Take internally stored tod and pointing
-        and bin into map and projection matrices.
-        '''
 
+        # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
         self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
         tod = self.sim_tod[np.newaxis]
 
-        vec, proj = self.from_tod(q_off, tod=tod)
-
+        vec, proj = self.from_tod(q_off, tod=tod,
+            mueller=np.asarray([[1,1,0,1]] * len(q_off)))
 
 #b2 = ScanStrategy(30*24*3600, 20, location='spole')
 #chunks = b2.partition_mission(3600*20)
