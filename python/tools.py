@@ -356,18 +356,51 @@ def quat_inv(q):
     
     return qi
 
+def quat_conj_by(q, q2):
+    '''
+    Conjugate q by q2, i.e. returns
+    q3 = q2 * q * inv(q2).
+
+    Arguments
+    ---------
+    q : array-like
+        Float array of shape (4,), representing the
+        quaternion to be conjugated by q2
+    q2 : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+
+
+    Returns
+    -------
+    q3 : array-like
+        Float array of shape (4,), representing
+        q conjugated by q2 
+    '''
+
+    q3 = quat_left_mult(q, quat_inv(q2))
+    q3 = quat_left_mult(q2, q3)
+
+    return q3    
+
 
 #import quaternion as qt
-#a = np.array([3.,2.,5.,0.])
+#a = np.array([3., 2., 5., 6.])
 #a = quat_norm(a, inplace=True)
-#b = np.array([3,2,5,2])
+#b = np.array([1., 6., 5., 2.])
+#b = quat_norm(b, inplace=True)
 #c = quat_left_mult(a, b)
 #print c
 #aq = qt.as_quat_array(a)
-#bq = qt.as_quat_array(a)
+#bq = qt.as_quat_array(b)
 #print aq * bq
 #print a
 #print aq
+#print b
+#print bq
+
+#print quat_conj_by(a, b)
+#print bq * aq * np.conj(bq)
 
 #print quat_inv(a)
 #print np.conj(aq)
