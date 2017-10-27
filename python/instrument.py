@@ -238,7 +238,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.nside_out = nside_out
 
     def set_instr_rot(self, period=None, start_ang=0,
-                      angles=None, sequence=None):
+                      angles=None):
         '''
         Have the instrument periodically rotate around
         the boresight.
@@ -252,11 +252,9 @@ class ScanStrategy(qp.QMap, Instrument):
             Starting angle of the instrument in deg.
             Default = 0 deg.
         angles : array-like, optional
-            Set of rotation angles. If left None, use
-            45 degree steps. If set, ignores start_ang
-        sequence : array-like, optional
-            Index array for angles array. If left None,
-            do cycle permuation through angles.
+            Set of rotation angles. If left None, cycle
+            through 45 degree steps. If set, ignores 
+            start_ang
         '''
 
 #        if self.hwp_mod:
@@ -266,17 +264,17 @@ class ScanStrategy(qp.QMap, Instrument):
         self.rot_dict['period'] = period
         self.rot_dict['angle'] = start_ang
         self.rot_dict['remainder'] = 0
-        self.rot_dict['indices'] = sequence
 
         if angles is None:
             angles = np.arange(start_ang, 360+start_ang, 45)
             np.mod(angles, 360, out=angles)
 
+        # init rotation generator
         self.angle_gen = tools.angle_gen(angles)
 
     def set_hwp_mod(self, mode=None,
                     freq=None,  start_ang=None,
-                    angles=None, sequence=None, reflectivity=None):
+                    angles=None,  reflectivity=None):
         '''
         Modulate the polarized sky signal using a stepped or
         continuously rotating half-wave plate.
@@ -292,9 +290,6 @@ class ScanStrategy(qp.QMap, Instrument):
         angles : array-like, optional
             Rotation angles for stepped HWP. If not set,
             use 22.5 degree steps.
-        sequence : array-like, optional
-            Index array for angles array. If left None,
-            cycle through angles.
         reflectivity : float, optional
             Not yet implemented
         '''
@@ -310,8 +305,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.hwp_dict['mode'] = mode
         self.hwp_dict['freq'] = freq
         self.hwp_dict['angles'] = angles
-        self.hwp_dict['start_ang'] = start_ang
-        self.hwp_dict['indices'] = sequence
+        self.hwp_dict['angle'] = start_ang
         self.hwp_dict['reflectivity'] = reflectivity
 
     def partition_mission(self, chunksize):
@@ -410,32 +404,28 @@ class ScanStrategy(qp.QMap, Instrument):
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
         self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
-    def scan_instrument(self, az_off=None, el_off=None,
-        ra0=-10, dec0=-57.5, az_throw=90, scan_speed=1, verbose=True):
+    def scan_instrument(self, az_offs=None, el_offs=None, 
+                        verbose=True, **kwargs):
+
 
         '''
         Cycles through the scans requried to populate maps
 
         Arguments
         ---------
-        az_off : np.array (default : None)
-            Azimuthal detector offset
-        el_off : np.array (default : None)
-            Elevation detector offset
-        ra0 : float
-            Ra coordinate of centre of scan in degrees
-        dec0 : float
-            Ra coordinate of centre of scan in degrees
-        az_throw : float
-            Scan width in azimuth (in degrees)
-        scan_speed : float
-            Max scan speed in degrees per second
+        az_offs : np.array (default : None)
+            Azimuthal detector offsets
+        el_offs : np.array (default : None)
+            Elevation detector offsets
         verbose : bool [default True]
             Prints status reports
+        kwargs : dict
+            Extra kwargs are assumed input to 
+            constant_el_scan()
         '''
 
         # Using precomputed detector offsets if not input to function
-        if az_off is None or el_off is None:
+        if az_offs is None or el_offs is None:
             az_offs = self.chn_pr_az
             el_offs = self.chn_pr_el
 
@@ -450,8 +440,11 @@ class ScanStrategy(qp.QMap, Instrument):
                     chunk['start'], chunk['end']))
 
             # Make the boresight move
-            self.constant_el_scan(ra0=ra0, dec0=dec0, az_throw=az_throw,
-                scan_speed=scan_speed, el_step=1*(cidx % 50 - 25), **chunk)
+#            self.constant_el_scan(ra0=ra0, dec0=dec0, az_throw=az_throw,
+#                scan_speed=scan_speed, el_step=1*(cidx % 50 - 25), **chunk)
+            ces_kwargs = kwargs.copy()
+            ces_kwargs.update(chunk)
+            self.constant_el_scan(**ces_kwargs)
 
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
@@ -513,27 +506,45 @@ class ScanStrategy(qp.QMap, Instrument):
         # Scan boresight, note that it will slowly drift away from az0, el0
         if vel_prf is 'triangle':
             scan_period = 2 * az_throw / float(scan_speed) # in deg.
-            az = np.arcsin(np.sin(2 * np.pi * np.arange(chunk_len, dtype=int)\
-                                      / scan_period / self.fsamp))
-            az *= az_throw / (np.pi)
+            if scan_period == 0.:
+                az = np.zeros(chunk_len)
+            else:
+                az = np.arcsin(np.sin(2 * np.pi * np.arange(chunk_len, dtype=int)\
+                                          / scan_period / self.fsamp))
+                az *= az_throw / (np.pi)
             az += az0
 
-        # return quaternion with ra, dec, pa
+        # step in elevation if needed
         if el_step:
             el = el0 + el_step * np.ones_like(az)
         else:
             el = el0 * np.ones_like(az)
 
+        # return quaternion with ra, dec, pa
         self.q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
 
-    def scan(self, az_off=None, el_off=None, start=None, end=None):
+    def scan(self, az_off=None, el_off=None, polang=0,
+             start=None, end=None):
         '''
-        Combine the pointing and spinmaps into a tod.
+        Update boresight pointing with detector offset, and
+        use it to bin spinmaps into a tod.
         '''
 
         # NOTE nicer if you give q_off directly instead of az_off, el_off
-        q_off = self.det_offset(az_off, el_off, 0)
+        q_off = self.det_offset(az_off, el_off, polang)
 
+        # Rotate offset given rot_dict['angle']
+        ang = np.radians(self.rot_dict['angle'])
+
+        q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
+        # Note, q_rot is already a unit quaternion.
+
+#        q_off = tools.quat_conj_by(q_off, q_rot)
+        q_off = tools.quat_left_mult(q_rot, q_off) # works
+
+        # store for mapmaking
+        self.q_off = q_off
+        
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
@@ -581,8 +592,11 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # load up hwp and polang arrays
         # combine polarized and unpolarized tods
+        hwp_ang = 0.
+        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
 #        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
-#        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
+#        expm2 = 1.
+        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
         self.sim_tod = sim_tod
 
         self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
@@ -706,7 +720,8 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         # dont forget init point
-        q_off = self.det_offset(az_off, el_off, 0)
+#        q_off = self.det_offset(az_off, el_off, 0)
+        q_off = self.q_off
         if init:
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
