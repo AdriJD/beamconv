@@ -587,8 +587,6 @@ class ScanStrategy(qp.QMap, Instrument):
         max_spin : int, optional
             Maximum spin value describing the beam
 
-        TODO:
-          Get rid of alm2map_spin printing to screen
         '''
 
         if not verbose:
