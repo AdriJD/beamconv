@@ -1,12 +1,11 @@
-import numpy as np
-import qpoint as qp
-import healpy as hp
-import tools
 import os
 import sys
 import time
 import warnings
-
+import numpy as np
+import qpoint as qp
+import healpy as hp
+import tools
 
 class Instrument(object):
     '''
@@ -216,12 +215,12 @@ class ScanStrategy(qp.QMap, Instrument):
 
         self.mlen = duration
         self.nsamp = int(self.mlen * self.fsamp)
-        
+
     def set_nsides(self, nside_spin=256, nside_out=256):
         '''
         Set the nside parameter of the spin maps that are
         scanned and the output maps.
-        
+
         Arguments
         ---------
         nside_spin : int
@@ -229,10 +228,10 @@ class ScanStrategy(qp.QMap, Instrument):
         nside_out : int
             Nside of output maps.
         '''
-        
+
         self.nside_spin = nside_spin
         self.nside_out = nside_out
-        
+
     def set_instr_rot(self, period=None, start_ang=None,
                       angles=None, sequence=None):
         '''
@@ -331,14 +330,14 @@ class ScanStrategy(qp.QMap, Instrument):
             end = start + chunksize - 1
             end = nsamp - 1 if end >= (nsamp - 1) else end
             chunks.append(dict(start=start, end=end))
-            start += chunksize 
+            start += chunksize
 
         self.chunks = chunks
         return chunks
 
     def subpart_chunk(self, chunk):
         '''
-        Sub-partition a chunk into sub-chunks given 
+        Sub-partition a chunk into sub-chunks given
         by the instrument rotation period (only
         when it is smaller than the chunk size).
 
@@ -363,7 +362,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         rot_chunk_size = period * self.fsamp
         chunksize = chunk['end'] - chunk['start'] + 1
-        
+
         if rot_chunk_size > chunksize:
             warnings.warn(
               'Rotation period * fsamp > chunk size: instrument is not rotated')
@@ -379,21 +378,21 @@ class ScanStrategy(qp.QMap, Instrument):
 
             else:
                 end = int(start + rot_chunk_size - 1)
-            
+
             if end >= chunk['end']:
                 self.rot_dict['remainder'] = end - chunk['end'] + 1
                 end = chunk['end']
 
             subchunks.append(dict(start=start, end=end))
             start += int(rot_chunk_size)
-                
+
         return subchunks
 
     def constant_el_scan(self, ra0, dec0, az_throw, scan_speed,
-                         el_step=None, vel_prf='triangle', 
+                         el_step=None, vel_prf='triangle',
                          start=None, end=None):
         '''
-        Let boresight scan back and forth in azimuth, starting 
+        Let boresight scan back and forth in azimuth, starting
         centered at ra0, dec0, while keeping elevation constant.
 
         Arguments
@@ -446,7 +445,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # allocate sim_tod
  #       self.sim_tod = np.zeros(chunk_len, dtype=float)
-        
+
 
     def scan(self, az_off=None, el_off=None, start=None, end=None):
         '''
@@ -471,17 +470,17 @@ class ScanStrategy(qp.QMap, Instrument):
         else:
             shrt_len = nrml_len
 
-        if self.q_bore.shape[0] == nrml_len:            
+        if self.q_bore.shape[0] == nrml_len:
             q_start = np.mod(start, nrml_len)
             q_end = q_start + end - start
-            
+
         else: # we know we're in the last big chunk
             q_start = start - (len(self.chunks)-1) * nrml_len
             q_end = end - (len(self.chunks)-1) * nrml_len
-                                        
+
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc.
-        ra, dec, pa = self.bore2radec(q_off, ctime, 
+        ra, dec, pa = self.bore2radec(q_off, ctime,
                                       self.q_bore[q_start:q_end+1],
                                       q_hwp=None, sindec=False,
                                       return_pa=True)
@@ -525,11 +524,15 @@ class ScanStrategy(qp.QMap, Instrument):
             Tuple containing blm, blmp2 and blmm2
         max_spin : int, optional
             Maximum spin value describing the beam
+
+        TODO:
+          Get rid of alm2map_spin printing to screen
         '''
 
         self.N = max_spin + 1
         nside = self.nside_spin
         lmax = hp.Alm.getlmax(alm[0].size)
+
 
         # Unpolarized sky and beam first
         self.func = np.zeros((self.N, 12*nside**2),
@@ -622,7 +625,7 @@ class ScanStrategy(qp.QMap, Instrument):
         q_off = q_off[np.newaxis]
         tod = self.sim_tod[np.newaxis]
 
-        vec, proj = self.from_tod(q_off, tod=tod, 
+        vec, proj = self.from_tod(q_off, tod=tod,
                             mueller=np.asarray([[1,1,0,1]] * len(q_off)))
 
 #b2 = ScanStrategy(30*24*3600, 20, location='spole')
