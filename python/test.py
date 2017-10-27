@@ -50,7 +50,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256, ra0=-10, dec0=-57.5,
     print('...spin-maps stored')
 
     # Initiate a single detector
-    b2.set_focal_plane(nrow=1, ncol=1, fov=10)
+    b2.set_focal_plane(nrow=8, ncol=8, fov=10)
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period)
     # calculate tod in chunks of # samples

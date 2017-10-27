@@ -64,6 +64,9 @@ class Instrument(object):
             sky in degrees.
         '''
 
+        self.nrow = nrow
+        self.ncol = ncol
+
         self.ndet = 2 * nrow * ncol
         self.chn_pr_az = np.zeros((nrow, ncol), dtype=float)
         self.chn_pr_el = np.zeros((nrow, ncol), dtype=float)
@@ -394,6 +397,14 @@ class ScanStrategy(qp.QMap, Instrument):
 
         return subchunks
 
+    def allocate_maps(self):
+        '''
+        Allocate space in memory for map-related numpy arrays
+        '''
+
+        self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
+        self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
+
     def scan_instrument(self, az_off=None, el_off=None,
         ra0=-10, dec0=-57.5, az_throw=90, scan_speed=1, verbose=True):
 
@@ -422,8 +433,12 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # Using precomputed detector offsets if not input to function
         if az_off is None or el_off is None:
-            az_off = self.chn_pr_az
-            el_off = self.chn_pr_el
+            az_offs = self.chn_pr_az
+            el_offs = self.chn_pr_el
+
+        if verbose:
+            print('  Scanning with {:d} x {:d} grid of detectors'.format(
+                self.nrow, self.ncol))
 
         for cidx, chunk in enumerate(self.chunks):
 
@@ -438,13 +453,15 @@ class ScanStrategy(qp.QMap, Instrument):
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
 
-                # Do the actual scanning
-                self.scan(az_off=az_off, el_off=el_off, **subchunk)
-                self.bin_tod(az_off, el_off)
+                # Cycling through detectors and scanning
+                for az_off, el_off in zip(az_offs.flatten(), el_offs.flatten()):
 
-            # this is a bit simplistic now, but works
-            self.vec += self.depo['vec']
-            self.proj += self.depo['proj']
+                    self.scan(az_off=az_off, el_off=el_off, **subchunk)
+                    self.bin_tod(az_off, el_off)
+
+                    # Adding to global maps
+                    self.vec += self.depo['vec']
+                    self.proj += self.depo['proj']
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
@@ -505,11 +522,6 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # allocate sim_tod
  #       self.sim_tod = np.zeros(chunk_len, dtype=float)
-
-    def allocate_maps(self):
-
-        self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
-        self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
     def scan(self, az_off=None, el_off=None, start=None, end=None):
         '''
@@ -589,6 +601,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         '''
 
+        # Turning off healpy printing
         if not verbose:
             sys.stdout = open(os.devnull, 'w') # Suppressing screen output
 
@@ -679,10 +692,11 @@ class ScanStrategy(qp.QMap, Instrument):
 
             start += end
 
+        # Turning printing back on
         if not verbose:
             sys.stdout = sys.__stdout__
 
-    def bin_tod(self, az_off, el_off):
+    def bin_tod(self, az_off, el_off, init=True):
         '''
         Take internally stored tod and pointing
         and bin into map and projection matrices.
@@ -690,7 +704,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
-        self.init_dest(nside=self.nside_out, pol=True, reset=True)
+        if init:
+            self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
         tod = self.sim_tod[np.newaxis]
