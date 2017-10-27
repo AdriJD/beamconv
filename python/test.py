@@ -51,7 +51,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256, rot_period=10*60):
     print('...spin-maps stored')
 
     # Initiate a single detector
-    b2.set_focal_plane(1, 10)
+    b2.set_focal_plane(nrow=1, ncol=1, fov=10)
     az_off = b2.chn_pr_az
     el_off = b2.chn_pr_el
 
@@ -116,4 +116,4 @@ def scan1(lmax=700, mmax=5, fwhm=40, nside=256, rot_period=10*60):
 
 if __name__ == '__main__':
 
-  scan1()
+    scan1()

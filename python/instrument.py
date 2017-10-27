@@ -47,7 +47,7 @@ class Instrument(object):
         if not self.lat or not self.lon:
             raise ValueError('Specify location of telescope')
 
-    def set_focal_plane(self, nrow, fov):
+    def set_focal_plane(self, nrow=1, ncol=1, fov=10):
         '''
         Create detector pointing offsets on the sky,
         i.e. in azimuth and elevation, for a square
@@ -64,12 +64,14 @@ class Instrument(object):
             sky in degrees.
         '''
 
-        self.ndet = 2 * nrow**2
-        self.chn_pr_az = np.zeros((nrow, nrow), dtype=float)
-        self.chn_pr_el = np.zeros((nrow, nrow), dtype=float)
+        self.ndet = 2 * nrow * ncol
+        self.chn_pr_az = np.zeros((nrow, ncol), dtype=float)
+        self.chn_pr_el = np.zeros((nrow, ncol), dtype=float)
 
-        x = np.linspace(-fov/2., fov/2., nrow)
-        xx, yy = np.meshgrid(x, x)
+        x = np.linspace(-fov/2., fov/2., ncol)
+        y = np.linspace(-fov/2., fov/2., nrow)
+
+        xx, yy = np.meshgrid(x, y)
 
         self.chn_pr_az = xx.flatten()
         self.chn_pr_el = yy.flatten()
@@ -481,10 +483,9 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc.
-        ra, dec, pa = self.bore2radec(q_off, ctime,
-                                      self.q_bore[q_start:q_end+1],
-                                      q_hwp=None, sindec=False,
-                                      return_pa=True)
+        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[q_start:q_end+1],
+            q_hwp=None, sindec=False, return_pa=True)
+
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
 
         # More efficient if you first use complex tod to do pol
