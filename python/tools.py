@@ -291,6 +291,8 @@ def quat_norm(q, inplace=False):
     q : array-like
         Float array of shape (4,), representing a 
         quaternion
+    inplace : bool, optional
+        Perform normalization in place, default=False
 
     Returns
     -------
@@ -305,14 +307,69 @@ def quat_norm(q, inplace=False):
 
     return q
 
+def quat_conj(q):
+    '''
+    Calculate conjugate quaternion.
+    
+    Arguments
+    ---------
+    q : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+
+    Returns
+    -------
+    qc : array-like
+        Float array of shape (4,), representing the
+        conjugate quaternion
+    '''
+
+    qc = np.zeros_like(q)
+
+    qc[0] = q[0] 
+    qc[1] = -q[1] 
+    qc[2] = -q[2] 
+    qc[3] = -q[3] 
+
+    return qc
+
+def quat_inv(q):
+    
+    '''
+    Calculate inverse quaternion.
+    
+    Arguments
+    ---------
+    q : array-like
+        Float array of shape (4,), representing a 
+        quaternion
+
+    Returns
+    -------
+    qi : array-like
+        Float array of shape (4,), representing the
+        inverse quaternion
+    '''
+
+    qi = quat_conj(q)
+    qi /= np.sum(qi**2)
+    
+    return qi
+
+
 #import quaternion as qt
-#a = np.array([3,2,5,0])
+#a = np.array([3.,2.,5.,0.])
+#a = quat_norm(a, inplace=True)
 #b = np.array([3,2,5,2])
 #c = quat_left_mult(a, b)
 #print c
 #aq = qt.as_quat_array(a)
 #bq = qt.as_quat_array(a)
 #print aq * bq
+#print a
+#print aq
 
+#print quat_inv(a)
+#print np.conj(aq)
     
 #print quat_norm(c)
