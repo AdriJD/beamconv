@@ -122,6 +122,8 @@ class ScanStrategy(qp.QMap, Instrument):
     Given an instrument, create a scan strategy in terms of
     azimuth, elevation, position and polarization angle.
     '''
+    
+    _qp_version = (1, 10, 0)
 
     def __init__(self, duration, sample_rate=100, **kwargs):
         '''
@@ -136,21 +138,23 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         # extract Instrument class specific kwargs.
-#        instr_kw = tools.extract_func_kwargs(
-#                   super(ScanStrategy, self).__init__, kwargs)
         instr_kw = tools.extract_func_kwargs(
                    Instrument.__init__, kwargs)
-#        instr_kw = tools.extract_func_kwargs(
-#                   Instrument.__init__(self), kwargs)
 
         # Initialize the instrument and qpoint.
-#        super(ScanStrategy, self).__init__(**instr_kw)
         Instrument.__init__(self, **instr_kw)
-#        qp.QPoint.__init__(self, fast_math=True)
+
+        # Checking qpoint version
+        if qp.version() < self._qp_version:
+            raise RuntimeError(
+                'qpoint version {} required, found version {}'.format(
+                    self._qp_version, qp.version()))
+
         qp.QMap.__init__(self, nside=256, pol=True, fast_math=True,
                          mean_aber=True, accuracy='low')
 #                         fast_pix=True, interp_pix=True,
 #                         interp_missing=True)
+
 
         ctime_kw = tools.extract_func_kwargs(self.set_ctime, kwargs)
         self.set_ctime(**ctime_kw)
@@ -619,16 +623,19 @@ class ScanStrategy(qp.QMap, Instrument):
             start += end
 
     def bin_tod(self, az_off, el_off):
+        '''
+        Take internally stored tod and pointing
+        and bin into map and projection matrices.
+        '''
 
-        # dont forget init point
         q_off = self.det_offset(az_off, el_off, 0)
         self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
         tod = self.sim_tod[np.newaxis]
 
-        vec, proj = self.from_tod(q_off, tod=tod,
-                            mueller=np.asarray([[1,1,0,1]] * len(q_off)))
+        vec, proj = self.from_tod(q_off, tod=tod)
+
 
 #b2 = ScanStrategy(30*24*3600, 20, location='spole')
 #chunks = b2.partition_mission(3600*20)
