@@ -151,29 +151,27 @@ def scan2(lmax=700, mmax=5, fwhm=40, nside=256, ra0=-10, dec0=-57.5,
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps...')
-    sys.stdout = open(os.devnull, 'w') # Suppressing screen output
-    b2.get_spinmaps(alm, blm, mmax)
-    sys.stdout = sys.__stdout__
+    b2.get_spinmaps(alm, blm, mmax, verbose=False)
     print('...spin-maps stored')
 
     # Initiate a single detector
     b2.set_focal_plane(nrow=1, ncol=1, fov=10)
-    az_off = b2.chn_pr_az
-    el_off = b2.chn_pr_el
-
-    b2.set_instr_rot(period=rot_period) # Rotate instrument (period in sec)
-
-    chunks = b2.partition_mission(int(60*60*b2.fsamp)) # calculate tod in chunks of # samples
-    b2.allocate_maps() # Allocate for mapmaking
-    b2.scan_instrument() # Generating timestreams and maps
+    # Rotate instrument (period in sec)
+    b2.set_instr_rot(period=rot_period)
+    # calculate tod in chunks of # samples
+    chunks = b2.partition_mission(int(60*60*b2.fsamp))
+    # Allocate and assign parameters for mapmaking
+    b2.allocate_maps()
+    # Generating timestreams + maps and storing as attributes
+    b2.scan_instrument()
 
     # just solve for the unpolarized map for now (condition number is terrible obviously)
-    maps = b2.solve_map(vec=vec[0], proj=proj[0], copy=True)
+    maps = b2.solve_map(vec=b2.vec[0], proj=b2.proj[0], copy=True)
 
+    ## Plotting results
     # plot solved T map
-    moll_opts = dict(min=-250, max=250)
-
     plt.figure()
+    moll_opts = dict(min=-250, max=250)
     hp.mollview(maps, **moll_opts)
     plt.savefig('../scratch/img/test_map_I.png')
     plt.close()
@@ -200,4 +198,5 @@ def scan2(lmax=700, mmax=5, fwhm=40, nside=256, ra0=-10, dec0=-57.5,
 
 if __name__ == '__main__':
 
-    scan1()
+    #scan1()
+    scan2()

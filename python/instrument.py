@@ -390,29 +390,57 @@ class ScanStrategy(qp.QMap, Instrument):
 
         return subchunks
 
-    def scan_intrument(verbose=True):
+    def scan_instrument(self, az_off=None, el_off=None,
+        ra0=-10, dec0=-57.5, az_throw=90, scan_speed=1, verbose=True):
+
         '''
         Cycles through the scans requried to populate maps
+
+        Arguments
+        ---------
+
+        az_off : np.array (default : None)
+            Azimuthal detector offset
+        el_off : np.array (default : None)
+            Elevation detector offset
+        ra0 : float
+            Ra coordinate of centre of scan in degrees
+        dec0 : float
+            Ra coordinate of centre of scan in degrees
+        az_throw : float
+            Scan width in azimuth (in degrees)
+        scan_speed : float
+            Max scan speed in degrees per second
+        verbose : bool [default True]
+            Prints status reports
+
         '''
+
+        # Using precomputed detector offsets if not input to function
+        if az_off is None or el_off is None:
+            az_off = self.chn_pr_az
+            el_off = self.chn_pr_el
+
         for cidx, chunk in enumerate(self.chunks):
 
-            print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
-                chunk['start'], chunk['end']))
+            if verbose:
+                print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
+                    chunk['start'], chunk['end']))
 
             # Make the boresight move
-            b2.constant_el_scan(ra0=-10, dec0=-57.5, az_throw=90,
-                scan_speed=1, el_step=1*(cidx % 50 - 25), **chunk)
+            self.constant_el_scan(ra0=ra0, dec0=dec0, az_throw=az_throw,
+                scan_speed=scan_speed, el_step=1*(cidx % 50 - 25), **chunk)
 
             # if required, loop over boresight rotations
-            for subchunk in b2.subpart_chunk(chunk):
+            for subchunk in self.subpart_chunk(chunk):
 
                 # Do the actual scanning
-                b2.scan(az_off=az_off, el_off=el_off, **subchunk)
-                b2.bin_tod(az_off, el_off)
+                self.scan(az_off=az_off, el_off=el_off, **subchunk)
+                self.bin_tod(az_off, el_off)
 
             # this is a bit simplistic now, but works
-            vec += b2.depo['vec']
-            proj += b2.depo['proj']
+            self.vec += self.depo['vec']
+            self.proj += self.depo['proj']
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
@@ -420,7 +448,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
         '''
         Let boresight scan back and forth in azimuth, starting
-        centered at ra0, dec0, while keeping elevation constant.
+        centered at ra0, dec0, while keeping elevation constant. Populates
+        scanning quaternions.
 
         Arguments
         ---------
@@ -476,7 +505,7 @@ class ScanStrategy(qp.QMap, Instrument):
     def allocate_maps(self):
 
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
-        self.proj = np.zeros((3, 12*self.nside_out**2), dtype=float)
+        self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
     def scan(self, az_off=None, el_off=None, start=None, end=None):
         '''
@@ -485,7 +514,6 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # NOTE nicer if you give q_off directly instead of az_off, el_off
         q_off = self.det_offset(az_off, el_off, 0)
-
 
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
@@ -540,7 +568,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
 
-    def get_spinmaps(self, alm, blm, max_spin=5):
+    def get_spinmaps(self, alm, blm, max_spin=5, verbose=True):
         '''
         Compute convolution of map with different spin modes
         of the beam. Computed per spin, so creates spinmmap
@@ -558,6 +586,9 @@ class ScanStrategy(qp.QMap, Instrument):
         TODO:
           Get rid of alm2map_spin printing to screen
         '''
+
+        if not verbose:
+            sys.stdout = open(os.devnull, 'w') # Suppressing screen output
 
         self.N = max_spin + 1
         nside = self.nside_spin
@@ -645,6 +676,9 @@ class ScanStrategy(qp.QMap, Instrument):
                 self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             start += end
+
+        if not verbose:
+            sys.stdout = sys.__stdout__
 
     def bin_tod(self, az_off, el_off):
 
