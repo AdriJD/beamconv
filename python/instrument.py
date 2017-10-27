@@ -118,8 +118,6 @@ class Instrument(object):
 
 
 
-#class ScanStrategy(Instrument, qp.QPoint):
-#class ScanStrategy(qp.QPoint, Instrument): # works
 class ScanStrategy(qp.QMap, Instrument):
     '''
     Given an instrument, create a scan strategy in terms of
@@ -153,7 +151,6 @@ class ScanStrategy(qp.QMap, Instrument):
                  'qpoint version {} required, found version {}'.format(
                      self._qp_version, qp.version()))
 
-#        qp.QPoint.__init__(self, fast_math=True)
         qp.QMap.__init__(self, nside=256, pol=True, fast_math=True,
                          mean_aber=True, accuracy='low')
 #                         fast_pix=True, interp_pix=True,
@@ -182,7 +179,6 @@ class ScanStrategy(qp.QMap, Instrument):
         Call QPoint destructor explicitely to make sure
         the c code frees up memory before exiting.
         '''
-#        super(ScanStrategy, self).__del__()
         self.__del__
 
 
@@ -241,7 +237,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.nside_spin = nside_spin
         self.nside_out = nside_out
 
-    def set_instr_rot(self, period=None, start_ang=None,
+    def set_instr_rot(self, period=None, start_ang=0,
                       angles=None, sequence=None):
         '''
         Have the instrument periodically rotate around
@@ -250,15 +246,17 @@ class ScanStrategy(qp.QMap, Instrument):
         Arguments
         ---------
         period : float
-            Rotation period in seconds.
+            Rotation period in seconds. If left None,
+            keep instrument unrotated.
         start_ang : float, optional
-            Starting angle of the instrument in deg
+            Starting angle of the instrument in deg.
+            Default = 0 deg.
         angles : array-like, optional
-            Set of rotation angles. If not set, use
+            Set of rotation angles. If left None, use
             45 degree steps.
         sequence : array-like, optional
             Index array for angles array. If left None,
-            cycle through angles.
+            do cycle permuation through angles.
         '''
 
 #        if self.hwp_mod:
@@ -266,7 +264,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
 #        self.instr_rot = True
         self.rot_dict['period'] = period
-        self.rot_dict['start_ang'] = start_ang
+        self.rot_dict['angle'] = start_ang
         self.rot_dict['remainder'] = 0
         self.rot_dict['angles'] = angles
         self.rot_dict['indices'] = sequence
@@ -372,6 +370,8 @@ class ScanStrategy(qp.QMap, Instrument):
         rot_chunk_size = period * self.fsamp
         chunksize = chunk['end'] - chunk['start'] + 1
 
+        # Currently, rotation periods longer than computation chunks
+        # are not implemented. So warn user and do not sub-divide chunk.
         if rot_chunk_size > chunksize:
             warnings.warn(
               'Rotation period * fsamp > chunk size: instrument is not rotated')
@@ -413,7 +413,6 @@ class ScanStrategy(qp.QMap, Instrument):
 
         Arguments
         ---------
-
         az_off : np.array (default : None)
             Azimuthal detector offset
         el_off : np.array (default : None)
@@ -428,7 +427,6 @@ class ScanStrategy(qp.QMap, Instrument):
             Max scan speed in degrees per second
         verbose : bool [default True]
             Prints status reports
-
         '''
 
         # Using precomputed detector offsets if not input to function
@@ -519,9 +517,6 @@ class ScanStrategy(qp.QMap, Instrument):
             el = el0 * np.ones_like(az)
 
         self.q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
-
-        # allocate sim_tod
- #       self.sim_tod = np.zeros(chunk_len, dtype=float)
 
     def scan(self, az_off=None, el_off=None, start=None, end=None):
         '''
