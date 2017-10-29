@@ -568,7 +568,9 @@ class ScanStrategy(qp.QMap, Instrument):
             q_end = end - (len(self.chunks)-1) * nrml_len
 
         # more efficient if you do bore2pix, i.e. skip
-        # the allocation of ra, dec, pa etc.
+        # the allocation of ra, dec, pa etc. But you need pa....
+        # Perhaps ask Sasha if she can make bore2pix output pix
+        # and pa (instead of sin2pa, cos2pa)
         ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[q_start:q_end+1],
             q_hwp=None, sindec=False, return_pa=True)
 
@@ -577,6 +579,9 @@ class ScanStrategy(qp.QMap, Instrument):
         # More efficient if you first use complex tod to do pol
         # case, then just add the unpolarized tod to the complex
         # one, i.e. only allocate sim_tod2, not sim_tod as well.
+
+        # Also more efficient if you do pa = np.radians(pa, out=pa)
+        # before the loop
 
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
