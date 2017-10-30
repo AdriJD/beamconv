@@ -47,8 +47,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     print('...spin-maps stored')
 
     # Initiate focal plane
-    #b2.set_focal_plane(nrow=14, ncol=14, fov=10)
-    b2.create_focal_plane(nrow=14, ncol=14, fov=10)
+    b2.set_focal_plane(nrow=10, ncol=10, fov=10)
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period)
     # calculate tod in chunks of # samples
@@ -59,53 +58,59 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
                        scan_speed=scan_speed)
 
-    # just solve for the unpolarized map for now (condition number is terrible obviously)
-    # maps = b2.solve_map(vec=b2.vec[0], proj=b2.proj[0], copy=True, fill=hp.UNSEEN)
-
     maps = b2.solve_map(vec=b2.vec, proj=b2.proj, copy=True, fill=hp.UNSEEN)
     cond = b2.proj_cond(proj=b2.proj)
+    cond[cond == np.inf] = hp.UNSEEN
 
     ## Plotting results
-    moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
-
-    plt.figure()
-    hp.mollview(cond, min=2, max=5, unit='condition number')
-    plt.savefig('../scratch/img/test_map_cond.png')
-    plt.close()
+    cart_opts = dict(rot=[ra0, dec0, 0],
+                     lonra=[-min(az_throw, 90), min(az_throw, 90)],
+                     latra=[-min(0.75*az_throw, 45), min(0.75*az_throw, 45)],
+                     unit=r'[$\mu K_{\mathrm{CMB}}$]')
+    
 
     # plot solved maps
     plt.figure()
-    hp.mollview(maps[0], min=-250, max=250, **moll_opts)
+    hp.cartview(maps[0], min=-250, max=250, **cart_opts)
     plt.savefig('../scratch/img/test_map_I.png')
     plt.close()
 
     plt.figure()
-    hp.mollview(maps[1], min=-5, max=5, **moll_opts)
+    hp.cartview(maps[1], min=-5, max=5, **cart_opts)
     plt.savefig('../scratch/img/test_map_Q.png')
     plt.close()
 
     plt.figure()
-    hp.mollview(maps[2], min=-5, max=5, **moll_opts)
+    hp.cartview(maps[2], min=-5, max=5, **cart_opts)
     plt.savefig('../scratch/img/test_map_U.png')
     plt.close()
 
     # plot the input map and spectra
     maps_raw = hp.alm2map(alm, 128)
     plt.figure()
-    hp.mollview(maps_raw[0], min=-250, max=250, **moll_opts)
+    hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
     plt.savefig('../scratch/img/raw_map_I.png')
     plt.close()
 
     maps_raw = hp.alm2map(alm, 128)
     plt.figure()
-    hp.mollview(maps_raw[1], min=-5, max=5, **moll_opts)
+    hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
     plt.savefig('../scratch/img/raw_map_Q.png')
     plt.close()
 
     maps_raw = hp.alm2map(alm, 128)
     plt.figure()
-    hp.mollview(maps_raw[2], min=-5, max=5, **moll_opts)
+    hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
     plt.savefig('../scratch/img/raw_map_U.png')
+    plt.close()
+
+    cart_opts.pop('min', None)
+    cart_opts.pop('max', None)
+    cart_opts.pop('unit', None)
+    plt.figure()
+    hp.cartview(cond, min=2, max=5, unit='condition number',
+                **cart_opts)
+    plt.savefig('../scratch/img/test_map_cond.png')
     plt.close()
 
     cls[3][cls[3]<=0.] *= -1.

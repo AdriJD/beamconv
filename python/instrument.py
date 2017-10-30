@@ -359,8 +359,8 @@ class ScanStrategy(qp.QMap, Instrument):
         self.angle_gen = tools.angle_gen(angles)
 
     def set_hwp_mod(self, mode=None,
-                    freq=None,  start_ang=None,
-                    angles=None,  reflectivity=None):
+                    freq=None, start_ang=None,
+                    angles=None, reflectivity=None):
         '''
         Modulate the polarized sky signal using a stepped or
         continuously rotating half-wave plate.
@@ -392,6 +392,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.hwp_dict['freq'] = freq
         self.hwp_dict['angles'] = angles
         self.hwp_dict['angle'] = start_ang
+        self.hwp_dict['remainder'] = 0 # sec remaining for step
         self.hwp_dict['reflectivity'] = reflectivity
 
     def partition_mission(self, chunksize):
@@ -542,7 +543,7 @@ class ScanStrategy(qp.QMap, Instrument):
                 for az_off, el_off in zip(az_offs.flatten(), el_offs.flatten()):
 
                     self.scan(az_off=az_off, el_off=el_off, **subchunk)
-                    self.bin_tod(az_off, el_off)
+                    self.bin_tod()
 
                     # Adding to global maps
                     self.vec += self.depo['vec']
@@ -634,9 +635,9 @@ class ScanStrategy(qp.QMap, Instrument):
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
+        self.ctime = ctime 
 
-        sim_tod = np.zeros(ctime.size, dtype='float64')
-        sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
+        tod_c = np.zeros(ctime.size, dtype=np.complex128)
 
         # normal chunk len
         nrml_len = self.chunks[0]['end'] - self.chunks[0]['start'] + 1
@@ -653,6 +654,9 @@ class ScanStrategy(qp.QMap, Instrument):
             q_start = start - (len(self.chunks)-1) * nrml_len
             q_end = end - (len(self.chunks)-1) * nrml_len
 
+        self.q_start = q_start
+        self.q_end = q_end
+
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc. But you need pa....
         # Perhaps ask Sasha if she can make bore2pix output pix
@@ -660,37 +664,54 @@ class ScanStrategy(qp.QMap, Instrument):
         ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[q_start:q_end+1],
             q_hwp=None, sindec=False, return_pa=True)
 
+        np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
 
-        # More efficient if you first use complex tod to do pol
-        # case, then just add the unpolarized tod to the complex
-        # one, i.e. only allocate sim_tod2, not sim_tod as well.
-
-        # Also more efficient if you do pa = np.radians(pa, out=pa)
-        # before the loop
-
+        # Fill complex array
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
-            exppais = np.exp(1j * n * np.radians(pa))
-            sim_tod2 += self.func_c[nidx][pix] * exppais
+            exppais = np.exp(1j * n * pa)
+            tod_c += self.func_c[nidx][pix] * exppais
+
+
+        # if needed, compute hwp angle array
+        if self.hwp_dict['freq']:
+
+            freq = self.hwp_dict['freq'] # cycles per sec for cont.
+            start_ang = np.radians(self.hwp_dict['angle'])
+
+            if self.hwp_dict['mode'] == 'continuous':
+
+                hwp_ang = np.arange(start_ang, tod_c.size, 
+                       self.fsamp / float(freq) / 2. / np.pi,
+                       dtype=float) # radians (w = 2 pi freq)
+
+            if self.hwp_dict['mode'] == 'stepped':
+                
+                hwp_ang = np.ones(tod_c.size, dtype=float)
+                hwp_ang[:hwp_dict['remainder']] += hwp_ang
+                          
+        hwp_ang = 0.
+
+        # modulate by hwp angle and polarization angle
+        expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+        tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+        tod = np.real(tod_c) # shares memory with tod_c
+
+        # add unpolarized tod
+        for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
             if n == 0: #avoid expais since its one anyway
-                sim_tod += np.real(self.func[n][pix])
+                tod += np.real(self.func[n][pix])
 
             if n > 0:
-                sim_tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * np.radians(pa))
-                sim_tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * np.radians(pa))
+                tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * pa)
+                tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * pa)
 
-        # load up hwp and polang arrays
-        # combine polarized and unpolarized tods
-        hwp_ang = 0.
-        expm2 = np.exp(1j * (4 * np.radians(hwp_ang) + 2 * np.radians(polang)))
-#        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
-#        expm2 = 1.
-        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
-        self.sim_tod = sim_tod
+        self.tod = tod
 
-        self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
+        # Nicer if we move this to the bin_tod part. It's a mapmaking related thing
+#        self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
 
     def get_spinmaps(self, alm, blm, max_spin=5, verbose=True):
         '''
@@ -804,28 +825,20 @@ class ScanStrategy(qp.QMap, Instrument):
         if not verbose:
             sys.stdout = sys.__stdout__
 
-    def bin_tod(self, az_off, el_off, init=True):
+    def bin_tod(self, init=True):
         '''
         Take internally stored tod and pointing
         and bin into map and projection matrices.
         '''
 
-        # dont forget init point
-#        q_off = self.det_offset(az_off, el_off, 0)
+        self.init_point(q_bore=self.q_bore[self.q_start:self.q_end+1],
+                        ctime=self.ctime, q_hwp=None)
         q_off = self.q_off
+
         if init:
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
-        tod = self.sim_tod[np.newaxis]
+        tod = self.tod[np.newaxis]
 
         vec, proj = self.from_tod(q_off, tod=tod)
-
-#b2 = ScanStrategy(30*24*3600, 20, location='spole')
-#chunks = b2.partition_mission(3600*20)
-#print chunks[0]
-#b2.set_instr_rot(1000)
-#for chunk in chunks[0:2]:
-#    subchunks = b2.subpart_chunk(chunk)
-#    print subchunks
-

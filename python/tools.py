@@ -120,7 +120,7 @@ def get_copol_blm(blm, normalize=False, deconv_q=False):
     normalize : bool
         Normalize unpolarized beam to monopole
     deconv_q : bool
-        Divide blm by sqrt(4 pi / (2 ell + 1)) before 
+        Divide blm by sqrt(4 pi / (2 ell + 1)) before
         computing spin harmonic coefficients
 
     Returns
@@ -174,9 +174,9 @@ def get_copol_blm(blm, normalize=False, deconv_q=False):
             end_p0 = getidx(lmax, m+3, m+3)
 
             blmp2[start+2:end] = blm[start_p0:end_p0]
-            
+
     return blm, blmm2, blmp2
-    
+
 
 def extract_func_kwargs(func, kwargs, pop=False, others_ok=True, warn=False):
     """
@@ -255,9 +255,9 @@ def radec2ind_hp(ra, dec, nside):
 
 def angle_gen(angles):
     '''
-    Generator that yields cyclic permmuation 
+    Generator that yields cyclic permmuation
     of elements of input array.
-    
+
     Arguments
     ---------
     angles : array-like
@@ -277,21 +277,21 @@ def quat_left_mult(q2, q):
     Arguments
     ---------
     q2 : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
     q : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
 
     Returns
     -------
     q3 : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
     '''
 
     q3 = np.zeros(4, dtype=float)
-    
+
     q3[0] = q2[0]*q[0] - q2[1]*q[1] - q2[2]*q[2] - q2[3]*q[3]
     q3[1] = q2[1]*q[0] + q2[0]*q[1] - q2[3]*q[2] + q2[2]*q[3]
     q3[2] = q2[2]*q[0] + q2[3]*q[1] + q2[0]*q[2] - q2[1]*q[3]
@@ -306,7 +306,7 @@ def quat_norm(q, inplace=False):
     Arguments
     ---------
     q : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
     inplace : bool, optional
         Perform normalization in place, default=False
@@ -314,10 +314,10 @@ def quat_norm(q, inplace=False):
     Returns
     -------
     qn : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         normalized quaternion
     '''
-    
+
     if not inplace:
         q = q.copy()
     q /= np.sqrt(np.sum(q**2))
@@ -327,11 +327,11 @@ def quat_norm(q, inplace=False):
 def quat_conj(q):
     '''
     Calculate conjugate quaternion.
-    
+
     Arguments
     ---------
     q : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
 
     Returns
@@ -343,22 +343,22 @@ def quat_conj(q):
 
     qc = np.zeros_like(q)
 
-    qc[0] = q[0] 
-    qc[1] = -q[1] 
-    qc[2] = -q[2] 
-    qc[3] = -q[3] 
+    qc[0] = q[0]
+    qc[1] = -q[1]
+    qc[2] = -q[2]
+    qc[3] = -q[3]
 
     return qc
 
 def quat_inv(q):
-    
+
     '''
     Calculate inverse quaternion.
-    
+
     Arguments
     ---------
     q : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
 
     Returns
@@ -370,7 +370,7 @@ def quat_inv(q):
 
     qi = quat_conj(q)
     qi /= np.sum(qi**2)
-    
+
     return qi
 
 def quat_conj_by(q, q2):
@@ -384,7 +384,7 @@ def quat_conj_by(q, q2):
         Float array of shape (4,), representing the
         quaternion to be conjugated by q2
     q2 : array-like
-        Float array of shape (4,), representing a 
+        Float array of shape (4,), representing a
         quaternion
 
 
@@ -392,13 +392,13 @@ def quat_conj_by(q, q2):
     -------
     q3 : array-like
         Float array of shape (4,), representing
-        q conjugated by q2 
+        q conjugated by q2
     '''
 
     q3 = quat_left_mult(q, quat_inv(q2))
     q3 = quat_left_mult(q2, q3)
 
-    return q3    
+    return q3
 
 
 #import quaternion as qt
@@ -421,6 +421,6 @@ def quat_conj_by(q, q2):
 
 #print quat_inv(a)
 #print np.conj(aq)
-    
+
 #print quat_norm(c)
 
