@@ -5,7 +5,7 @@ import glob
 import numpy as np
 import tools
 
-class Pointing():
+class Beam():
     '''
     An object representing detector centroid and spatial information
     '''
