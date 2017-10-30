@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import qpoint as qp
 import healpy as hp
+from detector import Pointing, Detector
 import tools
 
 class Instrument(object):
@@ -49,11 +50,9 @@ class Instrument(object):
 
     def set_focal_plane(self, nrow=1, ncol=1, fov=10):
         '''
-        Create detector pointing offsets on the sky,
-        i.e. in azimuth and elevation, for a square
-        grid of detectors. Every point on the grid
-        houses two detectors with orthogonal polarization
-        angles.
+        Create detector pointing offsets on the sky, i.e. in azimuth and
+        elevation, for a square grid of detectors. Every point on the grid
+        houses two detectors with orthogonal polarization angles.
 
         Arguments
         ---------
@@ -66,18 +65,45 @@ class Instrument(object):
 
         self.nrow = nrow
         self.ncol = ncol
-
         self.ndet = 2 * nrow * ncol
         self.chn_pr_az = np.zeros((nrow, ncol), dtype=float)
         self.chn_pr_el = np.zeros((nrow, ncol), dtype=float)
 
         x = np.linspace(-fov/2., fov/2., ncol)
         y = np.linspace(-fov/2., fov/2., nrow)
-
         xx, yy = np.meshgrid(x, y)
 
         self.chn_pr_az = xx.flatten()
         self.chn_pr_el = yy.flatten()
+
+    def create_focal_plane(self, nrow=1, ncol=1, fov=10):
+        '''
+        Create detector pointing offsets on the sky, i.e. in azimuth and
+        elevation by generating a list of Pointing objects.
+
+        '''
+
+        self.nrow = nrow
+        self.ncol = ncol
+        self.ndet = 2 * nrow * ncol
+
+        x = np.linspace(-fov/2., fov/2., ncol)
+        y = np.linspace(-fov/2., fov/2., nrow)
+        xx, yy = np.meshgrid(x, y)
+
+        pointings = []
+
+        for xi in x:
+            for yi in y:
+
+                pointi = Pointing(az=xi, el=yi, pol='A', type='Gaussian')
+                pointings.append(pointi)
+                pointi = Pointing(az=xi, el=yi, pol='B', type='Gaussian')
+                pointings.append(pointi)
+
+        self.pointings = pointings
+
+        assert (len(self.pointings) == self.ndet), 'Wrong number of detecors!'
 
 
     def get_blm(self, lmax, channel=None, fwhm=None, pol=True):
@@ -253,7 +279,7 @@ class ScanStrategy(qp.QMap, Instrument):
             Default = 0 deg.
         angles : array-like, optional
             Set of rotation angles. If left None, cycle
-            through 45 degree steps. If set, ignores 
+            through 45 degree steps. If set, ignores
             start_ang
         '''
 
@@ -404,7 +430,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
         self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
-    def scan_instrument(self, az_offs=None, el_offs=None, 
+    def scan_instrument(self, az_offs=None, el_offs=None,
                         verbose=True, **kwargs):
 
 
@@ -420,7 +446,7 @@ class ScanStrategy(qp.QMap, Instrument):
         verbose : bool [default True]
             Prints status reports
         kwargs : dict
-            Extra kwargs are assumed input to 
+            Extra kwargs are assumed input to
             constant_el_scan()
         '''
 
@@ -544,7 +570,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # store for mapmaking
         self.q_off = q_off
-        
+
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
