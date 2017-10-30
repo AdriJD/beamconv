@@ -465,10 +465,10 @@ class ScanStrategy(qp.QMap, Instrument):
         chunksize = chunk['end'] - chunk['start'] + 1
 
         # Currently, rotation periods longer than computation chunks
-        # are not implemented. So warn user and do not sub-divide chunk.
+        # are not implemented. So warn user and rotate per comp. chunk.
         if rot_chunk_size > chunksize:
             warnings.warn(
-              'Rotation period * fsamp > chunk size: instrument is not rotated')
+              'Rotation period * fsamp > chunk size: instrument rotates per chunk')
             return [chunk]
 
         nchunks = int(np.ceil(chunksize / rot_chunk_size))
@@ -477,12 +477,12 @@ class ScanStrategy(qp.QMap, Instrument):
 
         for sidx, subchunk in enumerate(xrange(nchunks)):
             if sidx == 0 and self.rot_dict['remainder'] != 0:
-                end = int(start + self.rot_dict['remainder'] - 0)
-
+                end = int(start + self.rot_dict['remainder'])
             else:
                 end = int(start + rot_chunk_size - 1)
 
-            if end >= chunk['end']:
+#            if end >= chunk['end']:
+            if end > chunk['end']:
                 self.rot_dict['remainder'] = end - chunk['end'] + 1
                 end = chunk['end']
 
@@ -539,46 +539,11 @@ class ScanStrategy(qp.QMap, Instrument):
             ces_kwargs.update(chunk)
             self.constant_el_scan(**ces_kwargs)
 
-            # Make HWP move if needed
-#            if self.hwp_dict['freq']:
-
-#                freq = self.hwp_dict['freq'] # cycles per sec for cont.
-#                start_ang = np.radians(self.hwp_dict['angle'])
-
-#                if self.hwp_dict['mode'] == 'continuous':
-
-#                    hwp_ang = np.linspace(start_ang,
-#                           start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp),
-#                           num=tod_c.size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
-
-                    # update mod 2pi start angle for next chunk
-#                    self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
-#                    self.hwp_ang = hwp_ang
-
-#                if self.hwp_dict['mode'] == 'stepped':
-
-#                    hwp_ang = np.ones(tod_c.size, dtype=float)
-
-#                    step_size = self.fsamp / float(freq) # samples per step
-
-#                    nsteps = int(np.ceil(tod_c.size / step_size))
-
-#                    for sidx, step in enumerate(xrange(nsteps)):
-
-#                        if sidx == 0 and self.hwp_dict['remainder'] != 0:
-
-#                            hwp_ang[:hwp_dict['remainder']] += hwp_ang
-
-#            else:
- #               hwp_ang = 0.
-
-
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
+                # rotate instrument if needed    
 
-                # rotate instrument if needed
                 if self.rot_dict['period']:
-
                     self.rot_dict['angle'] = self.rot_angle_gen.next()
 
                 # Cycling through detectors and scanning
@@ -947,6 +912,5 @@ class ScanStrategy(qp.QMap, Instrument):
 
         q_off = q_off[np.newaxis]
         tod = self.tod[np.newaxis]
-
         vec, proj = self.from_tod(q_off, tod=tod)
 
