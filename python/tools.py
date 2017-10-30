@@ -411,6 +411,8 @@ def quat_conj_by(q, q2):
 #aq = qt.as_quat_array(a)
 #bq = qt.as_quat_array(b)
 #print aq * bq
+#print quat_left_mult(a, b)
+#print quat_left_mult(b, a)
 #print a
 #print aq
 #print b

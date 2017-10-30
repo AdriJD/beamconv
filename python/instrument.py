@@ -323,7 +323,7 @@ class ScanStrategy(qp.QMap, Instrument):
         self.nside_spin = nside_spin
         self.nside_out = nside_out
 
-    def set_instr_rot(self, period=None, start_ang=0,
+    def set_instr_rot(self, period=None, start_ang=0.,
                       angles=None):
         '''
         Have the instrument periodically rotate around
@@ -343,23 +343,19 @@ class ScanStrategy(qp.QMap, Instrument):
             start_ang
         '''
 
-#        if self.hwp_mod:
-#            self.hwp_mod = False
-
-#        self.instr_rot = True
         self.rot_dict['period'] = period
         self.rot_dict['angle'] = start_ang
-        self.rot_dict['remainder'] = 0
+        self.rot_dict['remainder'] = 0.
 
         if angles is None:
             angles = np.arange(start_ang, 360+start_ang, 45)
             np.mod(angles, 360, out=angles)
 
         # init rotation generator
-        self.angle_gen = tools.angle_gen(angles)
+        self.rot_angle_gen = tools.angle_gen(angles)
 
     def set_hwp_mod(self, mode=None,
-                    freq=None, start_ang=None,
+                    freq=None, start_ang=0.,
                     angles=None, reflectivity=None):
         '''
         Modulate the polarized sky signal using a stepped or
@@ -380,20 +376,18 @@ class ScanStrategy(qp.QMap, Instrument):
             Not yet implemented
         '''
 
-        if  freq and not period:
-            raise ValueError('Pick either cont. rotation (freq) '
-                             'or stepped (period)')
-
-#        if self.instr_rot:
-#            self.instr_rot = False
-
-#        self.hwp_mod = True
         self.hwp_dict['mode'] = mode
         self.hwp_dict['freq'] = freq
-        self.hwp_dict['angles'] = angles
         self.hwp_dict['angle'] = start_ang
         self.hwp_dict['remainder'] = 0 # sec remaining for step
         self.hwp_dict['reflectivity'] = reflectivity
+
+        if angles is None:
+            angles = np.arange(start_ang, 360+start_ang, 22.5)
+            np.mod(angles, 360, out=angles)
+
+        # init rotation generator
+        self.hwp_angle_gen = tools.angle_gen(angles)
 
     def partition_mission(self, chunksize):
         '''
@@ -527,17 +521,51 @@ class ScanStrategy(qp.QMap, Instrument):
                     chunk['start'], chunk['end']))
 
             # Make the boresight move
-#            self.constant_el_scan(ra0=ra0, dec0=dec0, az_throw=az_throw,
-#                scan_speed=scan_speed, el_step=1*(cidx % 50 - 25), **chunk)
             ces_kwargs = kwargs.copy()
             ces_kwargs.update(chunk)
             self.constant_el_scan(**ces_kwargs)
 
+            # Make HWP move if needed
+#            if self.hwp_dict['freq']:
+
+#                freq = self.hwp_dict['freq'] # cycles per sec for cont.
+#                start_ang = np.radians(self.hwp_dict['angle'])
+
+#                if self.hwp_dict['mode'] == 'continuous':
+
+#                    hwp_ang = np.linspace(start_ang, 
+#                           start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp), 
+#                           num=tod_c.size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
+
+                    # update mod 2pi start angle for next chunk
+#                    self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
+#                    self.hwp_ang = hwp_ang
+
+#                if self.hwp_dict['mode'] == 'stepped':
+
+#                    hwp_ang = np.ones(tod_c.size, dtype=float)
+
+#                    step_size = self.fsamp / float(freq) # samples per step
+
+#                    nsteps = int(np.ceil(tod_c.size / step_size))
+
+#                    for sidx, step in enumerate(xrange(nsteps)):
+
+#                        if sidx == 0 and self.hwp_dict['remainder'] != 0:
+
+#                            hwp_ang[:hwp_dict['remainder']] += hwp_ang
+
+#            else:
+ #               hwp_ang = 0.
+
+
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
 
-                # rotate instrument
-                self.rot_dict['angle'] = self.angle_gen.next()
+                # rotate instrument if needed    
+                if self.rot_dict['period']:
+
+                    self.rot_dict['angle'] = self.rot_angle_gen.next()
 
                 # Cycling through detectors and scanning
                 for az_off, el_off in zip(az_offs.flatten(), el_offs.flatten()):
@@ -626,8 +654,11 @@ class ScanStrategy(qp.QMap, Instrument):
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
         # Note, q_rot is already a unit quaternion.
 
-#        q_off = tools.quat_conj_by(q_off, q_rot)
+        # works, but shouldnt it be switched around? No, that would
+        # rotate the polang of the centroid, but not the centroid 
+        # around the boresight. It's q_bore * q_rot * q_off
         q_off = tools.quat_left_mult(q_rot, q_off) # works
+#        q_off = tools.quat_left_mult(q_off, q_rot)  # no
 
         # store for mapmaking
         self.q_off = q_off
@@ -674,7 +705,7 @@ class ScanStrategy(qp.QMap, Instrument):
             tod_c += self.func_c[nidx][pix] * exppais
 
 
-        # if needed, compute hwp angle array
+        # if needed, compute hwp angle array.
         if self.hwp_dict['freq']:
 
             freq = self.hwp_dict['freq'] # cycles per sec for cont.
@@ -682,16 +713,57 @@ class ScanStrategy(qp.QMap, Instrument):
 
             if self.hwp_dict['mode'] == 'continuous':
 
-                hwp_ang = np.arange(start_ang, tod_c.size, 
-                       self.fsamp / float(freq) / 2. / np.pi,
-                       dtype=float) # radians (w = 2 pi freq)
+                hwp_ang = np.linspace(start_ang, 
+                       start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp), 
+                       num=tod_c.size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
+
+                # update mod 2pi start angle for next chunk
+                self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
+                self.hwp_ang = hwp_ang
 
             if self.hwp_dict['mode'] == 'stepped':
-                
+
                 hwp_ang = np.ones(tod_c.size, dtype=float)
-                hwp_ang[:hwp_dict['remainder']] += hwp_ang
-                          
-        hwp_ang = 0.
+
+                step_size = self.fsamp / float(freq) # samples per step
+
+                nsteps = int(np.ceil(tod_c.size / step_size))
+                
+                for sidx, step in enumerate(xrange(nsteps)):
+                            
+                    if sidx == 0 and self.hwp_dict['remainder'] != 0:
+                        
+                        hwp_ang[:hwp_dict['remainder']] += hwp_ang
+
+        else:
+            hwp_ang = 0.
+            self.hwp_ang = 0
+
+
+#        nchunks = int(np.ceil(chunksize / rot_chunk_size))
+#        subchunks = []
+#        start = chunk['start']
+
+#        for sidx, subchunk in enumerate(xrange(nchunks)):
+#            if sidx == 0 and self.rot_dict['remainder'] != 0:
+#                end = int(start + self.rot_dict['remainder'] - 0)
+
+#            else:
+#                end = int(start + rot_chunk_size - 1)
+
+#            if end >= chunk['end']:
+#                self.rot_dict['remainder'] = end - chunk['end'] + 1
+#                end = chunk['end']
+
+#            subchunks.append(dict(start=start, end=end))
+#            start += int(rot_chunk_size)
+
+#        return subchunks
+
+
+
+
+
 
         # modulate by hwp angle and polarization angle
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
@@ -830,9 +902,16 @@ class ScanStrategy(qp.QMap, Instrument):
         Take internally stored tod and pointing
         and bin into map and projection matrices.
         '''
+ 
+        # this works, but you should use the c code from qpoint 
+#        q_hwp = np.zeros((self.ctime.size, 4), dtype=float)
+#        q_hwp[:,0] = np.cos(-self.hwp_ang)
+#        q_hwp[:,3] = np.sin(-self.hwp_ang)
+        
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
         self.init_point(q_bore=self.q_bore[self.q_start:self.q_end+1],
-                        ctime=self.ctime, q_hwp=None)
+                        ctime=self.ctime, q_hwp=q_hwp)
         q_off = self.q_off
 
         if init:
@@ -842,3 +921,4 @@ class ScanStrategy(qp.QMap, Instrument):
         tod = self.tod[np.newaxis]
 
         vec, proj = self.from_tod(q_off, tod=tod)
+        

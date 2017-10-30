@@ -36,7 +36,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     blm = tools.get_copol_blm(blm.copy())
 
     # init scan strategy and instrument
-    b2 = ScanStrategy(2*60*60, # mission duration in sec.
+    b2 = ScanStrategy(3*60*60, # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
                       location='spole', # South pole instrument
                       nside_out=256)
@@ -47,21 +47,26 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     print('...spin-maps stored')
 
     # Initiate focal plane
-    b2.set_focal_plane(nrow=10, ncol=10, fov=10)
+    b2.set_focal_plane(nrow=1, ncol=1, fov=10)
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period)
+    # Set HWP rotation
+    b2.set_hwp_mod(mode='continuous', freq=1.) 
     # calculate tod in chunks of # samples
-    chunks = b2.partition_mission(int(60*60*b2.fsamp))
+    chunks = b2.partition_mission(int(3*60*60*b2.fsamp))
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps()
     # Generating timestreams + maps and storing as attributes
     b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
                        scan_speed=scan_speed)
-
+    
     maps = b2.solve_map(vec=b2.vec, proj=b2.proj, copy=True, fill=hp.UNSEEN)
+#    maps = b2.solve_map(vec=b2.vec[0], proj=b2.proj[0], copy=True, fill=hp.UNSEEN)
+#    maps = (maps, maps, maps)
     cond = b2.proj_cond(proj=b2.proj)
     cond[cond == np.inf] = hp.UNSEEN
 
+    
     ## Plotting results
     cart_opts = dict(rot=[ra0, dec0, 0],
                      lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
@@ -129,5 +134,5 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 
 if __name__ == '__main__':
 
-    scan1(lmax=300, mmax=2, fwhm=2, az_throw=50, rot_period=3*60, dec0=-60)
+    scan1(lmax=300, mmax=2, fwhm=2, az_throw=50, rot_period=0.5*60*60, dec0=-10)
 
