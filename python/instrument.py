@@ -5,8 +5,8 @@ import warnings
 import numpy as np
 import qpoint as qp
 import healpy as hp
-from detector import Beam, Detector
 import tools
+from detector import Beam
 
 class Instrument(object):
     '''
@@ -54,10 +54,15 @@ class Instrument(object):
         elevation, for a square grid of detectors. Every point on the grid
         houses two detectors with orthogonal polarization angles.
 
+        This function bypasses the creation of a Beam list
+
         Arguments
         ---------
-        ndet : int
-            Number of detectors per row.
+
+        nrow : int (default: 1)
+            Number of detectors per row
+        ncol : int (default: 1)
+            Number of detectors per column
         fov : float
             Angular size of side of square focal plane on
             sky in degrees.
@@ -77,16 +82,29 @@ class Instrument(object):
         self.els = yy.flatten()
 
 
-    def create_focal_plane(self, nrow=1, ncol=1, fov=10):
+    def create_focal_plane(self, nrow=1, ncol=1, fov=10.):
         '''
         Create detector pointing offsets on the sky, i.e. in azimuth and
         elevation by generating a list of Pointing objects.
+
+        Arguments
+        ---------
+        nrow : int (default: 1)
+            Number of detectors per row
+        ncol : int (default: 1)
+            Number of detectors per column
+        fov : float (default: 10.)
+            Angular size of side of square focal plane on
+            sky in degrees.
 
         '''
 
         self.nrow = nrow
         self.ncol = ncol
         self.ndet = 2 * nrow * ncol
+
+        nsr = np.ceil(np.log10(self.nrow))
+        nsc = np.ceil(np.log10(self.ncol))
 
         x = np.linspace(-fov/2., fov/2., ncol)
         y = np.linspace(-fov/2., fov/2., nrow)
@@ -100,10 +118,18 @@ class Instrument(object):
         for j, xi in enumerate(x):
             for i, yi in enumerate(y):
 
-                beami = Beam(az=xi, el=yi, pol='A', type='Gaussian')
-                beams.append(pointi)
-                beami = Beam(az=xi, el=yi, pol='B', type='Gaussian')
-                beams.append(pointi)
+                if nsr < 2 and nsc < 2:
+                    det_str = 'r{:02d}c{:02d}a'.format(i, j)
+                else:
+                    det_str = 'r{:03d}c{:03d}a'.format(i, j)
+
+                beami = Beam(az=xi, el=yi, name=det_str, polangle=0.,
+                    pol='A', type='Gaussian')
+                beams.append(beami)
+
+                beami = Beam(az=xi, el=yi, name=det_str, polangle=90.,
+                    pol='B', type='Gaussian')
+                beams.append(beami)
 
                 self.azs[i][j] = xi
                 self.els[i][j] = yi

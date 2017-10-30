@@ -9,7 +9,8 @@ class Beam():
     '''
     An object representing detector centroid and spatial information
     '''
-    def __init__(az=0., el=0., pol='A', type='Gaussian', fwhm=43, bdict=None):
+    def __init__(self, az=0., el=0., polangle=0., name=None,
+        pol='A', type='Gaussian', fwhm=43, dead=False, bdict=None):
         '''
 
         Arguments
@@ -19,6 +20,14 @@ class Beam():
             Azimuthal location of detector relative to boresight
         el : float (default: 0.)
             Elevation location of detector relative to boresight
+        polangle : float (default: 0.)
+            The polarization orientation of the beam/detector
+        name : str (default: None)
+            The callsign of this particular beam
+        pol : str (default: A)
+            The polarization callsign of the beam (A or B)
+        dead : bool (default: False)
+            True if the beam is dead (not functioning)
         type : str (default: gaussian)
             Type of detector spatial response model. Can be one of three
             Gaussian : A symmetric Gaussian beam
@@ -34,9 +43,13 @@ class Beam():
 
             self.az = bdict['az']
             self.el = bdict['el']
+            self.polangle = bdict['polangle']
+            self.name = bdict['name']
+            self.pol = bdict['pol']
             self.type = bdict['type']
             self.fwhm = bdict['fwhm']
-            self.pol = bdict['pol']
+            self.dead = bdict['dead']
+
             self.set_beam_map(bdict)
 
         else:
@@ -47,11 +60,13 @@ class Beam():
             self.fwhm = fwhm
             self.pol = pol
 
-    def set_beam_map(cr, numel, bmap):
+    def set_beam_map(cr, numel, bmap, load_map=False):
 
-        self.cr = cr
-        self.numel = numel
-        self.bmap = bmap
+        self.cr = bdict['cr']
+        self.numel = bdict['numel']
+        self.bmap_path = bdict['bmap_path']
+        if load_map:
+            self.bmap = bmap
 
     def load_eg_beams(bdir):
         '''

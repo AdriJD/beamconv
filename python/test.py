@@ -25,7 +25,6 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     rot_perio : int
         The instrument rotation period [s]
 
-
     '''
 
     # Load up alm and blm
