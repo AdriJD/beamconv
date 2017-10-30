@@ -29,7 +29,8 @@ class Instrument(object):
         lat : float, optional
             Latitude in degrees
         ghost_dc : float, optional
-            Ghost level. Not implemented yet.
+            Ghost level. Not implemented yet
+
         '''
 
         if location == 'spole':
@@ -65,7 +66,8 @@ class Instrument(object):
             Number of detectors per column
         fov : float
             Angular size of side of square focal plane on
-            sky in degrees.
+            sky in degrees
+
         '''
 
         self.nrow = nrow
@@ -95,7 +97,7 @@ class Instrument(object):
             Number of detectors per column
         fov : float (default: 10.)
             Angular size of side of square focal plane on
-            sky in degrees.
+            sky in degrees
 
         '''
 
@@ -124,11 +126,11 @@ class Instrument(object):
                     det_str = 'r{:03d}c{:03d}a'.format(i, j)
 
                 beami = Beam(az=xi, el=yi, name=det_str, polangle=0.,
-                    pol='A', type='Gaussian')
+                    pol='A', btype='Gaussian')
                 beams.append(beami)
 
                 beami = Beam(az=xi, el=yi, name=det_str, polangle=90.,
-                    pol='B', type='Gaussian')
+                    pol='B', btype='Gaussian')
                 beams.append(beami)
 
                 self.azs[i][j] = xi
@@ -165,35 +167,6 @@ class Instrument(object):
 
         self.beams = beams
 
-    def create_focal_plane(self, nrow=1, ncol=1, fov=10):
-        '''
-        Create detector pointing offsets on the sky, i.e. in azimuth and
-        elevation by generating a list of Pointing objects.
-
-        '''
-
-        self.nrow = nrow
-        self.ncol = ncol
-        self.ndet = 2 * nrow * ncol
-
-        x = np.linspace(-fov/2., fov/2., ncol)
-        y = np.linspace(-fov/2., fov/2., nrow)
-        xx, yy = np.meshgrid(x, y)
-
-        pointings = []
-
-        for xi in x:
-            for yi in y:
-
-                pointi = Pointing(az=xi, el=yi, pol='A', type='Gaussian')
-                pointings.append(pointi)
-                pointi = Pointing(az=xi, el=yi, pol='B', type='Gaussian')
-                pointings.append(pointi)
-
-        self.pointings = pointings
-
-        assert (len(self.pointings) == self.ndet), 'Wrong number of detecors!'
-
 
     def get_blm(self, lmax, channel=None, fwhm=None, pol=True):
         '''
@@ -213,7 +186,8 @@ class Instrument(object):
         -------
         blm (blm, blmm2) : (tuple of) array(s).
             Healpix-formatted beam blm array.
-            Also returns blmm2 if pol is set.
+            Also returns blmm2 if pol is set
+
         '''
 
         # for now, just create a blm array with sym, gaussian beam
@@ -230,7 +204,6 @@ class Instrument(object):
     def get_ghost(self):
         pass
     # function that introduces ghosts, i.e add detector offsets and corresponding beams
-
 
 
 class ScanStrategy(qp.QMap, Instrument):
@@ -273,10 +246,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
         ctime_kw = tools.extract_func_kwargs(self.set_ctime, kwargs)
         self.set_ctime(**ctime_kw)
-
         self.set_sample_rate(sample_rate)
         self.set_mission_len(duration)
-
 
  #       self.instr_rot = None
  #       self.hwp_mod = None
@@ -654,6 +625,7 @@ class ScanStrategy(qp.QMap, Instrument):
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
         # Note, q_rot is already a unit quaternion.
 
+#        q_off = tools.quat_conj_by(q_off, q_rot)
         q_off = tools.quat_left_mult(q_rot, q_off) # works
 
         # store for mapmaking
@@ -663,7 +635,8 @@ class ScanStrategy(qp.QMap, Instrument):
         ctime /= float(self.fsamp)
         ctime += self.ctime0
 
-        tod_c = np.zeros(ctime.size, dtype=np.complex128)
+        sim_tod = np.zeros(ctime.size, dtype='float64')
+        sim_tod2 = np.zeros(ctime.size, dtype=np.complex128)
 
         # normal chunk len
         nrml_len = self.chunks[0]['end'] - self.chunks[0]['start'] + 1
@@ -687,32 +660,35 @@ class ScanStrategy(qp.QMap, Instrument):
         ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[q_start:q_end+1],
             q_hwp=None, sindec=False, return_pa=True)
 
-        pa = np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
 
-        # Fill complex array
+        # More efficient if you first use complex tod to do pol
+        # case, then just add the unpolarized tod to the complex
+        # one, i.e. only allocate sim_tod2, not sim_tod as well.
+
+        # Also more efficient if you do pa = np.radians(pa, out=pa)
+        # before the loop
+
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
-            exppais = np.exp(1j * n * pa)
-            tod_c += self.func_c[nidx][pix] * exppais
-
-        # load up hwp and polang arrays
-        hwp_ang = 0.
-        expm2 = np.exp(1j * (4 * np.radians(hwp_ang) + 2 * np.radians(polang)))
-        tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        tod = np.real(tod_c) # shares memory with tod_c
-
-        # add unpolarized tod
-        for nidx, n in enumerate(xrange(-self.N+1, self.N)):
+            exppais = np.exp(1j * n * np.radians(pa))
+            sim_tod2 += self.func_c[nidx][pix] * exppais
 
             if n == 0: #avoid expais since its one anyway
-                tod += np.real(self.func[n][pix])
+                sim_tod += np.real(self.func[n][pix])
 
             if n > 0:
-                tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * pa)
-                tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * pa)
+                sim_tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * np.radians(pa))
+                sim_tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * np.radians(pa))
 
-        self.tod = tod
+        # load up hwp and polang arrays
+        # combine polarized and unpolarized tods
+        hwp_ang = 0.
+        expm2 = np.exp(1j * (4 * np.radians(hwp_ang) + 2 * np.radians(polang)))
+#        expm2 = np.exp(1j * (4 * np.radians(hwpang) + 2 * np.radians(polang)))
+#        expm2 = 1.
+        sim_tod += np.real(sim_tod2 * expm2 + np.conj(sim_tod2 * expm2)) / 2.
+        self.sim_tod = sim_tod
 
         self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
 
@@ -841,7 +817,7 @@ class ScanStrategy(qp.QMap, Instrument):
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
-        tod = self.tod[np.newaxis]
+        tod = self.sim_tod[np.newaxis]
 
         vec, proj = self.from_tod(q_off, tod=tod)
 

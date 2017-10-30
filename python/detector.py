@@ -10,7 +10,8 @@ class Beam():
     An object representing detector centroid and spatial information
     '''
     def __init__(self, az=0., el=0., polangle=0., name=None,
-        pol='A', type='Gaussian', fwhm=43, dead=False, bdict=None):
+        pol='A', btype='Gaussian', fwhm=43, lmax=None, dead=False, bdict=None,
+        load_map=False):
         '''
 
         Arguments
@@ -21,52 +22,68 @@ class Beam():
         el : float (default: 0.)
             Elevation location of detector relative to boresight
         polangle : float (default: 0.)
-            The polarization orientation of the beam/detector
+            The polarization orientation of the beam/detector [deg]
         name : str (default: None)
             The callsign of this particular beam
         pol : str (default: A)
             The polarization callsign of the beam (A or B)
         dead : bool (default: False)
             True if the beam is dead (not functioning)
-        type : str (default: gaussian)
+        btype : str (default: gaussian)
             Type of detector spatial response model. Can be one of three
-            Gaussian : A symmetric Gaussian beam
+            Gaussian : A symmetric Gaussian beam, definied by centroids and FWHM
+            Gaussian_map : A symmetric Gaussian, defined by centroids and a map
             EG       : An elliptical Gaussian
             PO       : A realistic beam based on optical simulations or beam maps
-
         fwhm : float (default: 43. ) [arcmin]
             Detector beam FWHM
 
         '''
 
         if bdict is not None:
+            # Loading from a dictionary
 
             self.az = bdict['az']
             self.el = bdict['el']
             self.polangle = bdict['polangle']
             self.name = bdict['name']
             self.pol = bdict['pol']
-            self.type = bdict['type']
+            self.btype = bdict['type']
             self.fwhm = bdict['fwhm']
             self.dead = bdict['dead']
 
-            self.set_beam_map(bdict)
+            self.cr = bdict['cr']
+            self.numel = bdict['numel']
+            self.bmap_path = bdict['bmap_path']
+            if load_map:
+                self.bmap = bmap
+
+            self.blm = bdict['blm']
+            self.blmm2 = bdict['blmm2']
 
         else:
+            # Populating attributes from init call
 
             self.az = az
             self.el = el
-            self.type = type
-            self.fwhm = fwhm
+            self.polangle = polangle
+            self.name = name
             self.pol = pol
+            self.btype = btype
+            self.fwhm = fwhm
+            self.dead = dead
 
-    def set_beam_map(cr, numel, bmap, load_map=False):
+            if lmax is None:
+                # Going up to the Nyquist frequency set by beam scale
+                self.lmax = int(2*np.pi/np.radians(self.fwhm/60.))
+            else:
+                self.lmax = lmax
 
-        self.cr = bdict['cr']
-        self.numel = bdict['numel']
-        self.bmap_path = bdict['bmap_path']
-        if load_map:
-            self.bmap = bmap
+            blm, blmm2 = tools.gauss_blm(self.fwhm, self.lmax, pol=True)
+
+            self.blm = blm
+            self.blmm2 = blmm2
+
 
     def load_eg_beams(bdir):
         '''
@@ -85,7 +102,6 @@ class Beam():
 
         Arguments
         ---------
-
 
         '''
 
