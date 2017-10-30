@@ -143,6 +143,24 @@ class Instrument(object):
 
         assert (len(self.beams) == self.ndet), 'Wrong number of detecors!'
 
+    def kill_channels(self, killfrac=0.2):
+        '''
+        Randomly identifies detectors in the beams list and sets their 'dead'
+        attribute to True.
+
+        Arguments
+        ---------
+
+        killfrac : 0 < float < 1  (default: 0.2)
+            The relative number of detectors to kill
+
+        '''
+
+        killidx = np.random.randint(0, self.ndet, np.floor(killfrac*self.ndet))
+
+        for beam in self.beams[killidx]:
+            beam.dead = True
+
 
     def load_beam_directory(bdir):
         '''
@@ -195,10 +213,6 @@ class Instrument(object):
             return tools.gauss_blm(fwhm, lmax, pol=True)
 
     def get_blm_spider(self):
-        pass
-
-    def kill_channels(self):
-        # function that kills certain detectors, i.e. create bool mask for focal plane
         pass
 
     def get_ghost(self):
@@ -533,8 +547,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
 #                if self.hwp_dict['mode'] == 'continuous':
 
-#                    hwp_ang = np.linspace(start_ang, 
-#                           start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp), 
+#                    hwp_ang = np.linspace(start_ang,
+#                           start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp),
 #                           num=tod_c.size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
 
                     # update mod 2pi start angle for next chunk
@@ -562,7 +576,7 @@ class ScanStrategy(qp.QMap, Instrument):
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
 
-                # rotate instrument if needed    
+                # rotate instrument if needed
                 if self.rot_dict['period']:
 
                     self.rot_dict['angle'] = self.rot_angle_gen.next()
@@ -643,6 +657,20 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
+
+        Arguments
+        ---------
+
+        az_off : float (default: None)
+            The detector azimuthal offset relative to borsight [deg]
+        el_off : float (default: None)
+            The detector elevation offset relative to borsight [deg].
+            Use ScanStrategy attribute if n
+        polang : float (default: None)
+            Detector polarization angle
+        start  :
+        end    :
+
         '''
 
         # NOTE nicer if you give q_off directly instead of az_off, el_off
@@ -655,7 +683,7 @@ class ScanStrategy(qp.QMap, Instrument):
         # Note, q_rot is already a unit quaternion.
 
         # works, but shouldnt it be switched around? No, that would
-        # rotate the polang of the centroid, but not the centroid 
+        # rotate the polang of the centroid, but not the centroid
         # around the boresight. It's q_bore * q_rot * q_off
         q_off = tools.quat_left_mult(q_rot, q_off) # works
 #        q_off = tools.quat_left_mult(q_off, q_rot)  # no
@@ -666,7 +694,7 @@ class ScanStrategy(qp.QMap, Instrument):
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
-        self.ctime = ctime 
+        self.ctime = ctime
 
         tod_c = np.zeros(ctime.size, dtype=np.complex128)
 
@@ -713,8 +741,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
             if self.hwp_dict['mode'] == 'continuous':
 
-                hwp_ang = np.linspace(start_ang, 
-                       start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp), 
+                hwp_ang = np.linspace(start_ang,
+                       start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp),
                        num=tod_c.size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
 
                 # update mod 2pi start angle for next chunk
@@ -728,11 +756,11 @@ class ScanStrategy(qp.QMap, Instrument):
                 step_size = self.fsamp / float(freq) # samples per step
 
                 nsteps = int(np.ceil(tod_c.size / step_size))
-                
+
                 for sidx, step in enumerate(xrange(nsteps)):
-                            
+
                     if sidx == 0 and self.hwp_dict['remainder'] != 0:
-                        
+
                         hwp_ang[:hwp_dict['remainder']] += hwp_ang
 
         else:
@@ -902,12 +930,12 @@ class ScanStrategy(qp.QMap, Instrument):
         Take internally stored tod and pointing
         and bin into map and projection matrices.
         '''
- 
-        # this works, but you should use the c code from qpoint 
+
+        # this works, but you should use the c code from qpoint
 #        q_hwp = np.zeros((self.ctime.size, 4), dtype=float)
 #        q_hwp[:,0] = np.cos(-self.hwp_ang)
 #        q_hwp[:,3] = np.sin(-self.hwp_ang)
-        
+
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
         self.init_point(q_bore=self.q_bore[self.q_start:self.q_end+1],
@@ -921,4 +949,4 @@ class ScanStrategy(qp.QMap, Instrument):
         tod = self.tod[np.newaxis]
 
         vec, proj = self.from_tod(q_off, tod=tod)
-        
+

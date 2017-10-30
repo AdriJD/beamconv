@@ -51,7 +51,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period)
     # Set HWP rotation
-    b2.set_hwp_mod(mode='continuous', freq=1.) 
+    b2.set_hwp_mod(mode='continuous', freq=1.)
     # calculate tod in chunks of # samples
     chunks = b2.partition_mission(int(3*60*60*b2.fsamp))
     # Allocate and assign parameters for mapmaking
@@ -59,20 +59,20 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     # Generating timestreams + maps and storing as attributes
     b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
                        scan_speed=scan_speed)
-    
+
     maps = b2.solve_map(vec=b2.vec, proj=b2.proj, copy=True, fill=hp.UNSEEN)
 #    maps = b2.solve_map(vec=b2.vec[0], proj=b2.proj[0], copy=True, fill=hp.UNSEEN)
 #    maps = (maps, maps, maps)
     cond = b2.proj_cond(proj=b2.proj)
     cond[cond == np.inf] = hp.UNSEEN
 
-    
+
     ## Plotting results
     cart_opts = dict(rot=[ra0, dec0, 0],
                      lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
                      latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
                      unit=r'[$\mu K_{\mathrm{CMB}}$]')
-    
+
     # plot solved maps
     plt.figure()
     hp.cartview(maps[0], min=-250, max=250, **cart_opts)
@@ -130,6 +130,50 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     plt.xlabel(r'Multipole [$\ell$]')
     plt.savefig('../scratch/img/cls.png')
     plt.close()
+
+
+def offset_beam():
+    '''
+    Script that scans the sky with a Gaussian beam that has been translated
+    relative to the North pole before calculating beam b_lm. This means that the
+    beam is highly asymmetric.
+    '''
+
+    pass
+
+def single_detector(nsamp=1000):
+    '''
+    Generates a timeline for a set of individual detectors scanning the sky. The
+    spatial response of these detectors is described by a 1) Gaussian, 2) an
+    elliptical Gaussian and, 3) a beam map derived by physical optics.
+
+    Arguments
+    ---------
+
+    nsamp : int (default: 1000)
+        The length of the generated timestreams in number of samples
+
+    '''
+
+    # Load up alm and blm
+    cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt', unpack=True) # Cl in uK^2
+    ell, cls = cls[0], cls[1:]
+    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+
+    blm = tools.gauss_blm(fwhm, lmax, pol=False)
+    blm = tools.get_copol_blm(blm.copy())
+
+    # init scan strategy and instrument
+    ss = ScanStrategy(nsamp/10., # mission duration in sec.
+                      sample_rate=10, # 10 Hz sample rate
+                      location='spole', # South pole instrument
+                      nside_out=256)
+
+    # Calculate spinmaps, stored internally
+
+    ss.get_spinmaps(alm, blm, mmax, verbose=False)
+
+    #### FINISH THIS ####
 
 
 if __name__ == '__main__':
