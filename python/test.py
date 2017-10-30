@@ -49,15 +49,16 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     print('...spin-maps stored')
 
     # Initiate focal plane
-    b2.set_focal_plane(nrow=14, ncol=14, fov=10)
-    # Rotate instrument (period in sec)  
+    #b2.set_focal_plane(nrow=14, ncol=14, fov=10)
+    b2.create_focal_plane(nrow=14, ncol=14, fov=10)
+    # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period)
     # calculate tod in chunks of # samples
     chunks = b2.partition_mission(int(60*60*b2.fsamp))
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps()
     # Generating timestreams + maps and storing as attributes
-    b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0, 
+    b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
                        scan_speed=scan_speed)
 
     # just solve for the unpolarized map for now (condition number is terrible obviously)
@@ -125,4 +126,4 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 if __name__ == '__main__':
 
     scan1(lmax=300, mmax=2, fwhm=2, az_throw=90, rot_period=3*60, dec0=-60)
-    
+

@@ -1,6 +1,7 @@
 import sys
 import time
 import warnings
+import glob
 import numpy as np
 import tools
 
@@ -8,7 +9,7 @@ class Pointing():
     '''
     An object representing detector centroid and spatial information
     '''
-    def __init__(az=0., el=0., pol='A', type='Gaussian', fwhm=43):
+    def __init__(az=0., el=0., pol='A', type='Gaussian', fwhm=43, bdict=None):
         '''
 
         Arguments
@@ -19,17 +20,61 @@ class Pointing():
         el : float (default: 0.)
             Elevation location of detector relative to boresight
         type : str (default: gaussian)
-            Type of detector spatial response model
+            Type of detector spatial response model. Can be one of three
+            Gaussian : A symmetric Gaussian beam
+            EG       : An elliptical Gaussian
+            PO       : A realistic beam based on optical simulations or beam maps
+
         fwhm : float (default: 43. ) [arcmin]
             Detector beam FWHM
 
         '''
 
-        self.az = az
-        self.el = el
-        self.type = type
-        self.fwhm = fwhm
+        if bdict is not None:
 
+            self.az = bdict['az']
+            self.el = bdict['el']
+            self.type = bdict['type']
+            self.fwhm = bdict['fwhm']
+            self.pol = bdict['pol']
+            self.set_beam_map(bdict)
+
+        else:
+
+            self.az = az
+            self.el = el
+            self.type = type
+            self.fwhm = fwhm
+            self.pol = pol
+
+    def set_beam_map(cr, numel, bmap):
+
+        self.cr = cr
+        self.numel = numel
+        self.bmap = bmap
+
+    def load_eg_beams(bdir):
+        '''
+        Loads a collection of elliptical Gaussian beams from parameters stored
+        in a pickle file.
+        '''
+
+        pass
+
+
+    def generate_eg_beams(nrow=1, ncol=1, fov=10, fwhm0=43,
+        emin=0.01, emax=0.05):
+        '''
+        Creates a set of elliptical Gaussian beams based on the recipe provided
+        in arguments
+
+        Arguments
+        ---------
+
+
+        '''
+
+        pass
 
 
 class Detector():

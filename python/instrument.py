@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import qpoint as qp
 import healpy as hp
-from detector import Pointing, Detector
+from detector import Beam, Detector
 import tools
 
 class Instrument(object):
@@ -66,15 +66,16 @@ class Instrument(object):
         self.nrow = nrow
         self.ncol = ncol
         self.ndet = 2 * nrow * ncol
-        self.chn_pr_az = np.zeros((nrow, ncol), dtype=float)
-        self.chn_pr_el = np.zeros((nrow, ncol), dtype=float)
+        self.azs = np.zeros((nrow, ncol), dtype=float)
+        self.els = np.zeros((nrow, ncol), dtype=float)
 
         x = np.linspace(-fov/2., fov/2., ncol)
         y = np.linspace(-fov/2., fov/2., nrow)
         xx, yy = np.meshgrid(x, y)
 
-        self.chn_pr_az = xx.flatten()
-        self.chn_pr_el = yy.flatten()
+        self.azs = xx.flatten()
+        self.els = yy.flatten()
+
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10):
         '''
@@ -91,19 +92,52 @@ class Instrument(object):
         y = np.linspace(-fov/2., fov/2., nrow)
         xx, yy = np.meshgrid(x, y)
 
-        pointings = []
+        beams = []
 
-        for xi in x:
-            for yi in y:
+        self.azs = np.zeros((nrow, ncol), dtype=float)
+        self.els = np.zeros((nrow, ncol), dtype=float)
 
-                pointi = Pointing(az=xi, el=yi, pol='A', type='Gaussian')
-                pointings.append(pointi)
-                pointi = Pointing(az=xi, el=yi, pol='B', type='Gaussian')
-                pointings.append(pointi)
+        for j, xi in enumerate(x):
+            for i, yi in enumerate(y):
 
-        self.pointings = pointings
+                beami = Beam(az=xi, el=yi, pol='A', type='Gaussian')
+                beams.append(pointi)
+                beami = Beam(az=xi, el=yi, pol='B', type='Gaussian')
+                beams.append(pointi)
 
-        assert (len(self.pointings) == self.ndet), 'Wrong number of detecors!'
+                self.azs[i][j] = xi
+                self.els[i][j] = yi
+
+        self.azs = self.azs.flatten()
+        self.els = self.els.flatten()
+
+        self.beams = beams
+
+        assert (len(self.beams) == self.ndet), 'Wrong number of detecors!'
+
+
+    def load_beam_directory(bdir):
+        '''
+        Loads a collection of beam maps to use for a scanning simulation. The
+        beam maps should be stored as a collection of pickled dictionaries.
+
+        Arguments
+        ---------
+
+        bdir : str
+            The path to the directory containing beam maps
+
+        '''
+
+        beams = []
+        file_list = sorted(glob.glob(bdir+'*.pkl'))
+
+        for filei in file_list:
+
+            bdata = pickle.load(open(filei, 'r'))
+            pointings.append(Pointing(bdict=bdata))
+
+        self.beams = beams
 
 
     def get_blm(self, lmax, channel=None, fwhm=None, pol=True):
@@ -452,8 +486,8 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # Using precomputed detector offsets if not input to function
         if az_offs is None or el_offs is None:
-            az_offs = self.chn_pr_az
-            el_offs = self.chn_pr_el
+            az_offs = self.azs
+            el_offs = self.els
 
         if verbose:
             print('  Scanning with {:d} x {:d} grid of detectors'.format(
