@@ -39,7 +39,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     b2 = ScanStrategy(2*60*60, # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
                       location='spole', # South pole instrument
-                      nside_out=128)
+                      nside_out=256)
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps...')
@@ -64,11 +64,10 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 
     ## Plotting results
     cart_opts = dict(rot=[ra0, dec0, 0],
-                     lonra=[-min(az_throw, 90), min(az_throw, 90)],
-                     latra=[-min(0.75*az_throw, 45), min(0.75*az_throw, 45)],
+                     lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
+                     latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
                      unit=r'[$\mu K_{\mathrm{CMB}}$]')
     
-
     # plot solved maps
     plt.figure()
     hp.cartview(maps[0], min=-250, max=250, **cart_opts)
@@ -86,19 +85,21 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     plt.close()
 
     # plot the input map and spectra
-    maps_raw = hp.alm2map(alm, 128)
+    nside = hp.get_nside(maps[0])
+    maps_raw = hp.alm2map(alm, nside)
+
     plt.figure()
     hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
     plt.savefig('../scratch/img/raw_map_I.png')
     plt.close()
 
-    maps_raw = hp.alm2map(alm, 128)
+    maps_raw = hp.alm2map(alm, nside)
     plt.figure()
     hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
     plt.savefig('../scratch/img/raw_map_Q.png')
     plt.close()
 
-    maps_raw = hp.alm2map(alm, 128)
+    maps_raw = hp.alm2map(alm, nside)
     plt.figure()
     hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
     plt.savefig('../scratch/img/raw_map_U.png')
@@ -128,5 +129,5 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 
 if __name__ == '__main__':
 
-    scan1(lmax=300, mmax=2, fwhm=2, az_throw=90, rot_period=3*60, dec0=-60)
+    scan1(lmax=300, mmax=2, fwhm=2, az_throw=50, rot_period=3*60, dec0=-60)
 
