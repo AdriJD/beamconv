@@ -3,10 +3,17 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
 import healpy as hp
 import tools
 from instrument import ScanStrategy
+
+def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
+
+    cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
+                     unpack=True) # Cl in uK^2
+    return cls[0], cls[1:]
 
 def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     az_throw=10, scan_speed=1, rot_period=10*60):
@@ -28,9 +35,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     '''
 
     # Load up alm and blm
-    cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
-                     unpack=True) # Cl in uK^2
-    ell, cls = cls[0], cls[1:]
+    ell, cls = get_cls()
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
     blm = tools.gauss_blm(fwhm, lmax, pol=False)
@@ -44,9 +49,8 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
                       nside_out=256)
 
     # Calculate spinmaps, stored internally
-    print('\nCalculating spin-maps...')
+    print('\nCalculating spin-maps')
     b2.get_spinmaps(alm, blm, mmax, verbose=False)
-    print('...spin-maps stored')
 
     # Initiate focal plane
     b2.set_focal_plane(nrow=3, ncol=3, fov=4)
@@ -155,17 +159,28 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     plt.close()
 
 
-def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100):
+def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
     '''
-    Script that scans the sky with a symmetric Gaussian beam that has 
+    Script that scans the sky with a symmetric Gaussian beam that has
     been rotated away from the boresight. This means that the
     beam is highly asymmetric.
+
+    Arguments
+    ---------
+
+    az_off :
+
+    el_off :
+
+    lmax :
+
+    fwhm :
+
+
     '''
 
     # Load up alm and blm
-    cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
-                     unpack=True) # Cl in uK^2
-    ell, cls = cls[0], cls[1:]
+    ell, cls = get_cls()
 
     # set random seed
     np.random.seed(10)
@@ -185,9 +200,8 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100):
                       nside_out=256)
 
     # Calculate spinmaps, stored internally
-    print('\nCalculating spin-maps...')
+    print('\nCalculating spin-maps')
     b2.get_spinmaps(alm, blm, max_spin=2, verbose=False)
-    print('...spin-maps stored')
 
     # Initiate focal plane
     b2.nrow = 1
@@ -205,7 +219,7 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100):
 
     # calculate tod in chunks of # samples
     chunks = b2.partition_mission(int(4*60*b2.fsamp))
-    
+
     b2.scan_instrument(mapmaking=False)
 
     # Store the tod made with symmetric beam
@@ -230,8 +244,7 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100):
 
     print np.degrees(radius), np.degrees(angle)
 
-    
-    q_off = b2.det_offset(az_off, el_off, 0)    
+    q_off = b2.det_offset(az_off, el_off, 0)
     ra, dec, pa = b2.quat2radecpa(b2.det_offset(az_off, el_off, 0))
     print ra, dec, pa
     angle = np.radians(180 - ra)
@@ -239,13 +252,16 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100):
     psi = -np.radians(pa)
 
     print np.degrees(psi), np.degrees(radius), np.degrees(-angle)
-    hp.rotate_alm([blmI, blmE, blmB], psi, radius, -angle, lmax=lmax,  mmax=lmax)
-#    hp.rotate_alm([blmI, blmE, blmB], angle, radius, -angle, lmax=lmax,  mmax=lmax)
-#    hp.rotate_alm([blmI, blmE, blmB], psi, radius, -np.radians(ra), lmax=lmax,  mmax=lmax)
+    hp.rotate_alm([blmI, blmE, blmB], psi, radius, -angle, lmax=lmax, mmax=lmax)
+    #hp.rotate_alm([blmI, blmE, blmB], angle, radius, -angle, lmax=lmax,  mmax=lmax)
+    #hp.rotate_alm([blmI, blmE, blmB], psi, radius, -np.radians(ra), lmax=lmax,  mmax=lmax)
 
     plt.figure()
-    plt.plot(np.arange(lmax+1), blmI[:lmax+1])
-    plt.plot(np.arange(lmax+1), blm[0][:lmax+1])
+    plt.plot(np.arange(lmax+1), blm[0][:lmax+1], label='Original Gaussian')
+    plt.plot(np.arange(lmax+1), blmI[:lmax+1], label='Rotated Gaussian')
+    plt.xlabel('Multipole, $\ell$')
+    plt.ylabel('Angular response')
+    plt.legend()
     plt.savefig('../scratch/img/bl.png')
     plt.close()
 
@@ -255,24 +271,31 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100):
     blm = (blmI, blmm2, blmp2)
 
     print('\nCalculating spin-maps...')
-    b2.get_spinmaps(alm, blm, max_spin=100, verbose=False)
+    b2.get_spinmaps(alm, blm, max_spin=max_spin, verbose=False)
     print('...spin-maps stored')
 
     # Reset instrument rotation and HWP
     b2.set_instr_rot(period=60)
     b2.set_hwp_mod(mode='continuous', freq=25.)
-    
     b2.scan_instrument(mapmaking=False)
 
-    samples = np.arange(tod_sym.size)
     plt.figure()
-    plt.plot(samples, b2.tod, label='asym')
-    plt.plot(samples, tod_sym, label='sym', alpha=0.5)#, ls=':')
-    plt.legend()
+    gs = gridspec.GridSpec(3, 1)
+    ax1 = plt.subplot(gs[:2, :])
+    ax2 = plt.subplot(gs[-1, :])
+    samples = np.arange(tod_sym.size)
+    ax1.plot(samples, b2.tod, label='Asymmetric Gaussian')
+    ax1.plot(samples, tod_sym, label='Symmetric Gaussian', alpha=0.5)#, ls=':')
+    ax1.legend()
+
+    ax1.tick_params(labelbottom='off')
+    ax2.plot(samples, b2.tod - tod_sym)
+    ax1.set_ylabel('Signal')
+    ax2.set_ylabel('Difference')
+    ax2.set_xlabel('Sample number')
+
     plt.savefig('../scratch/img/tods.png')
     plt.close()
-    
-
 
 def single_detector(nsamp=1000):
     '''
