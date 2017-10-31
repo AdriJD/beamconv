@@ -38,7 +38,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     # init scan strategy and instrument
     b2 = ScanStrategy(30*60*60, # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
-                      location='atacama', # South pole instrument
+                      location='spole', # South pole instrument
                       nside_spin=256,
                       nside_out=256)
 
@@ -48,13 +48,14 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     print('...spin-maps stored')
 
     # Initiate focal plane
-    b2.set_focal_plane(nrow=1, ncol=1, fov=4)
+    b2.set_focal_plane(nrow=3, ncol=3, fov=4)
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period, angles=np.arange(0, 360, 10))
     # Set HWP rotation
-    b2.set_hwp_mod(mode='continuous', freq=1.)
+#    b2.set_hwp_mod(mode='continuous', freq=1.)
+    b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
     # calculate tod in chunks of # samples
-    chunks = b2.partition_mission(int(1*60*60*b2.fsamp))
+    chunks = b2.partition_mission(int(30*60*60*b2.fsamp))
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps()
     # Generating timestreams + maps and storing as attributes
@@ -198,5 +199,5 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=0.1*60*60, dec0=-10)
+    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60, dec0=-10)
 

@@ -481,7 +481,6 @@ class ScanStrategy(qp.QMap, Instrument):
             else:
                 end = int(start + rot_chunk_size - 1)
 
-#            if end >= chunk['end']:
             if end > chunk['end']:
                 self.rot_dict['remainder'] = end - chunk['end'] + 1
                 end = chunk['end']
@@ -541,7 +540,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
-                # rotate instrument if needed    
+                # rotate instrument if needed
 
                 if self.rot_dict['period']:
                     self.rot_dict['angle'] = self.rot_angle_gen.next()
@@ -660,8 +659,9 @@ class ScanStrategy(qp.QMap, Instrument):
         ctime /= float(self.fsamp)
         ctime += self.ctime0
         self.ctime = ctime
+        tod_size = ctime.size
 
-        tod_c = np.zeros(ctime.size, dtype=np.complex128)
+        tod_c = np.zeros(tod_size, dtype=np.complex128)
 
         # normal chunk len
         nrml_len = self.chunks[0]['end'] - self.chunks[0]['start'] + 1
@@ -707,8 +707,8 @@ class ScanStrategy(qp.QMap, Instrument):
             if self.hwp_dict['mode'] == 'continuous':
 
                 hwp_ang = np.linspace(start_ang,
-                       start_ang + 2 * np.pi * tod_c.size / float(freq * self.fsamp),
-                       num=tod_c.size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
+                       start_ang + 2 * np.pi * tod_size / float(freq * self.fsamp),
+                       num=tod_size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
 
                 # update mod 2pi start angle for next chunk
                 self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
@@ -716,47 +716,41 @@ class ScanStrategy(qp.QMap, Instrument):
 
             if self.hwp_dict['mode'] == 'stepped':
 
-                hwp_ang = np.ones(tod_c.size, dtype=float)
+                step_size = int(self.fsamp / float(freq)) # samples per step
+                start_ang = self.hwp_dict['angle']
+                hwp_ang = np.zeros(tod_size, dtype=float)
+                nsteps = int(np.ceil(tod_size / float(step_size)))
 
-                step_size = self.fsamp / float(freq) # samples per step
-
-                nsteps = int(np.ceil(tod_c.size / step_size))
-
-                for sidx, step in enumerate(xrange(nsteps)):
-
+                startidx = 0
+                for sidx, step in enumerate(xrange(nsteps+1)):
                     if sidx == 0 and self.hwp_dict['remainder'] != 0:
+                        hwp_ang[:self.hwp_dict['remainder']] += np.radians(start_ang)
+                        startidx = self.hwp_dict['remainder']
+                    else:
+                        if startidx + step_size > tod_size:
 
-                        hwp_ang[:hwp_dict['remainder']] += hwp_ang
+                            endidx = tod_size - 1
+                            self.hwp_dict['remainder'] = startidx + step_size - endidx
+                            hwp_ang[startidx:endidx] += np.radians(
+                                self.hwp_angle_gen.next())
 
+                            # we're in the last chunk
+                            break
+
+                        else:
+                            endidx = startidx + step_size
+
+                            hwp_ang[startidx:endidx] += np.radians(
+                                self.hwp_angle_gen.next())
+
+                        startidx += step_size
+
+                # update mod 2pi start angle for next chunk
+                self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
+                self.hwp_ang = hwp_ang
         else:
             hwp_ang = 0.
             self.hwp_ang = 0
-
-
-#        nchunks = int(np.ceil(chunksize / rot_chunk_size))
-#        subchunks = []
-#        start = chunk['start']
-
-#        for sidx, subchunk in enumerate(xrange(nchunks)):
-#            if sidx == 0 and self.rot_dict['remainder'] != 0:
-#                end = int(start + self.rot_dict['remainder'] - 0)
-
-#            else:
-#                end = int(start + rot_chunk_size - 1)
-
-#            if end >= chunk['end']:
-#                self.rot_dict['remainder'] = end - chunk['end'] + 1
-#                end = chunk['end']
-
-#            subchunks.append(dict(start=start, end=end))
-#            start += int(rot_chunk_size)
-
-#        return subchunks
-
-
-
-
-
 
         # modulate by hwp angle and polarization angle
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
@@ -774,9 +768,6 @@ class ScanStrategy(qp.QMap, Instrument):
                 tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * pa)
 
         self.tod = tod
-
-        # Nicer if we move this to the bin_tod part. It's a mapmaking related thing
-#        self.init_point(q_bore=self.q_bore[q_start:q_end+1], ctime=ctime, q_hwp=None)
 
     def get_spinmaps(self, alm, blm, max_spin=5, verbose=True):
         '''
