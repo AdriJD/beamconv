@@ -1,12 +1,11 @@
 # cmb_beams
 
 **Authors**: Adri J. Duivenvoorden and Jon E. Gudmundsson
-
 **contact**: adri.j.duivenvoorden@gmail.com
 
 Code to simulate the scanning of the CMB sky while incorporating realistic beams and
 scan strategies. This code uses a spherical harmonic representation of the beam response
-in I, Q, and U to generate a signal.
+in I, Q, and U to generate a signal timeline that can then be binned into a map.
 
 
 ### Depdendencies
@@ -24,4 +23,4 @@ sudo setup.py install
 
 ### Usage
 
-See exampels in `python/test.py`
+See examples in `python/test.py`
