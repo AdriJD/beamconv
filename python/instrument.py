@@ -72,9 +72,10 @@ class Instrument(object):
 
         self.nrow = nrow
         self.ncol = ncol
-        self.ndet = 2 * nrow * ncol
+        self.ndet = nrow * ncol # note, no pairs
         self.azs = np.zeros((nrow, ncol), dtype=float)
         self.els = np.zeros((nrow, ncol), dtype=float)
+        self.polangs = np.zeros(nrow*ncol, dtype=float)
 
         x = np.linspace(-fov/2., fov/2., ncol)
         y = np.linspace(-fov/2., fov/2., nrow)
@@ -263,9 +264,6 @@ class ScanStrategy(qp.QMap, Instrument):
         self.set_sample_rate(sample_rate)
         self.set_mission_len(duration)
 
- #       self.instr_rot = None
- #       self.hwp_mod = None
-
         self.rot_dict = {}
         self.hwp_dict = {}
         self.set_instr_rot()
@@ -400,7 +398,7 @@ class ScanStrategy(qp.QMap, Instrument):
             angles = np.arange(start_ang, 360+start_ang, 22.5)
             np.mod(angles, 360, out=angles)
 
-        # init rotation generator
+        # init hwp ang generator
         self.hwp_angle_gen = tools.angle_gen(angles)
 
     def partition_mission(self, chunksize):
@@ -498,30 +496,23 @@ class ScanStrategy(qp.QMap, Instrument):
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
         self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
-    def scan_instrument(self, az_offs=None, el_offs=None,
-                        verbose=True, **kwargs):
-
-
+    def scan_instrument(self, verbose=True, mapmaking=True,
+                        **kwargs):
         '''
-        Cycles through the scans requried to populate maps
+        Cycles through chunks, scans and calculates
+        detector tods. Optionally: also bin tods into
+        maps.
 
         Arguments
         ---------
-        az_offs : np.array (default : None)
-            Azimuthal detector offsets
-        el_offs : np.array (default : None)
-            Elevation detector offsets
         verbose : bool [default True]
             Prints status reports
+        mapmaking : bool, optional
+            If True, bin tods into vec and proj.
         kwargs : dict
             Extra kwargs are assumed input to
             constant_el_scan()
         '''
-
-        # Using precomputed detector offsets if not input to function
-        if az_offs is None or el_offs is None:
-            az_offs = self.azs
-            el_offs = self.els
 
         if verbose:
             print('  Scanning with {:d} x {:d} grid of detectors'.format(
@@ -540,20 +531,27 @@ class ScanStrategy(qp.QMap, Instrument):
 
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
-                # rotate instrument if needed
 
+                # rotate instrument if needed
                 if self.rot_dict['period']:
                     self.rot_dict['angle'] = self.rot_angle_gen.next()
 
                 # Cycling through detectors and scanning
-                for az_off, el_off in zip(az_offs.flatten(), el_offs.flatten()):
+                for chnidx in xrange(self.ndet):
+                    
+                    az_off = self.azs[chnidx]
+                    el_off = self.els[chnidx]
+                    polang = self.polangs[chnidx]
 
-                    self.scan(az_off=az_off, el_off=el_off, **subchunk)
-                    self.bin_tod()
+                    self.scan(az_off=az_off, el_off=el_off, 
+                              polang=polang, **subchunk)
 
-                    # Adding to global maps
-                    self.vec += self.depo['vec']
-                    self.proj += self.depo['proj']
+                    if mapmaking:
+                        self.bin_tod()
+
+                        # Adding to global maps
+                        self.vec += self.depo['vec']
+                        self.proj += self.depo['proj']
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
@@ -696,7 +694,6 @@ class ScanStrategy(qp.QMap, Instrument):
 
             exppais = np.exp(1j * n * pa)
             tod_c += self.func_c[nidx][pix] * exppais
-
 
         # if needed, compute hwp angle array.
         if self.hwp_dict['freq']:
