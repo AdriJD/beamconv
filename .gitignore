@@ -1,1 +1,4 @@
 *.pyc
+*.aux
+*.log
+*.synctex.gz
