@@ -168,15 +168,14 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
     Arguments
     ---------
 
-    az_off :
-
-    el_off :
-
-    lmax :
-
-    fwhm :
-
-
+    az_off : float (default: 0.)
+        Azimuthal location of detector relative to boresight
+    el_off : float (default: 0.)
+        Elevation location of detector relative to boresight
+    lmax : int (default: 200)
+        Maximum multipole number
+    fwhm : float (default: 100)
+        The beam FWHM used in this analysis [arcmin]
     '''
 
     # Load up alm and blm
@@ -193,41 +192,41 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
     blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
 
     # init scan strategy and instrument
-    b2 = ScanStrategy(4*60, # mission duration in sec.
-                      sample_rate=10, # 10 Hz sample rate
+    ss = ScanStrategy(4*60, # mission duration in sec.
+                      sample_rate=50, # 10 Hz sample rate
                       location='spole', # South pole instrument
                       nside_spin=256,
                       nside_out=256)
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
-    b2.get_spinmaps(alm, blm, max_spin=2, verbose=False)
+    ss.get_spinmaps(alm, blm, max_spin=2, verbose=False)
 
     # Initiate focal plane
-    b2.nrow = 1
-    b2.ncol = 1
-    b2.ndet = 1
-    b2.azs = np.array([az_off])
-    b2.els = np.array([el_off])
-    b2.polangs = np.array([0])
+    ss.nrow = 1
+    ss.ncol = 1
+    ss.ndet = 1
+    ss.azs = np.array([az_off])
+    ss.els = np.array([el_off])
+    ss.polangs = np.array([0])
 
     # Rotate instrument (period in sec)
-    b2.set_instr_rot(period=60)
+    ss.set_instr_rot(period=60)
 
     # Set HWP rotation
-    b2.set_hwp_mod(mode='continuous', freq=25.)
+    ss.set_hwp_mod(mode='continuous', freq=25.)
 
     # calculate tod in chunks of # samples
-    chunks = b2.partition_mission(int(4*60*b2.fsamp))
+    chunks = ss.partition_mission(int(4*60*ss.fsamp))
 
-    b2.scan_instrument(mapmaking=False)
+    ss.scan_instrument(mapmaking=False)
 
     # Store the tod made with symmetric beam
-    tod_sym = b2.tod.copy()
+    tod_sym = ss.tod.copy()
 
     # now repeat with asymmetric beam and no detector offset
-    b2.azs = np.array([0])
-    b2.els = np.array([0])
+    ss.azs = np.array([0])
+    ss.els = np.array([0])
 
     # Beam E and B modes
     blmm2 = blm[1].copy()
@@ -244,8 +243,8 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
 
     print np.degrees(radius), np.degrees(angle)
 
-    q_off = b2.det_offset(az_off, el_off, 0)
-    ra, dec, pa = b2.quat2radecpa(b2.det_offset(az_off, el_off, 0))
+    q_off = ss.det_offset(az_off, el_off, 0)
+    ra, dec, pa = ss.quat2radecpa(ss.det_offset(az_off, el_off, 0))
     print ra, dec, pa
     angle = np.radians(180 - ra)
     radius = np.radians(90 - dec)
@@ -256,6 +255,7 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
     #hp.rotate_alm([blmI, blmE, blmB], angle, radius, -angle, lmax=lmax,  mmax=lmax)
     #hp.rotate_alm([blmI, blmE, blmB], psi, radius, -np.radians(ra), lmax=lmax,  mmax=lmax)
 
+    ## Figure showing the two sets of blm's used in this analysis
     plt.figure()
     plt.plot(np.arange(lmax+1), blm[0][:lmax+1], label='Original Gaussian')
     plt.plot(np.arange(lmax+1), blmI[:lmax+1], label='Rotated Gaussian')
@@ -271,28 +271,37 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
     blm = (blmI, blmm2, blmp2)
 
     print('\nCalculating spin-maps...')
-    b2.get_spinmaps(alm, blm, max_spin=max_spin, verbose=False)
+    ss.get_spinmaps(alm, blm, max_spin=max_spin, verbose=False)
     print('...spin-maps stored')
 
     # Reset instrument rotation and HWP
-    b2.set_instr_rot(period=60)
-    b2.set_hwp_mod(mode='continuous', freq=25.)
-    b2.scan_instrument(mapmaking=False)
+    ss.set_instr_rot(period=60)
+    ss.set_hwp_mod(mode='continuous', freq=25.)
+    ss.scan_instrument(mapmaking=False)
 
+    ## Figure comparing the raw detector timelines for the two versions
     plt.figure()
-    gs = gridspec.GridSpec(3, 1)
-    ax1 = plt.subplot(gs[:2, :])
-    ax2 = plt.subplot(gs[-1, :])
+    gs = gridspec.GridSpec(3, 9)
+    ax1 = plt.subplot(gs[:2, :6])
+    ax2 = plt.subplot(gs[-1, :6])
+    ax3 = plt.subplot(gs[:, 6:])
+    # ax1 = plt.subplot(gs[:2, :])
+    # ax2 = plt.subplot(gs[-1, :])
     samples = np.arange(tod_sym.size)
-    ax1.plot(samples, b2.tod, label='Asymmetric Gaussian')
-    ax1.plot(samples, tod_sym, label='Symmetric Gaussian', alpha=0.5)#, ls=':')
+    ax1.plot(samples, ss.tod, label='Asymmetric Gaussian')
+    ax1.plot(samples, tod_sym, label='Symmetric Gaussian', alpha=0.5)
     ax1.legend()
 
     ax1.tick_params(labelbottom='off')
-    ax2.plot(samples, b2.tod - tod_sym)
+    sigdiff = ss.tod - tod_sym
+    ax2.plot(samples, sigdiff)
     ax1.set_ylabel('Signal')
     ax2.set_ylabel('Difference')
     ax2.set_xlabel('Sample number')
+
+    ax3.hist(sigdiff, 128, label='Difference')
+    ax3.set_xlabel('Difference')
+    ax3.tick_params(labelleft='off')
 
     plt.savefig('../scratch/img/tods.png')
     plt.close()
@@ -335,4 +344,7 @@ def single_detector(nsamp=1000):
 if __name__ == '__main__':
 
 #    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60, dec0=-10)
-    offset_beam(az_off=15, el_off=-5)
+    #offset_beam(az_off=15, el_off=-5)
+    offset_beam(az_off=0.2, el_off=-0.3)
+
+
