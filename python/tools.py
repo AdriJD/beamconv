@@ -106,7 +106,8 @@ def gauss_blm(fwhm, lmax, pol=False):
     else:
         return blm
 
-def get_copol_blm(blm, normalize=False, deconv_q=False):
+def get_copol_blm(blm, normalize=False, deconv_q=False, 
+                  c2_fwhm=None):
     '''
     Create the spin \pm 2 coefficients of a unpolarized
     beam, assuming a co-polarized beam. See Hivon, Ponthieu
@@ -122,6 +123,11 @@ def get_copol_blm(blm, normalize=False, deconv_q=False):
     deconv_q : bool
         Divide blm by sqrt(4 pi / (2 ell + 1)) before
         computing spin harmonic coefficients
+    c2 : float, optional
+        fwhm in arcmin. Used to multiply \pm 2 
+        coefficients with exp 2 sigma**2. Needed 
+        to match healpy Gaussian smoothing. 
+        Default=None.
 
     Returns
     -------
@@ -174,6 +180,12 @@ def get_copol_blm(blm, normalize=False, deconv_q=False):
             end_p0 = getidx(lmax, m+3, m+3)
 
             blmp2[start+2:end] = blm[start_p0:end_p0]
+
+    if c2_fwhm:
+        s2fwhm = 2 * np.sqrt(2 * np.log(2))
+        expsig2 = np.exp(2 * (np.radians(c2_fwhm / 60.) / s2fwhm)**2)
+        blmm2 *= expsig2
+        blmp2 *= expsig2
 
     return blm, blmm2, blmp2
 

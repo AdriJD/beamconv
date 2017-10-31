@@ -33,12 +33,13 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
     blm = tools.gauss_blm(fwhm, lmax, pol=False)
-    blm = tools.get_copol_blm(blm.copy())
+    blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
 
     # init scan strategy and instrument
-    b2 = ScanStrategy(3*60*60, # mission duration in sec.
+    b2 = ScanStrategy(30*60*60, # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
-                      location='spole', # South pole instrument
+                      location='atacama', # South pole instrument
+                      nside_spin=256,
                       nside_out=256)
 
     # Calculate spinmaps, stored internally
@@ -47,7 +48,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     print('...spin-maps stored')
 
     # Initiate focal plane
-    b2.set_focal_plane(nrow=2, ncol=2, fov=4)
+    b2.set_focal_plane(nrow=1, ncol=1, fov=4)
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period, angles=np.arange(0, 360, 10))
     # Set HWP rotation
@@ -72,6 +73,9 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
                      lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
                      latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
                      unit=r'[$\mu K_{\mathrm{CMB}}$]')
+
+#    cart_opts = dict(
+#                     unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
     # plot solved maps
     plt.figure()
@@ -111,17 +115,17 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 
     # plot diff maps
     plt.figure()
-    hp.cartview(maps[0] - maps_raw[0], min=-1e-4, max=1e-4, **cart_opts)
+    hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
     plt.savefig('../scratch/img/diff_map_I.png')
     plt.close()
 
     plt.figure()
-    hp.cartview(maps[1] - maps_raw[1], min=-1e-4, max=1e-4, **cart_opts)
+    hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
     plt.savefig('../scratch/img/diff_map_Q.png')
     plt.close()
 
     plt.figure()
-    hp.cartview(maps[2] - maps_raw[2], min=-1e-4, max=1e-4, **cart_opts)
+    hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
     plt.savefig('../scratch/img/diff_map_U.png')
     plt.close()
 
@@ -194,5 +198,5 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-    scan1(lmax=300, mmax=2, fwhm=20, az_throw=50, rot_period=0.1*60*60, dec0=-10)
+    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=0.1*60*60, dec0=-10)
 
