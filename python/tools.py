@@ -189,6 +189,62 @@ def get_copol_blm(blm, normalize=False, deconv_q=False,
 
     return blm, blmm2, blmp2
 
+def spin2eb(almm2, almp2):
+    '''
+    Convert spin-harmonic coefficients
+    to E and B mode coefficients.
+
+    Arguments
+    ---------
+    almm2 : array-like
+       Healpix-ordered complex array with spin-(-2) 
+       coefficients
+    almp2 : array-like
+       Healpix-ordered complex array with spin-(+2) 
+       coefficients
+
+    Returns
+    -------
+    almE : array-like
+        Healpix ordered array with E-modes
+    almB : array-like
+        Healpix ordered array with B-modes
+    '''
+    
+    almE = almp2 + almm2 
+    almE /= -2.
+
+    almB = almp2 - almm2
+    almB *= (1j / 2.)
+
+    return almE, almB
+
+def eb2spin(almE, almB):
+    '''
+    Convert to E and B mode coefficients 
+    to spin-harmonic coefficients.
+
+    Arguments
+    ---------
+    almE : array-like
+        Healpix ordered array with E-modes
+    almB : array-like
+        Healpix ordered array with B-modes
+
+    Returns
+    -------
+    almm2 : array-like
+       Healpix-ordered complex array with spin-(-2) 
+       coefficients
+    almp2 : array-like
+       Healpix-ordered complex array with spin-(+2) 
+       coefficients
+    '''
+
+    almm2 = -1 * (almE - 1j * almB)
+    almp2 = -1 * (almE + 1j * almB)
+
+    return almm2, almp2
 
 def extract_func_kwargs(func, kwargs, pop=False, others_ok=True, warn=False):
     """
