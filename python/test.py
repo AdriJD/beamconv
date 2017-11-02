@@ -16,22 +16,36 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     return cls[0], cls[1:]
 
 def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
-    az_throw=10, scan_speed=1, rot_period=10*60):
+          az_throw=10, scan_speed=1, rot_period=10*60,
+          hwp_mode=None):
     '''
     Simulates a fraction of BICEP2-like scan strategy
 
     Arguments
     ---------
 
-    lmax : int
-        bandlimit
-    mmax : int
-        assumed azimuthal bandlimit beams (symmetric in this example)
-    fwhm : float
-        The beam FWHM in arcmin
-    rot_period : int
-        The instrument rotation period [s]
-
+    lmax : int, optional
+        bandlimit (default: 700)
+    mmax : int, optional
+        assumed azimuthal bandlimit beams (symmetric in this example
+        so 2 would suffice) (default: 5)
+    fwhm : float, optional
+        The beam FWHM in arcmin (default: 40)
+    ra0 : float, optional
+        Ra coord of centre region (default: -10)
+    dec0 : float, optional (default: -57.5)
+        Ra coord of centre region
+    az_throw : float, optional
+        Scan width in azimuth (in degrees) (default: 10)
+    scan_speed : float, optional
+        Scan speed in deg/s (default: 1)
+    rot_period : float, optional
+        The instrument rotation period in sec
+        (default: 600)
+    hwp_mode : str, optional
+        HWP modulation mode, either "continuous", 
+        "stepped" or None. Use freq of 1 or 1/10800 Hz
+        respectively (default: None)
     '''
 
     # Load up alm and blm
@@ -45,8 +59,8 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     b2 = ScanStrategy(30*60*60, # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
                       location='spole', # South pole instrument
-                      nside_spin=256,
-                      nside_out=256)
+                      nside_spin=256, # nside of rescanned maps
+                      nside_out=256) # nside of binned output
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
@@ -55,12 +69,17 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     # Initiate focal plane
     b2.set_focal_plane(nrow=3, ncol=3, fov=4)
 
+    # Give every detector a random polarization angle
+    b2.polangs = np.random.randint(0, 360, b2.ndet)
+
     # Rotate instrument (period in sec)
     b2.set_instr_rot(period=rot_period, angles=np.arange(0, 360, 10))
 
     # Set HWP rotation
-#    b2.set_hwp_mod(mode='continuous', freq=1.)
-    b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
+    if hwp_mode == 'continuous':
+        b2.set_hwp_mod(mode='continuous', freq=1.)
+    elif hwp_mode == 'stepped':
+        b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
     # calculate tod in chunks of # samples
     chunks = b2.partition_mission(int(30*60*60*b2.fsamp))
@@ -159,48 +178,57 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     plt.close()
 
 
-def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
+def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
+                hwp_freq=25., pol_only=True):
     '''
-    Script that scans the sky with a symmetric Gaussian beam that has
-    been rotated away from the boresight. This means that the
-    beam is highly asymmetric.
+    Script that scans LCDM realization of sky with a symmetric
+    Gaussian beam that has been rotated away from the boresight. 
+    This means that the beam is highly asymmetric.
 
     Arguments
     ---------
 
-    az_off : float (default: 0.)
+    az_off : float, optional
         Azimuthal location of detector relative to boresight
-    el_off : float (default: 0.)
+        (default: 0.)
+    el_off : float, optional
         Elevation location of detector relative to boresight
-    lmax : int (default: 200)
-        Maximum multipole number
-    fwhm : float (default: 100)
+        (default: 0.)
+    lmax : int, optional
+        Maximum multipole number, (default: 200)
+    fwhm : float, optional
         The beam FWHM used in this analysis [arcmin]
+        (default: 100)
+    hwp_freq : float, optional
+        HWP spin frequency (continuous mode) (default: 25.)
+    pol_only : bool, optional
+        Set unpolarized sky signal to zero (default: True)
     '''
+
+    polang = 50
 
     # Load up alm and blm
     ell, cls = get_cls()
-
-    # set random seed
-    np.random.seed(10)
+    np.random.seed(30)
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
-    # Only use the polarized signal
-    alm = (alm[0]*0., alm[1]*1, alm[2]*1)
+    if pol_only:
+        alm = (alm[0]*0., alm[1], alm[2])
 
     blm = tools.gauss_blm(fwhm, lmax, pol=False)
     blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
 
     # init scan strategy and instrument
-    ss = ScanStrategy(4*60, # mission duration in sec.
-                      sample_rate=50, # 10 Hz sample rate
+    mlen = 240 # mission length
+    ss = ScanStrategy(mlen, # mission duration in sec.
+                      sample_rate=1, # sample rate in Hz
                       location='spole', # South pole instrument
-                      nside_spin=256,
-                      nside_out=256)
+                      nside_spin=256) # pixels smaller than beam
 
-    # Calculate spinmaps, stored internally
+    # Calculate spinmaps. Only need mmax=2 for symmetric beam.
     print('\nCalculating spin-maps')
     ss.get_spinmaps(alm, blm, max_spin=2, verbose=False)
+    print('...spin-maps stored')
 
     # Initiate focal plane
     ss.nrow = 1
@@ -208,100 +236,96 @@ def offset_beam(az_off=0, el_off=0, lmax=200, fwhm=100, max_spin=100):
     ss.ndet = 1
     ss.azs = np.array([az_off])
     ss.els = np.array([el_off])
-    ss.polangs = np.array([0])
+    ss.polangs = np.array([polang])
 
-    # Rotate instrument (period in sec)
-    ss.set_instr_rot(period=60)
+    # Rotate instrument halfway through
+    rot_period = 0.5 * ss.mlen
+    ss.set_instr_rot(period=rot_period)
 
     # Set HWP rotation
-    ss.set_hwp_mod(mode='continuous', freq=25.)
+    ss.set_hwp_mod(mode='continuous', freq=hwp_freq)
 
-    # calculate tod in chunks of # samples
+    # calculate tod in one go
     chunks = ss.partition_mission(int(4*60*ss.fsamp))
-
     ss.scan_instrument(mapmaking=False)
 
-    # Store the tod made with symmetric beam
+    # Store the tod and pixel indices made with symmetric beam
+    # Note that this is the tod after the instrument rotation
     tod_sym = ss.tod.copy()
+    pix_sym = ss.pix.copy()
 
     # now repeat with asymmetric beam and no detector offset
+    # set offsets to zero
     ss.azs = np.array([0])
     ss.els = np.array([0])
+#    ss.polangs = np.array([0])
 
-    # Beam E and B modes
-    blmm2 = blm[1].copy()
-    blmE = -blmm2 / 2.
-    blmB = -1j * blmm2 / 2.
+    # Convert beam spin modes to E and B modes and rotate them
     blmI = blm[0].copy()
+    blmE, blmB = tools.spin2eb(blm[1], blm[2])
 
-    # Rotate blm to match centroid
-    radius = np.arccos(np.cos(np.radians(el_off)) * np.cos(np.radians(az_off)))
-    if np.tan(radius) != 0:
-        angle = np.arctan2(np.tan(np.radians(el_off)), np.sin(np.radians(az_off))) + np.pi/2.
-    else:
-        angle = 0.
-
-    print np.degrees(radius), np.degrees(angle)
-
+    # Rotate blm to match centroid.
+    # Note that rotate_alm uses the ZYZ euler convention.
+#    q_off = ss.det_offset(az_off, el_off, polang)
     q_off = ss.det_offset(az_off, el_off, 0)
-    ra, dec, pa = ss.quat2radecpa(ss.det_offset(az_off, el_off, 0))
-    print ra, dec, pa
-    angle = np.radians(180 - ra)
-    radius = np.radians(90 - dec)
-    psi = -np.radians(pa)
+    ra, dec, pa = ss.quat2radecpa(q_off)
 
-    print np.degrees(psi), np.degrees(radius), np.degrees(-angle)
-    hp.rotate_alm([blmI, blmE, blmB], psi, radius, -angle, lmax=lmax, mmax=lmax)
-    #hp.rotate_alm([blmI, blmE, blmB], angle, radius, -angle, lmax=lmax,  mmax=lmax)
-    #hp.rotate_alm([blmI, blmE, blmB], psi, radius, -np.radians(ra), lmax=lmax,  mmax=lmax)
+    # convert between healpy and math angle conventions
+    phi = np.radians(ra - 180)
+    theta = np.radians(90 - dec)
+    psi = np.radians(-pa)
 
-    ## Figure showing the two sets of blm's used in this analysis
-    plt.figure()
-    plt.plot(np.arange(lmax+1), blm[0][:lmax+1], label='Original Gaussian')
-    plt.plot(np.arange(lmax+1), blmI[:lmax+1], label='Rotated Gaussian')
-    plt.xlabel('Multipole, $\ell$')
-    plt.ylabel('Angular response')
-    plt.legend()
-    plt.savefig('../scratch/img/bl.png')
-    plt.close()
+    print np.degrees(theta), np.degrees(phi), np.degrees(psi)
+    hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
 
-    blmp2 = -1 * (blmE + 1j * blmB)
-    blmm2 = -1 * (blmE - 1j * blmB)
-
+    # convert beam coeff. back to spin representation.
+    blmm2, blmp2 = tools.eb2spin(blmE, blmB)
     blm = (blmI, blmm2, blmp2)
 
+    # Now we calculate all spin maps. So we can deal with
+    # an arbitrary beam bandlimited at lmax
     print('\nCalculating spin-maps...')
-    ss.get_spinmaps(alm, blm, max_spin=max_spin, verbose=False)
+    ss.get_spinmaps(alm, blm, max_spin=lmax, verbose=False)
     print('...spin-maps stored')
 
-    # Reset instrument rotation and HWP
-    ss.set_instr_rot(period=60)
-    ss.set_hwp_mod(mode='continuous', freq=25.)
+    # Reset instrument rotation and HWP and scan again
+    ss.set_instr_rot(period=rot_period)
+    ss.set_hwp_mod(mode='continuous', freq=hwp_freq)
     ss.scan_instrument(mapmaking=False)
 
-    ## Figure comparing the raw detector timelines for the two versions
+    # Figure comparing the raw detector timelines for the two versions
+    # For subpixel offsets, the bottom plot shows you that sudden shifts
+    # in the differenced tods are due to the pointing for the symmetric
+    # case hitting a different pixel than the boresight pointing.
     plt.figure()
-    gs = gridspec.GridSpec(3, 9)
+    gs = gridspec.GridSpec(5, 9)
     ax1 = plt.subplot(gs[:2, :6])
-    ax2 = plt.subplot(gs[-1, :6])
-    ax3 = plt.subplot(gs[:, 6:])
-    # ax1 = plt.subplot(gs[:2, :])
-    # ax2 = plt.subplot(gs[-1, :])
+    ax2 = plt.subplot(gs[2:4, :6])
+    ax3 = plt.subplot(gs[-1, :6])
+    ax4 = plt.subplot(gs[:, 6:])
+
     samples = np.arange(tod_sym.size)
-    ax1.plot(samples, ss.tod, label='Asymmetric Gaussian')
-    ax1.plot(samples, tod_sym, label='Symmetric Gaussian', alpha=0.5)
+    ax1.plot(samples, ss.tod, label='Asymmetric Gaussian', linewidth=0.7)
+    ax1.plot(samples, tod_sym, label='Symmetric Gaussian', linewidth=0.7,
+             alpha=0.5)
     ax1.legend()
 
     ax1.tick_params(labelbottom='off')
     sigdiff = ss.tod - tod_sym
-    ax2.plot(samples, sigdiff)
-    ax1.set_ylabel('Signal')
-    ax2.set_ylabel('Difference')
-    ax2.set_xlabel('Sample number')
+    ax2.plot(samples, sigdiff,ls='None', marker='.', markersize=2.)
+    ax2.tick_params(labelbottom='off')
+    ax3.plot(samples, (pix_sym - ss.pix).astype(bool).astype(int), 
+             ls='None', marker='.', markersize=2.)
+    ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
+    ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
+    ax3.set_xlabel('Sample number')
+    ax3.set_ylabel('different pixel?')
+    ax3.set_ylim([-0.25,1.25])
+    ax3.set_yticks([0, 1])
 
-    ax3.hist(sigdiff, 128, label='Difference')
-    ax3.set_xlabel('Difference')
-    ax3.tick_params(labelleft='off')
+    ax4.hist(sigdiff, 128, label='Difference')
+    ax4.set_xlabel(r'Difference [$\mu K_{\mathrm{CMB}}$]')
+    ax4.tick_params(labelleft='off')
 
     plt.savefig('../scratch/img/tods.png')
     plt.close()
@@ -343,8 +367,9 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-#    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60, dec0=-10)
-    #offset_beam(az_off=15, el_off=-5)
-    offset_beam(az_off=0.2, el_off=-0.3)
+    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60,
+          hwp_mode='continuous')
+ 
+    #offset_beam(az_off=7, el_off=-4)
 
 

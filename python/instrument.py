@@ -636,22 +636,23 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         # NOTE nicer if you give q_off directly instead of az_off, el_off
-        q_off = self.det_offset(az_off, el_off, polang)
+        # we use a offset quaternion without polang. 
+        # We apply polang at the beam level later.
+        q_off = self.det_offset(az_off, el_off, 0)
 
         # Rotate offset given rot_dict['angle']
         ang = np.radians(self.rot_dict['angle'])
 
-        q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
-        # Note, q_rot is already a unit quaternion.
-
         # works, but shouldnt it be switched around? No, that would
         # rotate the polang of the centroid, but not the centroid
         # around the boresight. It's q_bore * q_rot * q_off
+        q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
         q_off = tools.quat_left_mult(q_rot, q_off) # works
 #        q_off = tools.quat_left_mult(q_off, q_rot)  # no
 
         # store for mapmaking
         self.q_off = q_off
+        self.polang = polang
 
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
@@ -669,25 +670,28 @@ class ScanStrategy(qp.QMap, Instrument):
             shrt_len = nrml_len
 
         if self.q_bore.shape[0] == nrml_len:
-            q_start = np.mod(start, nrml_len)
-            q_end = q_start + end - start
+            qidx_start = np.mod(start, nrml_len)
+            qidx_end = qidx_start + end - start
 
         else: # we know we're in the last big chunk
-            q_start = start - (len(self.chunks)-1) * nrml_len
-            q_end = end - (len(self.chunks)-1) * nrml_len
+            qidx_start = start - (len(self.chunks)-1) * nrml_len
+            qidx_end = end - (len(self.chunks)-1) * nrml_len
 
-        self.q_start = q_start
-        self.q_end = q_end
+        self.qidx_start = qidx_start
+        self.qidx_end = qidx_end
 
         # more efficient if you do bore2pix, i.e. skip
         # the allocation of ra, dec, pa etc. But you need pa....
         # Perhaps ask Sasha if she can make bore2pix output pix
         # and pa (instead of sin2pa, cos2pa)
-        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[q_start:q_end+1],
+        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[qidx_start:qidx_end+1],
             q_hwp=None, sindec=False, return_pa=True)
-
+        
         np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
+
+        # expose pixel indices for test centroid
+        self.pix = pix
 
         # Fill complex array
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
@@ -891,9 +895,14 @@ class ScanStrategy(qp.QMap, Instrument):
 
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
-        self.init_point(q_bore=self.q_bore[self.q_start:self.q_end+1],
+        self.init_point(q_bore=self.q_bore[self.qidx_start:self.qidx_end+1],
                         ctime=self.ctime, q_hwp=q_hwp)
+
+        # use q_off quat with polang (and instr. ang) included.
         q_off = self.q_off
+        polang = -np.radians(self.polang)
+        q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
+        q_off = tools.quat_left_mult(q_off, q_polang) 
 
         if init:
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
