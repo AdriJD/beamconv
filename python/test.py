@@ -178,8 +178,8 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     plt.close()
 
 
-def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
-                hwp_freq=25., pol_only=True):
+def offset_beam(az_off=0, el_off=0, polang=0, lmax=100, 
+                fwhm=200, hwp_freq=25., pol_only=True):
     '''
     Script that scans LCDM realization of sky with a symmetric
     Gaussian beam that has been rotated away from the boresight. 
@@ -194,6 +194,10 @@ def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
     el_off : float, optional
         Elevation location of detector relative to boresight
         (default: 0.)
+    polang : float, optional
+        Detector polarization angle in degrees (defined for
+        unrotated detector as offset from meridian) 
+        (default: 0)
     lmax : int, optional
         Maximum multipole number, (default: 200)
     fwhm : float, optional
@@ -204,8 +208,6 @@ def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
     pol_only : bool, optional
         Set unpolarized sky signal to zero (default: True)
     '''
-
-    polang = 50
 
     # Load up alm and blm
     ell, cls = get_cls()
@@ -223,7 +225,7 @@ def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
     ss = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=1, # sample rate in Hz
                       location='spole', # South pole instrument
-                      nside_spin=256) # pixels smaller than beam
+                      nside_spin=512) # pixels smaller than beam
 
     # Calculate spinmaps. Only need mmax=2 for symmetric beam.
     print('\nCalculating spin-maps')
@@ -250,15 +252,16 @@ def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
     ss.scan_instrument(mapmaking=False)
 
     # Store the tod and pixel indices made with symmetric beam
-    # Note that this is the tod after the instrument rotation
+    # Note that this is the part after the instrument rotation
     tod_sym = ss.tod.copy()
     pix_sym = ss.pix.copy()
 
     # now repeat with asymmetric beam and no detector offset
-    # set offsets to zero
+    # set offsets to zero such that tods are generated using
+    # only the boresight pointing.
     ss.azs = np.array([0])
     ss.els = np.array([0])
-#    ss.polangs = np.array([0])
+    ss.polangs = np.array([0])
 
     # Convert beam spin modes to E and B modes and rotate them
     blmI = blm[0].copy()
@@ -266,8 +269,8 @@ def offset_beam(az_off=0, el_off=0, lmax=50, fwhm=200,
 
     # Rotate blm to match centroid.
     # Note that rotate_alm uses the ZYZ euler convention.
-#    q_off = ss.det_offset(az_off, el_off, polang)
-    q_off = ss.det_offset(az_off, el_off, 0)
+    # Note that we include polang here as first rotation.
+    q_off = ss.det_offset(az_off, el_off, polang)
     ra, dec, pa = ss.quat2radecpa(q_off)
 
     # convert between healpy and math angle conventions
@@ -367,9 +370,9 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60,
-          hwp_mode='continuous')
+#    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60,
+#          hwp_mode='continuous')
  
-    #offset_beam(az_off=7, el_off=-4)
+    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
 
 
