@@ -10,14 +10,22 @@ import tools
 from instrument import ScanStrategy
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
-
+    '''
+    Load a set of LCDM power spectra.
+    
+    Keyword arguments
+    -----------------
+    fname : str
+        Absolute path to file
+    '''
+    
     cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
 
-def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
-          az_throw=10, scan_speed=1, rot_period=10*60,
-          hwp_mode=None):
+def scan_bicep(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
+               az_throw=50, scan_speed=2.8, rot_period=10*60,
+               hwp_mode=None):
     '''
     Simulates a fraction of BICEP2-like scan strategy
 
@@ -65,9 +73,10 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
     b2.get_spinmaps(alm, blm, mmax, verbose=False)
+    print('...spin-maps stored')
 
     # Initiate focal plane
-    b2.set_focal_plane(nrow=3, ncol=3, fov=4)
+    b2.set_focal_plane(nrow=3, ncol=3, fov=5)
 
     # Give every detector a random polarization angle
     b2.polangs = np.random.randint(0, 360, b2.ndet)
@@ -82,7 +91,7 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
         b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
     # calculate tod in chunks of # samples
-    chunks = b2.partition_mission(int(30*60*60*b2.fsamp))
+    chunks = b2.partition_mission(int(10*60*60*b2.fsamp))
 
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps()
@@ -175,6 +184,171 @@ def scan1(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
     plt.xlabel(r'Multipole [$\ell$]')
     plt.savefig('../scratch/img/cls.png')
+    plt.close()
+
+
+def scan_atacama(lmax=700, mmax=5, fwhm=40,
+               ra0=[-10, 0], dec0=[-57.5, 0],
+               az_throw=50, scan_speed=1, rot_period=0,
+               hwp_mode='continuous'):
+    '''
+    Simulates a fraction of an atacama-based telescope. Prefers to scan  
+    the bicep patch but will scan other patches if the first is not
+    visible.
+
+    Arguments
+    ---------
+
+    lmax : int, optional
+        bandlimit (default: 700)
+    mmax : int, optional
+        assumed azimuthal bandlimit beams (symmetric in this example
+        so 2 would suffice) (default: 5)
+    fwhm : float, optional
+        The beam FWHM in arcmin (default: 40)
+    ra0 : float, optional
+        Ra coord of centre region (default: -10)
+    dec0 : float, optional (default: -57.5)
+        Ra coord of centre region
+    az_throw : float, optional
+        Scan width in azimuth (in degrees) (default: 10)
+    scan_speed : float, optional
+        Scan speed in deg/s (default: 1)
+    rot_period : float, optional
+        The instrument rotation period in sec
+        (default: 600)
+    hwp_mode : str, optional
+        HWP modulation mode, either "continuous", 
+        "stepped" or None. Use freq of 1 or 1/10800 Hz
+        respectively (default: continuous)
+    '''
+
+    # Load up alm and blm
+    ell, cls = get_cls()
+    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+
+    blm = tools.gauss_blm(fwhm, lmax, pol=False)
+    blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
+
+    # init scan strategy and instrument
+    ac = ScanStrategy(2*24*60*60, # mission duration in sec.
+                      sample_rate=10, # 10 Hz sample rate
+                      location='atacama', # South pole instrument
+                      nside_spin=256, # nside of rescanned maps
+                      nside_out=256) # nside of binned output
+
+    # Calculate spinmaps, stored internally
+    print('\nCalculating spin-maps')
+    ac.get_spinmaps(alm, blm, mmax, verbose=False)
+    print('...spin-maps stored')
+
+    # Initiate focal plane
+    ac.set_focal_plane(nrow=1, ncol=1, fov=10)
+
+    # Give every detector a random polarization angle
+    ac.polangs = np.random.randint(0, 360, ac.ndet)
+
+    # Rotate instrument (period in sec)
+    ac.set_instr_rot(period=rot_period, angles=np.arange(0, 360, 10))
+
+    # Set HWP rotation
+    if hwp_mode == 'continuous':
+        ac.set_hwp_mod(mode='continuous', freq=1.)
+    elif hwp_mode == 'stepped':
+        ac.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
+
+    # calculate tod in chunks of # samples
+    chunks = ac.partition_mission(int(10*60*60*ac.fsamp))
+
+    # Allocate and assign parameters for mapmaking
+    ac.allocate_maps()
+
+    # Generating timestreams + maps and storing as attributes
+    ac.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
+                       scan_speed=scan_speed, 
+                       el_min=45) # set minimum elevation range
+
+    maps = ac.solve_map(vec=ac.vec, proj=ac.proj, copy=True,
+                        fill=hp.UNSEEN)
+    cond = ac.proj_cond(proj=ac.proj)
+    cond[cond == np.inf] = hp.UNSEEN
+
+
+    ## Plotting results
+    moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
+
+    # plot solved maps
+    plt.figure()
+    hp.mollview(maps[0], min=-250, max=250, **moll_opts)
+    plt.savefig('../scratch/img/test_act_map_I.png')
+    plt.close()
+
+    plt.figure()
+    hp.mollview(maps[1], min=-5, max=5, **moll_opts)
+    plt.savefig('../scratch/img/test_act_map_Q.png')
+    plt.close()
+
+    plt.figure()
+    hp.mollview(maps[2], min=-5, max=5, **moll_opts)
+    plt.savefig('../scratch/img/test_act_map_U.png')
+    plt.close()
+
+    # plot smoothed input maps, diff maps and spectra
+    nside = hp.get_nside(maps[0])
+    hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
+    maps_raw = hp.alm2map(alm, nside, verbose=False)
+
+    plt.figure()
+    hp.mollview(maps_raw[0], min=-250, max=250, **moll_opts)
+    plt.savefig('../scratch/img/raw_act_map_I.png')
+    plt.close()
+
+    plt.figure()
+    hp.mollview(maps_raw[1], min=-5, max=5, **moll_opts)
+    plt.savefig('../scratch/img/raw_act_map_Q.png')
+    plt.close()
+
+    plt.figure()
+    hp.mollview(maps_raw[2], min=-5, max=5, **moll_opts)
+    plt.savefig('../scratch/img/raw_act_map_U.png')
+    plt.close()
+
+    # plot diff maps
+    plt.figure()
+    hp.mollview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **moll_opts)
+    plt.savefig('../scratch/img/diff_act_map_I.png')
+    plt.close()
+
+    plt.figure()
+    hp.mollview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **moll_opts)
+    plt.savefig('../scratch/img/diff_act_map_Q.png')
+    plt.close()
+
+    plt.figure()
+    hp.mollview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **moll_opts)
+    plt.savefig('../scratch/img/diff_act_map_U.png')
+    plt.close()
+
+
+    moll_opts.pop('min', None)
+    moll_opts.pop('max', None)
+    moll_opts.pop('unit', None)
+    plt.figure()
+    hp.mollview(cond, min=2, max=5, unit='condition number',
+                **moll_opts)
+    plt.savefig('../scratch/img/test_act_map_cond.png')
+    plt.close()
+
+    cls[3][cls[3]<=0.] *= -1.
+    dell = ell * (ell + 1) / 2. / np.pi
+    plt.figure()
+    for i, label in enumerate(['TT', 'EE', 'BB', 'TE']):
+      plt.semilogy(ell, dell * cls[i], label=label)
+
+    plt.legend()
+    plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
+    plt.xlabel(r'Multipole [$\ell$]')
+    plt.savefig('../scratch/img/cls_act.png')
     plt.close()
 
 
@@ -278,7 +452,6 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     theta = np.radians(90 - dec)
     psi = np.radians(-pa)
 
-    print np.degrees(theta), np.degrees(phi), np.degrees(psi)
     hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
 
     # convert beam coeff. back to spin representation.
@@ -333,6 +506,47 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     plt.savefig('../scratch/img/tods.png')
     plt.close()
 
+
+def test_mpi():
+
+    mlen = 240 # mission length
+    b2 = ScanStrategy(mlen, # mission duration in sec.
+                      sample_rate=1, # sample rate in Hz
+                      location='spole', # South pole instrument
+                      nside_spin=128) 
+
+    b2.create_focal_plane(nrow=100, ncol=100, fov=10)
+    
+    if False:
+        print b2.beams
+        for beam in b2.beams:
+            print '\n'
+            print beam.name
+            print beam.az
+            print beam.el
+            print beam.polang
+            print beam.btype
+            print beam.pol
+            print beam.lmax
+            print beam.fwhm
+            print beam.dead
+    
+    # Divide beam objects over cores
+
+    # write function that only selects the A beam
+    # write function that selects corr. B beam
+
+    # per core, loop over beams
+        # init spinmaps
+            # get tod for A and B serially
+        
+    a_beams = []
+    for beam in b2.beams:
+        if beam.pol == 'A':
+            a_beams.append(beam)
+    print [b.name for b in a_beams]
+
+
 def single_detector(nsamp=1000):
     '''
     Generates a timeline for a set of individual detectors scanning the sky. The
@@ -370,9 +584,9 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-#    scan1(lmax=1200, mmax=2, fwhm=40, az_throw=50, rot_period=1*60*60,
-#          hwp_mode='continuous')
+#    scan_bicep(hwp_mode='continuous')
+    scan_atacama(mmax=2)
  
-    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
-
+#    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
+#    test_mpi()
 

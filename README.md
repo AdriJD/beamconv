@@ -11,7 +11,8 @@ in I, Q, and U to generate a signal timeline that can then be binned into a map.
 
 ### Depdendencies
 
-* [Numpy](https://github.com/numpy/numpy)
+* [qpoint] (https://github.com/arahlin/qpoint)
+* [NumPy](https://github.com/numpy/numpy)
 * [Healpy](https://github.com/healpy/healpy)
 * [Matplotlib](https://github.com/matplotlib/matplotlib)
 

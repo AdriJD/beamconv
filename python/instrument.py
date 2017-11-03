@@ -85,64 +85,77 @@ class Instrument(object):
         self.els = yy.flatten()
 
 
-    def create_focal_plane(self, nrow=1, ncol=1, fov=10.):
+    def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
+                           from_files=False):
         '''
-        Create detector pointing offsets on the sky, i.e. in azimuth and
-        elevation by generating a list of Pointing objects.
+        Create detector pointing offsets and beam properties for 
+        a rectangular focal plane. Creates Beam objects for every
+        detector.
 
         Arguments
         ---------
-        nrow : int (default: 1)
-            Number of detectors per row
-        ncol : int (default: 1)
-            Number of detectors per column
-        fov : float (default: 10.)
+        nrow : int, optional
+            Number of detectors per row (default: 1)
+        ncol : int, optional
+            Number of detectors per column (default: 1)
+        fov : float, optional
             Angular size of side of square focal plane on
-            sky in degrees
-
+            sky in degrees (default: 10.)
+        from_files : bool, optional
+            Load beam properties from files (default: False)
         '''
 
         self.nrow = nrow
         self.ncol = ncol
-        self.ndet = 2 * nrow * ncol
+        self.ndet = 2 * nrow * ncol # A and B detectors
 
-        nsr = np.ceil(np.log10(self.nrow))
-        nsc = np.ceil(np.log10(self.ncol))
+#        nsr = np.ceil(np.log10(self.nrow))
+#        nsc = np.ceil(np.log10(self.ncol))
 
-        x = np.linspace(-fov/2., fov/2., ncol)
-        y = np.linspace(-fov/2., fov/2., nrow)
-        xx, yy = np.meshgrid(x, y)
+#        x = np.linspace(-fov/2., fov/2., ncol)
+#        y = np.linspace(-fov/2., fov/2., nrow)
+#        xx, yy = np.meshgrid(x, y)
 
         beams = []
 
-        self.azs = np.zeros((nrow, ncol), dtype=float)
-        self.els = np.zeros((nrow, ncol), dtype=float)
+#        self.azs = np.zeros((nrow, ncol), dtype=float)
+#        self.els = np.zeros((nrow, ncol), dtype=float)
+
+        
+        
 
         for j, xi in enumerate(x):
             for i, yi in enumerate(y):
 
-                if nsr < 2 and nsc < 2:
-                    det_str = 'r{:02d}c{:02d}a'.format(i, j)
-                else:
-                    det_str = 'r{:03d}c{:03d}a'.format(i, j)
-
-                beami = Beam(az=xi, el=yi, name=det_str, polangle=0.,
+ #               if nsr < 2 and nsc < 2:
+ #                   det_str = 'r{:02d}c{:02d}a'.format(i, j)
+ #               else:
+ #                   det_str = 'r{:03d}c{:03d}a'.format(i, j)
+                
+                det_str = 'r{:03d}c{:03d}a'.format(i, j)
+                
+                beami = Beam(az=xi, el=yi, name=det_str, polang=0.,
                     pol='A', btype='Gaussian')
                 beams.append(beami)
 
-                beami = Beam(az=xi, el=yi, name=det_str, polangle=90.,
+                beami = Beam(az=xi, el=yi, name=det_str, polang=90.,
                     pol='B', btype='Gaussian')
                 beams.append(beami)
 
                 self.azs[i][j] = xi
                 self.els[i][j] = yi
 
-        self.azs = self.azs.flatten()
-        self.els = self.els.flatten()
+        # should be removed at some point
+#        self.azs = self.azs.flatten()
+#        self.els = self.els.flatten()
 
         self.beams = beams
 
         assert (len(self.beams) == self.ndet), 'Wrong number of detecors!'
+
+        # If MPI, distribute beams over cores right here already
+        
+        
 
     def kill_channels(self, killfrac=0.2):
         '''
@@ -182,7 +195,7 @@ class Instrument(object):
         for filei in file_list:
 
             bdata = pickle.load(open(filei, 'r'))
-            pointings.append(Pointing(bdict=bdata))
+            beams.append(Beam(bdict=bdata))
 
         self.beams = beams
 
@@ -258,6 +271,9 @@ class ScanStrategy(qp.QMap, Instrument):
                          mean_aber=True, accuracy='low')
 #                         fast_pix=True, interp_pix=True,
 #                         interp_missing=True)
+        #NOTE look at how UnifileMap extracts the qpoint and
+        # qmap kwargs from kwargs.
+        
 
         ctime_kw = tools.extract_func_kwargs(self.set_ctime, kwargs)
         self.set_ctime(**ctime_kw)
@@ -511,12 +527,19 @@ class ScanStrategy(qp.QMap, Instrument):
             If True, bin tods into vec and proj.
         kwargs : dict
             Extra kwargs are assumed input to
-            constant_el_scan()
+            `constant_el_scan()`
         '''
 
         if verbose:
             print('  Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
+
+        # perhaps add loop over channel pairs (per core) here? 
+        # move get_spinmaps before loop share beam is set (all detectors use same beam)
+        # otherwise, run get_spinmaps for every pair
+
+        # for that, you would need to have loaded a beam per channel pair
+        
 
         for cidx, chunk in enumerate(self.chunks):
 
@@ -550,11 +573,15 @@ class ScanStrategy(qp.QMap, Instrument):
                         self.bin_tod()
 
                         # Adding to global maps
+                        # when MPI these are only global maps to
+                        # the rank. Still do this
+
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
+            check_interval=600, el_min=45, 
             start=None, end=None):
 
         '''
@@ -562,23 +589,31 @@ class ScanStrategy(qp.QMap, Instrument):
         centered at ra0, dec0, while keeping elevation constant. Populates
         scanning quaternions.
 
-        Arguments
+        Keyword Arguments
         ---------
-        ra0 : float
-            Ra coordinate of centre of scan in degrees
-        dec0 : float
-            Ra coordinate of centre of scan in degrees
+        ra0 : float, array-like
+            Ra coordinate of centre of scan in degrees.
+            If array, consider items as scan
+            centres ordered by preference.
+        dec0 : float, array-like
+            Ra coordinate of centre of scan in degrees.
+            If array, same shape as ra0.
         az_throw : float
             Scan width in azimuth (in degrees)
         scan_speed : float
             Max scan speed in degrees per second
-        el_step : float, optional
+        el_step : float
             Offset in elevation (in degrees). Defaults
             to zero when left None.
         vel_prf : str
             Velocity profile. Current options:
                 triangle : (default) triangle wave with total
                            width=az_throw
+        check_interval : float
+            Check whether elevation is not below `el_min` 
+            at this rate in seconds (default : 600)
+        el_min : float
+            Lower elevation limit in degrees (default : 45)
         start : int
             Starting sample
         end : int
@@ -586,13 +621,39 @@ class ScanStrategy(qp.QMap, Instrument):
         '''
 
         chunk_len = end - start + 1 # Note, you end on "end"
+        check_len = int(check_interval * self.fsamp) # min_el checks        
+
+        nchecks = int(np.ceil(chunk_len / float(check_len)))
+        p_len = check_len * nchecks # longer than chunk for nicer slicing 
+
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
+        self.ctime = ctime
 
-        # use qpoint to find az, el corresponding to ra0, el0
-        az0, el0, _ = self.radec2azel(ra0, dec0, 0,
-                                       self.lon, self.lat, ctime[0])
+        ra0 = np.atleast_1d(ra0)
+        dec0 = np.atleast_1d(dec0)
+        npatches = dec0.shape[0]
+
+        az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
+                                      self.lon, self.lat, ctime[::check_len])
+
+        # check and fix cases where boresight el < el_min
+        n = 1
+        while np.any(el0 < el_min):
+            if n < npatches:
+                # run check again with other ra0, dec0 options
+                azn, eln, _ = self.radec2azel(ra0[n], dec0[n], 0,
+                                      self.lon, self.lat, ctime[::check_len])
+                el0[el0<el_min] = eln[el0<el_min]
+                az0[el0<el_min] = azn[el0<el_min]
+
+            else:
+                # give up and keep boresight fixed at el_min
+                el0[el0<el_min] = el_min            
+                warnings.warn(
+              'Keeping el0 at {:.1f} for part of scan'.format(el_min))
+            n += 1
 
         # Scan boresight, note that it will slowly drift away from az0, el0
         if vel_prf is 'triangle':
@@ -600,16 +661,29 @@ class ScanStrategy(qp.QMap, Instrument):
             if scan_period == 0.:
                 az = np.zeros(chunk_len)
             else:
-                az = np.arcsin(np.sin(2 * np.pi * np.arange(chunk_len, dtype=int)\
-                                          / scan_period / self.fsamp))
-                az *= az_throw / (np.pi)
-            az += az0
+                az = np.arange(p_len, dtype=float)
+                az *= (2 * np.pi / scan_period / float(self.fsamp))
+                np.sin(az, out=az)
+                np.arcsin(az, out=az)
+                az *= (az_throw / np.pi)
+
+            # slightly complicated way to multiply az with az0
+            # while avoiding expanding az0 to p_len
+            az = az.reshape(nchecks, check_len)
+            az += az0[:, np.newaxis]
+            az = az.ravel()
+            az = az[:chunk_len+1] # discard extra entries
+
+        el = np.zeros((nchecks, check_len), dtype=float)
+        el += el0[:, np.newaxis]
+        el = el.ravel()
+        el = el[:chunk_len+1]
 
         # step in elevation if needed
-        if el_step:
-            el = el0 + el_step * np.ones_like(az)
-        else:
-            el = el0 * np.ones_like(az)
+#        if el_step:
+#            el = el0 + el_step * np.ones_like(az)
+#        else:
+#            el = el0 * np.ones_like(az)
 
         # return quaternion with ra, dec, pa
         self.q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
@@ -647,19 +721,13 @@ class ScanStrategy(qp.QMap, Instrument):
         # rotate the polang of the centroid, but not the centroid
         # around the boresight. It's q_bore * q_rot * q_off
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
-        q_off = tools.quat_left_mult(q_rot, q_off) # works
-#        q_off = tools.quat_left_mult(q_off, q_rot)  # no
+        q_off = tools.quat_left_mult(q_rot, q_off) 
 
         # store for mapmaking
         self.q_off = q_off
         self.polang = polang
 
-        ctime = np.arange(start, end+1, dtype=float)
-        ctime /= float(self.fsamp)
-        ctime += self.ctime0
-        self.ctime = ctime
-        tod_size = ctime.size
-
+        tod_size = end - start + 1
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
         # normal chunk len
@@ -684,8 +752,10 @@ class ScanStrategy(qp.QMap, Instrument):
         # the allocation of ra, dec, pa etc. But you need pa....
         # Perhaps ask Sasha if she can make bore2pix output pix
         # and pa (instead of sin2pa, cos2pa)
-        ra, dec, pa = self.bore2radec(q_off, ctime, self.q_bore[qidx_start:qidx_end+1],
-            q_hwp=None, sindec=False, return_pa=True)
+        ra, dec, pa = self.bore2radec(q_off,
+                                      self.ctime[self.qidx_start:self.qidx_end+1],
+                                      self.q_bore[qidx_start:qidx_end+1],
+                                      q_hwp=None, sindec=False, return_pa=True)
         
         np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
@@ -697,7 +767,7 @@ class ScanStrategy(qp.QMap, Instrument):
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
             exppais = np.exp(1j * n * pa)
-            tod_c += self.func_c[nidx][pix] * exppais
+            tod_c += self.func_c[nidx,pix] * exppais
 
         # if needed, compute hwp angle array.
         if self.hwp_dict['freq']:
@@ -762,11 +832,11 @@ class ScanStrategy(qp.QMap, Instrument):
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
             if n == 0: #avoid expais since its one anyway
-                tod += np.real(self.func[n][pix])
+                tod += np.real(self.func[n,pix])
 
             if n > 0:
-                tod += 2 * np.real(self.func[n,:][pix]) * np.cos(n * pa)
-                tod -= 2 * np.imag(self.func[n,:][pix]) * np.sin(n * pa)
+                tod += 2 * np.real(self.func[n,pix]) * np.cos(n * pa)
+                tod -= 2 * np.imag(self.func[n,pix]) * np.sin(n * pa)
 
         self.tod = tod
 
@@ -786,6 +856,11 @@ class ScanStrategy(qp.QMap, Instrument):
             Maximum spin value describing the beam
 
         '''
+
+        # NOTE it would be nice to have a symmetric beam option
+        # that only makes it run over n=0, -2 and 2.
+
+        # in MPI case, nothing changes really
 
         # Turning off healpy printing
         if not verbose:
@@ -888,15 +963,12 @@ class ScanStrategy(qp.QMap, Instrument):
         and bin into map and projection matrices.
         '''
 
-        # this works, but you should use the c code from qpoint
-#        q_hwp = np.zeros((self.ctime.size, 4), dtype=float)
-#        q_hwp[:,0] = np.cos(-self.hwp_ang)
-#        q_hwp[:,3] = np.sin(-self.hwp_ang)
-
+        
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
         self.init_point(q_bore=self.q_bore[self.qidx_start:self.qidx_end+1],
-                        ctime=self.ctime, q_hwp=q_hwp)
+                        ctime=self.ctime[self.qidx_start:self.qidx_end+1],
+                        q_hwp=q_hwp)
 
         # use q_off quat with polang (and instr. ang) included.
         q_off = self.q_off
@@ -909,5 +981,25 @@ class ScanStrategy(qp.QMap, Instrument):
 
         q_off = q_off[np.newaxis]
         tod = self.tod[np.newaxis]
-        vec, proj = self.from_tod(q_off, tod=tod)
+        self.from_tod(q_off, tod=tod)
 
+
+    def solve(self):
+        '''
+        Solve for the output map given the stored 
+        vec map and proj matrix.
+
+        Returns
+        -------
+        maps : array-like
+            Solved I, Q and U maps in shape (3, npix)
+        cond : array-like
+            Condition number map
+        '''
+
+        # in MPI case, you need to add a step here that waits for all 
+        # ranks to have reached the end of scan_instrument, i.e. they
+        # have a single vec and proj array.
+        # then gather these and solve on rank0
+
+        pass
