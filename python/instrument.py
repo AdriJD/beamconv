@@ -127,6 +127,7 @@ class Instrument(object):
         for j, xi in enumerate(x):
             for i, yi in enumerate(y):
 
+
  #               if nsr < 2 and nsc < 2:
  #                   det_str = 'r{:02d}c{:02d}a'.format(i, j)
  #               else:
@@ -151,7 +152,7 @@ class Instrument(object):
 
         self.beams = beams
 
-        assert (len(self.beams) == self.ndet), 'Wrong number of detecors!'
+        assert (len(self.beams) == self.ndet), 'Wrong number of detectors!'
 
         # If MPI, distribute beams over cores right here already
         
@@ -269,8 +270,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         qp.QMap.__init__(self, nside=256, pol=True, fast_math=True,
                          mean_aber=True, accuracy='low')
-#                         fast_pix=True, interp_pix=True,
-#                         interp_missing=True)
+#                         fast_pix=True)
         #NOTE look at how UnifileMap extracts the qpoint and
         # qmap kwargs from kwargs.
         
@@ -657,7 +657,7 @@ class ScanStrategy(qp.QMap, Instrument):
 
         # Scan boresight, note that it will slowly drift away from az0, el0
         if vel_prf is 'triangle':
-            scan_period = 2 * az_throw / float(scan_speed) # in deg.
+            scan_period = 2 * az_throw / float(scan_speed) 
             if scan_period == 0.:
                 az = np.zeros(chunk_len)
             else:
@@ -685,6 +685,21 @@ class ScanStrategy(qp.QMap, Instrument):
 #        else:
 #            el = el0 * np.ones_like(az)
 
+        # WHen MPI, you can allocate a chunk_len sized empty q_bore on 
+        # each rank. Then calculatea chunk_len / size part of q_bore and
+        # use allgather to complete q_bore on each rank. Tricky part is: 
+        # how to get things working with the (:, 4) shape of q_off and the
+        # the fact that it has to be c contig. for applications later.
+
+        # perhaps
+        # q_bore = q_bore.ravel() # should still be c-contiguous -> [q1 q2 q3 ...]
+        # then allgather them into a bigger array check if c-cont. otherwise np.ascon...
+        # and do q_bore.reshape(size, 4)
+        
+
+        # I don't think its worth to also calculate az and el in distributed
+        # chunks. Profiling suggests that majority of time is spent in azel2bore
+        
         # return quaternion with ra, dec, pa
         self.q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
 

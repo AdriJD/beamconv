@@ -231,8 +231,8 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
 
     # init scan strategy and instrument
-    ac = ScanStrategy(2*24*60*60, # mission duration in sec.
-                      sample_rate=10, # 10 Hz sample rate
+    ac = ScanStrategy(30*24*60*60, # mission duration in sec.
+                      sample_rate=100, # 10 Hz sample rate
                       location='atacama', # South pole instrument
                       nside_spin=256, # nside of rescanned maps
                       nside_out=256) # nside of binned output
@@ -584,8 +584,8 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-#    scan_bicep(hwp_mode='continuous')
-    scan_atacama(mmax=2)
+#    scan_bicep(mmax=2, hwp_mode='continuous')
+    scan_atacama(mmax=2, rot_period=60*60)
  
 #    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
 #    test_mpi()

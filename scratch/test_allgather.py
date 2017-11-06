@@ -63,6 +63,9 @@ q_bore2 = np.empty(chunksize * 4, dtype=float)
 q_boresub = Q.azel2bore(az[start:end], el[start:end], None, None, lon, lat, ctime[start:end])
 q_boresub = q_boresub.ravel()
 
+if rank == 1:
+    time.sleep(1)
+
 sub_size *= 4 # for the flattened quat array
 
 offsets = np.zeros(size) 
