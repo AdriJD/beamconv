@@ -20,7 +20,7 @@ class MPIBase(object):
 
         Keyword arguments
         ---------
-        no_mpi : bool
+        mpi : bool
             If False, do not use MPI regardless of MPI env. 
             otherwise, let code decide based on env. vars
             (default : True)
@@ -89,7 +89,7 @@ class Instrument(MPIBase):
             Latitude in degrees
         ghost_dc : float, optional
             Ghost level. Not implemented yet
-        kwargs : {MPIBase}
+        kwargs : {mpi_opts}
         '''
 
         if location == 'spole':
@@ -182,11 +182,11 @@ class Instrument(MPIBase):
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
                 
                 beamA = Beam(az=azs[az_idx], el=els[el_idx], 
-                             name=det_str, polang=0.,
+                             name=det_str+'A', polang=0.,
                              pol='A', btype='Gaussian')
 
                 beamB = Beam(az=azs[az_idx], el=els[el_idx],
-                             name=det_str, polang=90.,
+                             name=det_str+'B', polang=90.,
                              pol='B', btype='Gaussian')
                 beams.append([beamA, beamB])
 
@@ -477,7 +477,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if not chunksize or chunksize >= nsamp:
             chunksize = nsamp
 
-#        chunksize = nsamp if chunksize >= nsamp else chunksize
         nchunks = int(np.ceil(nsamp / float(chunksize)))
         chunks = []
         start = 0
@@ -563,16 +562,16 @@ class ScanStrategy(Instrument, qp.QMap):
                         **kwargs):
         '''
         Cycles through chunks, scans and calculates
-        detector tods. Optionally: also bin tods into
-        maps.
+        detector tods for all detectors serially.
+        Optionally: also bin tods into maps.
 
-        Arguments
+        Keyword arguments
         ---------
         verbose : bool [default True]
             Prints status reports
         mapmaking : bool, optional
             If True, bin tods into vec and proj.
-        kwargs : dict
+        kwargs : {ces_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()`
         '''
@@ -595,9 +594,9 @@ class ScanStrategy(Instrument, qp.QMap):
                     chunk['start'], chunk['end']))
 
             # Make the boresight move
-            ces_kwargs = kwargs.copy()
-            ces_kwargs.update(chunk)
-            self.constant_el_scan(**ces_kwargs)
+            ces_opts = kwargs.copy()
+            ces_opts.update(chunk)
+            self.constant_el_scan(**ces_opts)
 
             # if required, loop over boresight rotations
             for subchunk in self.subpart_chunk(chunk):
@@ -625,6 +624,86 @@ class ScanStrategy(Instrument, qp.QMap):
 
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
+
+    def scan_instrument_mpi(self, alm, verbose=True, mapmaking=True,
+                        **kwargs):
+        '''
+
+        Arguments
+        ---------
+        alm : tuple
+            Tuple containing (almI, almE, almB) as 
+            Healpix-formatted complex numpy arrays
+
+        Keyword arguments
+        ---------
+        verbose : bool [default True]
+            Prints status reports
+        mapmaking : bool, optional
+            If True, bin tods into vec and proj.
+        kwargs : {ces_opts}
+            Extra kwargs are assumed input to
+            `constant_el_scan()`
+        '''
+
+        if verbose and self.mpi_rank == 0:
+            print('Scanning with {:d} x {:d} grid of detectors'.format(
+                self.nrow, self.ncol))
+
+        # perhaps add loop over channel pairs (per core) here? 
+        # move get_spinmaps before loop share beam is set (all detectors use same beam)
+        # otherwise, run get_spinmaps for every pair
+
+        # for that, you would need to have loaded a beam per channel pair
+            
+        # perhaps let all ranks loop over same number even if some dont
+        # have any beams left.
+        for beampair in self.beams:
+
+            beamA = beampair[0]
+
+            if verbose:
+                print('[rank {:03d}]: working on: \n'.format(
+                        self.mpi_rank) + str(beamA))
+            beamA.gen_gaussian_blm()
+            
+            # fix these kwargs
+            self.get_spinmaps(alm, beamA.blm, max_spin=5, nside=256,
+                     verbose=False)
+
+            for cidx, chunk in enumerate(self.chunks):
+
+                if verbose:
+                    print(('[rank {:03d}]:  Working on chunk {:03}:'
+                           ' samples {:d}-{:d}').format(self.mpi_rank,
+                            cidx, chunk['start'], chunk['end']))
+
+                # Make the boresight move
+                ces_opts = kwargs.copy()
+                ces_opts.update(chunk)
+                self.constant_el_scan(**ces_opts)
+
+                # if required, loop over boresight rotations
+                for subchunk in self.subpart_chunk(chunk):
+
+                    # rotate instrument if needed
+                    if self.rot_dict['period']:
+                        self.rot_dict['angle'] = self.rot_angle_gen.next()
+
+                    self.scan(az_off=beamA.az, el_off=beamA.el, 
+                              polang=beamA.polang, **subchunk)
+
+                    self._comm.Barrier()
+                    if False:
+                        self.bin_tod()
+
+                        # Adding to global maps
+                        # when MPI these are only global maps to
+                        # the rank. Still do this
+                        
+                        self.vec += self.depo['vec']
+                        self.proj += self.depo['proj']
+
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',

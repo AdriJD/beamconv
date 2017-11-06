@@ -508,28 +508,32 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
 
 def test_mpi():
 
+    # Load up alm and blm
+    lmax = 700
+    ell, cls = get_cls()
+    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+
+
     print "MRO:", [x.__name__ for x in ScanStrategy.__mro__]
 
-#    mlen = 240 # mission length
-    mlen = 1 # mission length #BUGGGGG
+    mlen = 600 # mission length
     b2 = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=1, # sample rate in Hz
                       location='spole', # South pole instrument
                       mpi=True) # not necessary
 
-    print b2.mpi
 
     b2.create_focal_plane(nrow=3, ncol=3, fov=10)
 
-    if b2.mpi_rank == 1:
-        for beam in b2.beams:
-            print beam[0]
-            print beam[1]
+#    if b2.mpi_rank == 1:
+#        for beam in b2.beams:
+#            print beam[0]
+#            print beam[1]
 
     chunks = b2.partition_mission()
-    print chunks
-    b2.constant_el_scan(**b2.chunks[0])
-    print b2.q_bore
+#    b2.constant_el_scan(**b2.chunks[0])
+
+    b2.scan_instrument_mpi(alm)
 
 #    if False:
 #        for beam in b2.beams:
@@ -593,6 +597,7 @@ def single_detector(nsamp=1000):
                       sample_rate=10, # 10 Hz sample rate
                       location='spole') # South pole instrument
 
+    
 
     # Calculate spinmaps, stored internally
 
