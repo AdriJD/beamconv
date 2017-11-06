@@ -11,11 +11,13 @@ in I, Q, and U to generate a signal timeline that can then be binned into a map.
 
 ### Dependencies
 
-* [qpoint](https://github.com/arahlin/qpoint)
- * A lightweight quaternion-based library for telescope pointing.
-* [NumPy](https://github.com/numpy/numpy)
-* [Healpy](https://github.com/healpy/healpy)
-* [Matplotlib](https://github.com/matplotlib/matplotlib)
+ * [qpoint](https://github.com/arahlin/qpoint)
+  * A lightweight quaternion-based library for telescope pointing, written by Sasha Rahlin.
+ * [NumPy](https://github.com/numpy/numpy)
+ * [Healpy](https://github.com/healpy/healpy)
+ * [Matplotlib](https://github.com/matplotlib/matplotlib)
+
+### Example Usage
 
 ### Installation
 
