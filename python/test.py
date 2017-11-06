@@ -7,7 +7,7 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import healpy as hp
 import tools
-from instrument import ScanStrategy
+from instrument import ScanStrategy, MPIBase, Instrument
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
@@ -66,13 +66,12 @@ def scan_bicep(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     # init scan strategy and instrument
     b2 = ScanStrategy(30*60*60, # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
-                      location='spole', # South pole instrument
-                      nside_spin=256, # nside of rescanned maps
-                      nside_out=256) # nside of binned output
+                      location='spole') # South pole instrument
+
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
-    b2.get_spinmaps(alm, blm, mmax, verbose=False)
+    b2.get_spinmaps(alm, blm, mmax, nside=256, verbose=False)
     print('...spin-maps stored')
 
     # Initiate focal plane
@@ -94,7 +93,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     chunks = b2.partition_mission(int(10*60*60*b2.fsamp))
 
     # Allocate and assign parameters for mapmaking
-    b2.allocate_maps()
+    b2.allocate_maps(nside=256)
 
     # Generating timestreams + maps and storing as attributes
     b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
@@ -231,15 +230,14 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
 
     # init scan strategy and instrument
-    ac = ScanStrategy(30*24*60*60, # mission duration in sec.
+    ac = ScanStrategy(24*60*60, # mission duration in sec.
                       sample_rate=100, # 10 Hz sample rate
-                      location='atacama', # South pole instrument
-                      nside_spin=256, # nside of rescanned maps
-                      nside_out=256) # nside of binned output
+                      location='atacama') # South pole instrument
+
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
-    ac.get_spinmaps(alm, blm, mmax, verbose=False)
+    ac.get_spinmaps(alm, blm, mmax, nside=256, verbose=False)
     print('...spin-maps stored')
 
     # Initiate focal plane
@@ -258,10 +256,10 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         ac.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
     # calculate tod in chunks of # samples
-    chunks = ac.partition_mission(int(10*60*60*ac.fsamp))
+    chunks = ac.partition_mission(int(2*24*60*60*ac.fsamp))
 
     # Allocate and assign parameters for mapmaking
-    ac.allocate_maps()
+    ac.allocate_maps(nside=256)
 
     # Generating timestreams + maps and storing as attributes
     ac.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
@@ -398,12 +396,13 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     mlen = 240 # mission length
     ss = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=1, # sample rate in Hz
-                      location='spole', # South pole instrument
-                      nside_spin=512) # pixels smaller than beam
+                      location='spole') # South pole instrument
 
     # Calculate spinmaps. Only need mmax=2 for symmetric beam.
     print('\nCalculating spin-maps')
-    ss.get_spinmaps(alm, blm, max_spin=2, verbose=False)
+    # pixels smaller than beam
+    ss.get_spinmaps(alm, blm, max_spin=2, nside=512,
+                    verbose=False)
     print('...spin-maps stored')
 
     # Initiate focal plane
@@ -509,28 +508,48 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
 
 def test_mpi():
 
-    mlen = 240 # mission length
+    print "MRO:", [x.__name__ for x in ScanStrategy.__mro__]
+
+#    mlen = 240 # mission length
+    mlen = 1 # mission length #BUGGGGG
     b2 = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=1, # sample rate in Hz
                       location='spole', # South pole instrument
-                      nside_spin=128) 
+                      mpi=True) # not necessary
 
-    b2.create_focal_plane(nrow=100, ncol=100, fov=10)
-    
-    if False:
-        print b2.beams
+    print b2.mpi
+
+    b2.create_focal_plane(nrow=3, ncol=3, fov=10)
+
+    if b2.mpi_rank == 1:
         for beam in b2.beams:
-            print '\n'
-            print beam.name
-            print beam.az
-            print beam.el
-            print beam.polang
-            print beam.btype
-            print beam.pol
-            print beam.lmax
-            print beam.fwhm
-            print beam.dead
-    
+            print beam[0]
+            print beam[1]
+
+    chunks = b2.partition_mission()
+    print chunks
+    b2.constant_el_scan(**b2.chunks[0])
+    print b2.q_bore
+
+#    if False:
+#        for beam in b2.beams:
+#            print beam[0]
+#            print beam[1]
+
+#    det = b2.beams[0][0]
+#    print det
+#    det.gen_gaussian_blm()
+#    print det.blm
+
+#    partner = b2.beams[0][1]
+#    partner.reuse_beam(det)
+
+#    b2 = MPIBase()
+#    b2 = Instrument()
+#    print b2.mpi
+#    print b2.mpi_size
+#    print b2.mpi_rank
+
     # Divide beam objects over cores
 
     # write function that only selects the A beam
@@ -540,11 +559,11 @@ def test_mpi():
         # init spinmaps
             # get tod for A and B serially
         
-    a_beams = []
-    for beam in b2.beams:
-        if beam.pol == 'A':
-            a_beams.append(beam)
-    print [b.name for b in a_beams]
+#    a_beams = []
+#    for beam in b2.beams:
+#        if beam.pol == 'A':
+#            a_beams.append(beam)
+#    print [b.name for b in a_beams]
 
 
 def single_detector(nsamp=1000):
@@ -572,12 +591,12 @@ def single_detector(nsamp=1000):
     # init scan strategy and instrument
     ss = ScanStrategy(nsamp/10., # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
-                      location='spole', # South pole instrument
-                      nside_out=256)
+                      location='spole') # South pole instrument
+
 
     # Calculate spinmaps, stored internally
 
-    ss.get_spinmaps(alm, blm, mmax, verbose=False)
+#    ss.get_spinmaps(alm, blm, mmax, verbose=False)
 
     #### FINISH THIS ####
 
@@ -585,8 +604,8 @@ def single_detector(nsamp=1000):
 if __name__ == '__main__':
 
 #    scan_bicep(mmax=2, hwp_mode='continuous')
-    scan_atacama(mmax=2, rot_period=60*60)
+#    scan_atacama(mmax=2, rot_period=60*60)
  
 #    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
-#    test_mpi()
+    test_mpi()
 

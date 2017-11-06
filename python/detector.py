@@ -62,6 +62,8 @@ class Beam(object):
 #            if load_map:
 #                self.bmap = bmap # FIX this
 
+            # You don't want to load this at init.
+            # Better to have to have to seperate files.
             self.blm = bdict['blm']
             self.blmm2 = bdict['blmm2']
             self.blmm2 = bdict['blmp2']
@@ -84,14 +86,43 @@ class Beam(object):
             else:
                 self.lmax = lmax
 
-            # you don't want this to happen at init
-            blm, blmm2 = tools.gauss_blm(self.fwhm, self.lmax, pol=True)
+    def __str__(self):
 
-            self.blm = blm
-            self.blmm2 = blmm2
+        return "name   : {} \nbtype  : {} \nalive  : {} \nFWHM"\
+            "   : {} arcmin \naz     : {} deg \nel     : {} deg "\
+            "\npolang : {} deg\n".format(self.name, self.btype,
+            str(not self.dead), self.fwhm, self.az, self.el,
+            self.polang)
 
+    def gen_gaussian_blm(self):
+        '''
+        Generate symmetric Gaussian beam coefficients
+        (I and pol) using FWHM and lmax.
+        '''
+        
+        blmI, blmm2 = tools.gauss_blm(self.fwhm, self.lmax, pol=True)
+        blmp2 = np.zeros(blmm2.size, dtype=np.complex128)
+                                
+        self.blm = (blmI, blmm2, blmp2)
+        self.btype = 'Gaussian'
 
-    def load_eg_beams(bdir):
+    def reuse_beam(self, partner):
+        '''
+        Copy pointers to already initialized beam by
+        another Beam instance.
+
+        Arguments
+        ---------
+        partner : Beam object
+        '''
+        
+        if not isinstance(partner, Beam):
+            raise TypeError('partner must be Beam object')
+
+        self.blm = partner.blm
+        self.btype = partner.btype        
+
+    def load_eg_beams(self, bdir):
         '''
         Loads a collection of elliptical Gaussian beams from parameters stored
         in a pickle file.
@@ -100,7 +131,7 @@ class Beam(object):
         pass
 
 
-    def generate_eg_beams(nrow=1, ncol=1, fov=10, fwhm0=43,
+    def generate_eg_beams(self, nrow=1, ncol=1, fov=10, fwhm0=43,
         emin=0.01, emax=0.05):
         '''
         Creates a set of elliptical Gaussian beams based on the recipe provided
