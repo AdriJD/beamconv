@@ -650,12 +650,6 @@ class ScanStrategy(Instrument, qp.QMap):
             print('Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 
-        # perhaps add loop over channel pairs (per core) here? 
-        # move get_spinmaps before loop share beam is set (all detectors use same beam)
-        # otherwise, run get_spinmaps for every pair
-
-        # for that, you would need to have loaded a beam per channel pair
-            
         # perhaps let all ranks loop over same number even if some dont
         # have any beams left.
         for beampair in self.beams:
@@ -693,7 +687,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     self.scan(az_off=beamA.az, el_off=beamA.el, 
                               polang=beamA.polang, **subchunk)
 
-                    self._comm.Barrier()
+
                     if False:
                         self.bin_tod()
 
