@@ -65,7 +65,13 @@ class MPIBase(object):
             return self._comm.Get_size()
         else:
             return 1
-    
+
+    def gather_maps(self):
+        '''
+        Gather all proj and vec maps
+        '''
+
+        
 
 class Instrument(MPIBase):
     '''
@@ -475,8 +481,9 @@ class ScanStrategy(Instrument, qp.QMap):
         nsamp = self.nsamp
 
         if not chunksize or chunksize >= nsamp:
-            chunksize = nsamp
-
+            chunksize = int(nsamp)
+            
+        chunksize = int(chunksize)
         nchunks = int(np.ceil(nsamp / float(chunksize)))
         chunks = []
         start = 0
@@ -625,7 +632,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
 
-    def scan_instrument_mpi(self, alm, verbose=True, mapmaking=True,
+    def scan_instrument_mpi(self, alm, verbose=1, mapmaking=True,
                         **kwargs):
         '''
 
@@ -637,38 +644,54 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         ---------
-        verbose : bool [default True]
-            Prints status reports
+        verbose : int 
+            Prints status reports (0 : nothing, 1: some,
+            2: all) (defaul: 1)
         mapmaking : bool, optional
             If True, bin tods into vec and proj.
-        kwargs : {ces_opts}
+        kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
-            `constant_el_scan()`
+            `constant_el_scan()` or `get_spinmaps()`
         '''
+        
+        # pop get_spinmaps kwargs
+        max_spin = kwargs.pop('max_spin', 5)
+        nside = kwargs.pop('nside', 256)
 
         if verbose and self.mpi_rank == 0:
             print('Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 
-        # perhaps let all ranks loop over same number even if some dont
-        # have any beams left.
-        for beampair in self.beams:
+        # let every core loop over max number of beams per core
+        # this makes sure that cores still participate in 
+        # calculating boresight quaternion
+        nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
+
+        for bidx in xrange(nmax):
+            try:
+                beampair = self.beams[bidx]
+            except IndexError:
+                beampair = [None, None]
 
             beamA = beampair[0]
+            beamB = beampair[1]
 
-            if verbose:
-                print('[rank {:03d}]: working on: \n'.format(
-                        self.mpi_rank) + str(beamA))
-            beamA.gen_gaussian_blm()
-            
-            # fix these kwargs
-            self.get_spinmaps(alm, beamA.blm, max_spin=5, nside=256,
-                     verbose=False)
+            if verbose == 2:
+                print('\n[rank {:03d}]: working on: \n {} \n {}'.format(
+                        self.mpi_rank, str(beamA), str(beamB)))
+            if verbose == 1 and beamA and beamB:                
+                print('[rank {:03d}]: working on: {}, {}'.format(
+                        self.mpi_rank, beamA.name, beamB.name))
+
+            if beamA:                
+                beamA.gen_gaussian_blm()                
+                self.get_spinmaps(alm, beamA.blm, max_spin=max_spin,
+                                  nside=nside, verbose=(verbose==2))
 
             for cidx, chunk in enumerate(self.chunks):
 
                 if verbose:
-                    print(('[rank {:03d}]:  Working on chunk {:03}:'
+                    print(('[rank {:03d}]:    Working on chunk {:03}:'
                            ' samples {:d}-{:d}').format(self.mpi_rank,
                             cidx, chunk['start'], chunk['end']))
 
@@ -680,24 +703,28 @@ class ScanStrategy(Instrument, qp.QMap):
                 # if required, loop over boresight rotations
                 for subchunk in self.subpart_chunk(chunk):
 
+                    if verbose == 2:
+                        print(('[rank {:03d}]:        ...'
+                               ' samples {:d}-{:d}').format(self.mpi_rank,
+                                      subchunk['start'], subchunk['end']))
+
+
                     # rotate instrument if needed
                     if self.rot_dict['period']:
                         self.rot_dict['angle'] = self.rot_angle_gen.next()
 
-                    self.scan(az_off=beamA.az, el_off=beamA.el, 
-                              polang=beamA.polang, **subchunk)
+                    # scan and bin
+                    if beamA:
+                        self.scan(az_off=beamA.az, el_off=beamA.el, 
+                                  polang=beamA.polang, **subchunk)
+                        if mapmaking:
+                            self.bin_tod(add_to_global=True)
 
-
-                    if False:
-                        self.bin_tod()
-
-                        # Adding to global maps
-                        # when MPI these are only global maps to
-                        # the rank. Still do this
-                        
-                        self.vec += self.depo['vec']
-                        self.proj += self.depo['proj']
-
+                    if beamB:
+                        self.scan(az_off=beamB.az, el_off=beamB.el, 
+                                  polang=beamB.polang, **subchunk)
+                        if mapmaking:
+                            self.bin_tod(add_to_global=True)
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
@@ -1045,7 +1072,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if n == 0: # scalar transform
 
                 flmn = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
-                self.func[n,:] += hp.alm2map(flmn, nside)
+                self.func[n,:] += hp.alm2map(flmn, nside, verbose=False)
 
             else: # spin transforms
 
@@ -1058,7 +1085,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 flmnp = - (flmn + flmmn) / 2.
                 flmnm = 1j * (flmn - flmmn) / 2.
-                spinmaps = hp.alm2map_spin([flmnp, flmnm], nside, n, lmax, lmax)
+                spinmaps = hp.alm2map_spin([flmnp, flmnm], nside, n, lmax,
+                                           lmax)
                 self.func[n,:] = spinmaps[0] + 1j * spinmaps[1]
 
             start += end
@@ -1099,8 +1127,8 @@ class ScanStrategy(Instrument, qp.QMap):
             ms_flm_m *= 1j / 2.
 
             if n == 0:
-                spinmaps = [hp.alm2map(-ps_flm_p, nside),
-                            hp.alm2map(-ms_flm_m, nside)]
+                spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
+                            hp.alm2map(-ms_flm_m, nside, verbose=False)]
 
                 self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
@@ -1121,7 +1149,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if not verbose:
             sys.stdout = sys.__stdout__
 
-    def bin_tod(self, init=True):
+    def bin_tod(self, init=True, add_to_global=False):
         '''
         Take internally stored tod and pointing
         and bin into map and projection matrices.
@@ -1146,6 +1174,11 @@ class ScanStrategy(Instrument, qp.QMap):
         q_off = q_off[np.newaxis]
         tod = self.tod[np.newaxis]
         self.from_tod(q_off, tod=tod)
+
+        if add_to_global:
+            # add local maps to global maps
+            self.vec += self.depo['vec']
+            self.proj += self.depo['proj']
 
 
     def solve(self):

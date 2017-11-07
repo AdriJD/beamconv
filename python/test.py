@@ -513,10 +513,7 @@ def test_mpi():
     ell, cls = get_cls()
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
-
-    print "MRO:", [x.__name__ for x in ScanStrategy.__mro__]
-
-    mlen = 600 # mission length
+    mlen = 60000 # mission length
     b2 = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=1, # sample rate in Hz
                       location='spole', # South pole instrument
@@ -530,11 +527,21 @@ def test_mpi():
 #            print beam[0]
 #            print beam[1]
 
-    chunks = b2.partition_mission()
+    chunks = b2.partition_mission(0.5*b2.mlen)
 #    b2.constant_el_scan(**b2.chunks[0])
 
-    b2.scan_instrument_mpi(alm)
+    b2.allocate_maps()
 
+    rot_period = 0.5 * b2.mlen
+    b2.set_instr_rot(period=rot_period)
+
+    # Set HWP rotation
+    b2.set_hwp_mod(mode='continuous', freq=1)
+
+
+    b2.scan_instrument_mpi(alm, max_spin=0, verbose=2, nside=128)
+
+    print np.any(b2.vec)
 #    if False:
 #        for beam in b2.beams:
 #            print beam[0]
