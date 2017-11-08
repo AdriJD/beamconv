@@ -362,7 +362,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Set some useful qpoint/qmap options
         qmap_opts = dict(pol=True, 
-                         fast_math=True,
+                         fast_math=False, 
                          mean_aber=True, 
                          accuracy='low',
                          fast_pix=True)
@@ -707,9 +707,11 @@ class ScanStrategy(Instrument, qp.QMap):
         
         # pop get_spinmaps kwargs
         max_spin = kwargs.pop('max_spin', 5)
-        nside = kwargs.pop('nside', 256)
+        nside_spin = kwargs.pop('nside_spin', 256)
 
         if verbose and self.mpi_rank == 0:
+#            if self.mpi:
+#                self._comm.Barrier()
             print('Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 
@@ -742,7 +744,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if beam_a:                
                 beam_a.gen_gaussian_blm()                
                 self.get_spinmaps(alm, beam_a.blm, max_spin=max_spin,
-                                  nside=nside, verbose=(verbose==2))
+                                  nside_spin=nside_spin, verbose=(verbose==2))
 
             for cidx, chunk in enumerate(self.chunks):
 
@@ -1079,7 +1081,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         self.tod = tod
 
-    def get_spinmaps(self, alm, blm, max_spin=5, nside=256,
+    def get_spinmaps(self, alm, blm, max_spin=5, nside_spin=256,
                      verbose=True):
         '''
         Compute convolution of map with different spin modes
@@ -1098,7 +1100,7 @@ class ScanStrategy(Instrument, qp.QMap):
         max_spin : int, optional
             Maximum spin value describing the beam
             (default : 5)
-        nside : int
+        nside_spin : int
             Nside of spin maps (default : 256)
 
         '''
@@ -1113,11 +1115,11 @@ class ScanStrategy(Instrument, qp.QMap):
  #           sys.stdout = open(os.devnull, 'w') # Suppressing screen output
 
         self.N = max_spin + 1
-        self.nside_spin = nside
+        self.nside_spin = nside_spin
         lmax = hp.Alm.getlmax(alm[0].size)
 
         # Unpolarized sky and beam first
-        self.func = np.zeros((self.N, 12*nside**2),
+        self.func = np.zeros((self.N, 12*nside_spin**2),
                              dtype=np.complex128) # s <=0 spheres
 
         start = 0
@@ -1126,7 +1128,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if n == 0: # scalar transform
 
                 flmn = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
-                self.func[n,:] += hp.alm2map(flmn, nside, verbose=False)
+                self.func[n,:] += hp.alm2map(flmn, nside_spin, verbose=False)
 
             else: # spin transforms
 
@@ -1139,14 +1141,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 flmnp = - (flmn + flmmn) / 2.
                 flmnm = 1j * (flmn - flmmn) / 2.
-                spinmaps = hp.alm2map_spin([flmnp, flmnm], nside, n, lmax,
+                spinmaps = hp.alm2map_spin([flmnp, flmnm], nside_spin, n, lmax,
                                            lmax)
                 self.func[n,:] = spinmaps[0] + 1j * spinmaps[1]
 
             start += end
 
         # Pol
-        self.func_c = np.zeros((2*self.N-1, 12*nside**2), dtype=np.complex128) # all spin spheres
+        self.func_c = np.zeros((2*self.N-1, 12*nside_spin**2), dtype=np.complex128) # all spin spheres
 
         almp2 = -1 * (alm[1] + 1j * alm[2])
         almm2 = -1 * (alm[1] - 1j * alm[2])
@@ -1181,20 +1183,20 @@ class ScanStrategy(Instrument, qp.QMap):
             ms_flm_m *= 1j / 2.
 
             if n == 0:
-                spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
-                            hp.alm2map(-ms_flm_m, nside, verbose=False)]
+                spinmaps = [hp.alm2map(-ps_flm_p, nside_spin, verbose=False),
+                            hp.alm2map(-ms_flm_m, nside_spin, verbose=False)]
 
                 self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             else:
                 # positive spin
                 spinmaps = hp.alm2map_spin([ps_flm_p, ps_flm_m],
-                                           nside, n, lmax, lmax)
+                                           nside_spin, n, lmax, lmax)
                 self.func_c[self.N+n-1,:] = spinmaps[0] + 1j * spinmaps[1]
 
                 # negative spin
                 spinmaps = hp.alm2map_spin([ms_flm_p, ms_flm_m],
-                                           nside, n, lmax, lmax)
+                                           nside_spin, n, lmax, lmax)
                 self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             start += end

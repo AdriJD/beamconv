@@ -71,7 +71,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
-    b2.get_spinmaps(alm, blm, mmax, nside=256, verbose=False)
+    b2.get_spinmaps(alm, blm, mmax, nside_spin=256, verbose=False)
     print('...spin-maps stored')
 
     # Initiate focal plane
@@ -237,7 +237,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
     # Calculate spinmaps, stored internally
     print('\nCalculating spin-maps')
-    ac.get_spinmaps(alm, blm, mmax, nside=256, verbose=False)
+    ac.get_spinmaps(alm, blm, mmax, nside_spin=256, verbose=False)
     print('...spin-maps stored')
 
     # Initiate focal plane
@@ -401,7 +401,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     # Calculate spinmaps. Only need mmax=2 for symmetric beam.
     print('\nCalculating spin-maps')
     # pixels smaller than beam
-    ss.get_spinmaps(alm, blm, max_spin=2, nside=512,
+    ss.get_spinmaps(alm, blm, max_spin=2, nside_spin=512,
                     verbose=False)
     print('...spin-maps stored')
 
@@ -511,7 +511,7 @@ def test_mpi():
     # Load up alm and blm
     lmax = 700
     ell, cls = get_cls()
-    np.random.seed(39)
+    np.random.seed(22) # make sure all cores create the same map
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 #    alm = (alm[0], alm[1]*0, alm[2]*0)
 
@@ -522,25 +522,29 @@ def test_mpi():
     fwhm = 43
     b2 = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=13.21, # sample rate in Hz
-                      location='spole') # South pole instrument
+                      location='atacama', 
+                      fast_math=False)
+
 #                      mpi=False) # not necessary
-    import time
-    b2.set_ctime(time.time()+8*3600)
-    b2.create_focal_plane(nrow=1, ncol=3, fov=10)
+#    import time
+#    b2.set_ctime(time.time()-4*3600)
+    b2.create_focal_plane(nrow=6, ncol=6, fov=5)
 
     chunks = b2.partition_mission(0.6*b2.mlen*b2.fsamp)
 #    chunks = b2.partition_mission()
 
-    b2.allocate_maps(nside=256)
+    b2.allocate_maps(nside=512)
 
     rot_period = 0.1 * b2.mlen
-    b2.set_instr_rot(period=rot_period)
+    b2.set_instr_rot(period=rot_period, angles=np.linspace(0, 360, 20))
 
     # Set HWP rotation
-    b2.set_hwp_mod(mode='continuous', freq=10)
+#    b2.set_hwp_mod(mode='continuous', freq=10)
+    b2.set_hwp_mod(mode='stepped', freq=1/1820.)
 
     b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
-                           dec0=dec0, az_throw=az_throw, nside=256,
+                           dec0=dec0, az_throw=az_throw, 
+                           nside_spin=512,
                            el_min=45)
 
     maps, cond = b2.solve_for_map()
@@ -594,17 +598,17 @@ def test_mpi():
 
         # plot diff maps
         plt.figure()
-        hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
+        hp.cartview(maps[0] - maps_raw[0], min=-1e-2, max=1e-2, **cart_opts)
         plt.savefig('../scratch/img/diff_mpi_map_I.png')
         plt.close()
 
         plt.figure()
-        hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
+        hp.cartview(maps[1] - maps_raw[1], min=-1e-2, max=1e-2, **cart_opts)
         plt.savefig('../scratch/img/diff_mpi_map_Q.png')
         plt.close()
 
         plt.figure()
-        hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
+        hp.cartview(maps[2] - maps_raw[2], min=-1e-2, max=1e-2, **cart_opts)
         plt.savefig('../scratch/img/diff_mpi_map_U.png')
         plt.close()
 
