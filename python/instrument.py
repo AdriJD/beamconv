@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-import warnings
+from warnings import warn, catch_warnings, simplefilter
 import numpy as np
 import qpoint as qp
 import healpy as hp
@@ -48,8 +48,8 @@ class MPIBase(object):
                 self._comm = MPI.COMM_WORLD
 
             except ImportError:
-                warnings.warn(
-                  "Failed to import mpi4py, continuing without MPI")
+                warn("Failed to import mpi4py, continuing without MPI",
+                     RuntimeWarning)
 
                 self.mpi = False
 
@@ -162,6 +162,9 @@ class Instrument(MPIBase):
             sky in degrees
 
         '''
+
+        warn('you should use `create_focal_plane()`', 
+             DeprecationWarning)
 
         self.nrow = nrow
         self.ncol = ncol
@@ -579,8 +582,9 @@ class ScanStrategy(Instrument, qp.QMap):
         # Currently, rotation periods longer than computation chunks
         # are not implemented. So warn user and rotate per comp. chunk.
         if rot_chunk_size > chunksize:
-            warnings.warn(
-              'Rotation period * fsamp > chunk size: instrument rotates per chunk')
+            warn(
+              'Rotation chunk > chunk size: instrument rotates per chunk',
+              RuntimeWarning)
             return [chunk]
 
         nchunks = int(np.ceil(chunksize / rot_chunk_size))
@@ -854,8 +858,8 @@ class ScanStrategy(Instrument, qp.QMap):
             else:
                 # give up and keep boresight fixed at el_min
                 el0[el0<el_min] = el_min            
-                warnings.warn(
-              'Keeping el0 at {:.1f} for part of scan'.format(el_min))
+                warn('Keeping el0 at {:.1f} for part of scan'.format(el_min),
+                    RuntimeWarning)
             n += 1
 
         # Scan boresight, note that it will slowly drift away from az0, el0
@@ -1108,8 +1112,6 @@ class ScanStrategy(Instrument, qp.QMap):
         # NOTE it would be nice to have a symmetric beam option
         # that only makes it run over n=0, -2 and 2.
 
-        # in MPI case, nothing changes really
-
         # Turning off healpy printing
 #        if not verbose:
  #           sys.stdout = open(os.devnull, 'w') # Suppressing screen output
@@ -1117,6 +1119,13 @@ class ScanStrategy(Instrument, qp.QMap):
         self.N = max_spin + 1
         self.nside_spin = nside_spin
         lmax = hp.Alm.getlmax(alm[0].size)
+
+        # Make sure bandlimits beam and sky match
+        lmax_beam = hp.Alm.getlmax(blm[0].size)
+        if lmax > lmax_beam:
+            alm = tools.trunc_alm(alm, lmax_beam)
+        elif lmax_beam > lmax:
+            blm = tools.trunc_alm(blm, lmax)
 
         # Unpolarized sky and beam first
         self.func = np.zeros((self.N, 12*nside_spin**2),
@@ -1265,14 +1274,11 @@ class ScanStrategy(Instrument, qp.QMap):
             vec = self.vec
             proj = self.proj
 
-#        print vec[vec!=0]
-#        print proj[proj!=0]
-
         # solve map on root process
         if self.mpi_rank == 0:
             # suppress 1/0 warnings from numpy linalg
-            with warnings.catch_warnings(RuntimeWarning):
-                warnings.simplefilter("ignore")
+            with catch_warnings(RuntimeWarning):
+                simplefilter("ignore")
 
                 maps = self.solve_map(vec=vec, proj=proj, 
                                       copy=True, fill=fill)

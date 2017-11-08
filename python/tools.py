@@ -15,14 +15,18 @@ def trunc_alm(alm, lmax_new, mmax_old=None):
         share lmax and mmax.
     lmax_new : int
         The new bandlmit.
+        
+    Keyword arguments
+    -----------------
     mmax_old : int
-        m-bandlimit alm, optional.
+        m-bandlimit alm. If None, assume mmax_old=lmax
+        (default : None)
 
     Returns
     -------
-    alm_new: array with same type and dimensionality as
-        alm, but now only contains modes up to lmax_new.
-        If original dimension > 1, return tuple with
+    alm_new: newly-allocated complex alm array that
+        only contains modes up to lmax_new. If alm 
+        is sequence of arrays, return tuple with
         truncated components.
     '''
 

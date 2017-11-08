@@ -14,7 +14,7 @@ class Beam(object):
         load_map=False):
         '''
 
-        Arguments
+        Keyword arguments
         ---------
 
         az : float (default: 0.)
@@ -29,17 +29,20 @@ class Beam(object):
             The polarization callsign of the beam (A or B)
         dead : bool (default: False)
             True if the beam is dead (not functioning)
-        btype : str (default: gaussian)
+        btype : str (default: Gaussian)
             Type of detector spatial response model. Can be one of three
             Gaussian : A symmetric Gaussian beam, definied by centroids and FWHM
             Gaussian_map : A symmetric Gaussian, defined by centroids and a map
             EG       : An elliptical Gaussian
             PO       : A realistic beam based on optical simulations or beam maps
-        fwhm : float (default: 43. ) [arcmin]
-            Detector beam FWHM
+        fwhm : float 
+            Detector beam FWHM in arcmin (default : 43)
+        lmax : int
+            Bandlimit beam. If None, use 1.4*2*pi/fwhm. (default : None)
         bdict : dict
             Dictionary with kwargs. Will overwrite all other provided kwargs
-        load_map : bool, optional
+            (default : None)
+        load_map : bool
             Not yet implemented
 
         '''
@@ -81,9 +84,10 @@ class Beam(object):
             self.dead = dead
 
             if lmax is None:
-                # Going up to the Nyquist frequency set by beam scale
-#                self.lmax = int(2*np.pi/np.radians(self.fwhm/60.))
-                self.lmax = 700
+                # Going up to the Nyquist frequency set by beam scale 
+                # Note: added factor 1.4 oversampling, seems to be needed
+                self.lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
+#                self.lmax = 701
             else:
                 self.lmax = lmax
 

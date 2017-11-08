@@ -528,7 +528,7 @@ def test_mpi():
 #                      mpi=False) # not necessary
 #    import time
 #    b2.set_ctime(time.time()-4*3600)
-    b2.create_focal_plane(nrow=6, ncol=6, fov=5)
+    b2.create_focal_plane(nrow=2, ncol=2, fov=5)
 
     chunks = b2.partition_mission(0.6*b2.mlen*b2.fsamp)
 #    chunks = b2.partition_mission()
@@ -598,17 +598,17 @@ def test_mpi():
 
         # plot diff maps
         plt.figure()
-        hp.cartview(maps[0] - maps_raw[0], min=-1e-2, max=1e-2, **cart_opts)
+        hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
         plt.savefig('../scratch/img/diff_mpi_map_I.png')
         plt.close()
 
         plt.figure()
-        hp.cartview(maps[1] - maps_raw[1], min=-1e-2, max=1e-2, **cart_opts)
+        hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
         plt.savefig('../scratch/img/diff_mpi_map_Q.png')
         plt.close()
 
         plt.figure()
-        hp.cartview(maps[2] - maps_raw[2], min=-1e-2, max=1e-2, **cart_opts)
+        hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
         plt.savefig('../scratch/img/diff_mpi_map_U.png')
         plt.close()
 
