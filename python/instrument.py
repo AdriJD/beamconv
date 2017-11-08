@@ -44,6 +44,7 @@ class MPIBase(object):
             
                 self.mpi = True
                 self._mpi_double = MPI.DOUBLE
+                self._mpi_sum = MPI.SUM
                 self._comm = MPI.COMM_WORLD
 
             except ImportError:
@@ -66,12 +67,36 @@ class MPIBase(object):
         else:
             return 1
 
-    def gather_maps(self):
+    def reduce_array(self, arr_loc):
         '''
-        Gather all proj and vec maps
+        Sum arrays on all ranks elementwise into an
+        array living in the root process.
+        
+        Arguments
+        ---------
+        arr_loc : array-like
+            Local numpy array on each rank to be reduced.
+            Need to be of same shape and dtype on each rank.
+
+        Returns
+        -------
+        arr : array-like or None
+            Reduced numpy array with same shape and dtype as 
+            arr_loc on root process, None for other ranks
+            (arr_loc if not using MPI)
         '''
 
-        
+        if not self.mpi:
+            return arr_loc
+
+        if self.mpi_rank == 0:
+            arr = np.empty_like(arr_loc)
+        else: 
+            arr = None
+            
+        self._comm.Reduce(arr_loc, arr, op=self._mpi_sum, root=0)
+
+        return arr
 
 class Instrument(MPIBase):
     '''
@@ -187,14 +212,14 @@ class Instrument(MPIBase):
 
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
                 
-                beamA = Beam(az=azs[az_idx], el=els[el_idx], 
+                beam_a = Beam(az=azs[az_idx], el=els[el_idx], 
                              name=det_str+'A', polang=0.,
                              pol='A', btype='Gaussian')
 
-                beamB = Beam(az=azs[az_idx], el=els[el_idx],
+                beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                              name=det_str+'B', polang=90.,
                              pol='B', btype='Gaussian')
-                beams.append([beamA, beamB])
+                beams.append([beam_a, beam_b])
 
         assert (len(beams) == self.ndet/2.), 'Wrong number of detectors!'
 
@@ -359,7 +384,7 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         Set starting time.
 
-        Arguments
+        Keyword arguments
         ---------
         ctime0 : int, optional
             Unix time in seconds. If None, use current time.
@@ -373,7 +398,7 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         Set detector/pointing sample rate in Hz
 
-        Arguments
+        Keyword arguments
         ---------
         sample_rate : float
             Sample rate in Hz
@@ -397,10 +422,10 @@ class ScanStrategy(Instrument, qp.QMap):
     def set_instr_rot(self, period=None, start_ang=0.,
                       angles=None):
         '''
-        Have the instrument periodically rotate around
-        the boresight.
+        Set options that allow instrument to periodically 
+        rotate around the boresight.
 
-        Arguments
+        Keyword arguments
         ---------
         period : float
             Rotation period in seconds. If left None,
@@ -422,8 +447,25 @@ class ScanStrategy(Instrument, qp.QMap):
             angles = np.arange(start_ang, 360+start_ang, 45)
             np.mod(angles, 360, out=angles)
 
-        # init rotation generator
+        self.rot_dict['angles'] = angles
+
+        # init rotation generators
         self.rot_angle_gen = tools.angle_gen(angles)
+
+    def reset_instr_rot(self):
+        '''
+        "Reset" the instrument rotation generator
+        '''
+        self.rot_angle_gen = tools.angle_gen(
+            self.rot_dict['angles'])
+
+    def rotate_instr(self):
+        '''
+        Advance boresight rotation options by one
+        rotation
+        '''
+        if self.rot_dict['period']:
+            self.rot_dict['angle'] = self.rot_angle_gen.next()
 
     def set_hwp_mod(self, mode=None,
                     freq=None, start_ang=0.,
@@ -432,7 +474,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Modulate the polarized sky signal using a stepped or
         continuously rotating half-wave plate.
 
-        Arguments
+        Keyword arguments
         ---------
         mode : str
             Either "stepped" or "continuous"
@@ -457,8 +499,17 @@ class ScanStrategy(Instrument, qp.QMap):
             angles = np.arange(start_ang, 360+start_ang, 22.5)
             np.mod(angles, 360, out=angles)
 
+        self.hwp_dict['angles'] = angles
+
         # init hwp ang generator
         self.hwp_angle_gen = tools.angle_gen(angles)
+
+    def reset_hwp_mod(self):
+        '''
+        "Reset" the hwp modulation generator
+        '''
+        self.hwp_angle_gen = tools.angle_gen(
+            self.hwp_dict['angles'])
 
     def partition_mission(self, chunksize=None):
         '''
@@ -632,7 +683,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
 
-    def scan_instrument_mpi(self, alm, verbose=1, mapmaking=True,
+    def scan_instrument_mpi(self, alm, verbose=1, binning=True,
                         **kwargs):
         '''
 
@@ -647,7 +698,7 @@ class ScanStrategy(Instrument, qp.QMap):
         verbose : int 
             Prints status reports (0 : nothing, 1: some,
             2: all) (defaul: 1)
-        mapmaking : bool, optional
+        binning : bool, optional
             If True, bin tods into vec and proj.
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
@@ -668,30 +719,35 @@ class ScanStrategy(Instrument, qp.QMap):
         nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
 
         for bidx in xrange(nmax):
+            
+            if bidx > 0:
+                # reset instrument and hwp rotation
+                self.reset_instr_rot()
+                self.reset_hwp_mod()
             try:
                 beampair = self.beams[bidx]
             except IndexError:
                 beampair = [None, None]
 
-            beamA = beampair[0]
-            beamB = beampair[1]
+            beam_a = beampair[0]
+            beam_b = beampair[1]
 
             if verbose == 2:
-                print('\n[rank {:03d}]: working on: \n {} \n {}'.format(
-                        self.mpi_rank, str(beamA), str(beamB)))
-            if verbose == 1 and beamA and beamB:                
+                print('\n[rank {:03d}]: working on: \n{} \n{}'.format(
+                        self.mpi_rank, str(beam_a), str(beam_b)))
+            if verbose == 1 and beam_a and beam_b:                
                 print('[rank {:03d}]: working on: {}, {}'.format(
-                        self.mpi_rank, beamA.name, beamB.name))
+                        self.mpi_rank, beam_a.name, beam_b.name))
 
-            if beamA:                
-                beamA.gen_gaussian_blm()                
-                self.get_spinmaps(alm, beamA.blm, max_spin=max_spin,
+            if beam_a:                
+                beam_a.gen_gaussian_blm()                
+                self.get_spinmaps(alm, beam_a.blm, max_spin=max_spin,
                                   nside=nside, verbose=(verbose==2))
 
             for cidx, chunk in enumerate(self.chunks):
 
                 if verbose:
-                    print(('[rank {:03d}]:    Working on chunk {:03}:'
+                    print(('[rank {:03d}]:\tWorking on chunk {:03}:'
                            ' samples {:d}-{:d}').format(self.mpi_rank,
                             cidx, chunk['start'], chunk['end']))
 
@@ -704,26 +760,24 @@ class ScanStrategy(Instrument, qp.QMap):
                 for subchunk in self.subpart_chunk(chunk):
 
                     if verbose == 2:
-                        print(('[rank {:03d}]:        ...'
+                        print(('[rank {:03d}]:\t\t...'
                                ' samples {:d}-{:d}').format(self.mpi_rank,
                                       subchunk['start'], subchunk['end']))
 
 
                     # rotate instrument if needed
-                    if self.rot_dict['period']:
-                        self.rot_dict['angle'] = self.rot_angle_gen.next()
-
+                    self.rotate_instr()
+                        
                     # scan and bin
-                    if beamA:
-                        self.scan(az_off=beamA.az, el_off=beamA.el, 
-                                  polang=beamA.polang, **subchunk)
-                        if mapmaking:
+                    if beam_a:
+                        self.scan(az_off=beam_a.az, el_off=beam_a.el, 
+                                  polang=beam_a.polang, **subchunk)                            
+                        if binning:
                             self.bin_tod(add_to_global=True)
-
-                    if beamB:
-                        self.scan(az_off=beamB.az, el_off=beamB.el, 
-                                  polang=beamB.polang, **subchunk)
-                        if mapmaking:
+                    if beam_b:
+                        self.scan(az_off=beam_b.az, el_off=beam_b.el, 
+                                  polang=beam_b.polang, **subchunk)
+                        if binning:
                             self.bin_tod(add_to_global=True)
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
@@ -1055,8 +1109,8 @@ class ScanStrategy(Instrument, qp.QMap):
         # in MPI case, nothing changes really
 
         # Turning off healpy printing
-        if not verbose:
-            sys.stdout = open(os.devnull, 'w') # Suppressing screen output
+#        if not verbose:
+ #           sys.stdout = open(os.devnull, 'w') # Suppressing screen output
 
         self.N = max_spin + 1
         self.nside_spin = nside
@@ -1146,15 +1200,14 @@ class ScanStrategy(Instrument, qp.QMap):
             start += end
 
         # Turning printing back on
-        if not verbose:
-            sys.stdout = sys.__stdout__
+#        if not verbose:
+#            sys.stdout = sys.__stdout__
 
     def bin_tod(self, init=True, add_to_global=False):
         '''
         Take internally stored tod and pointing
         and bin into map and projection matrices.
         '''
-
         
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
@@ -1164,14 +1217,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # use q_off quat with polang (and instr. ang) included.
         q_off = self.q_off
+
         polang = -np.radians(self.polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang) 
 
         if init:
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
-
+            
         q_off = q_off[np.newaxis]
+#        print self.tod + self.mpi_rank * 1j
         tod = self.tod[np.newaxis]
         self.from_tod(q_off, tod=tod)
 
@@ -1181,10 +1236,16 @@ class ScanStrategy(Instrument, qp.QMap):
             self.proj += self.depo['proj']
 
 
-    def solve(self):
+    def solve_for_map(self, fill=hp.UNSEEN):
         '''
         Solve for the output map given the stored 
         vec map and proj matrix.
+        If MPI, reduce maps to root and solve there.
+
+        Keyword arguments
+        -----------------
+        fill : scalar
+            Fill value for unobserved pixels
 
         Returns
         -------
@@ -1194,9 +1255,31 @@ class ScanStrategy(Instrument, qp.QMap):
             Condition number map
         '''
 
-        # in MPI case, you need to add a step here that waits for all 
-        # ranks to have reached the end of scan_instrument, i.e. they
-        # have a single vec and proj array.
-        # then gather these and solve on rank0
+        if self.mpi:
+            # collect the binned maps on the root process
+            vec = self.reduce_array(self.vec)
+            proj = self.reduce_array(self.proj)
+        else:
+            vec = self.vec
+            proj = self.proj
 
-        pass
+#        print vec[vec!=0]
+#        print proj[proj!=0]
+
+        # solve map on root process
+        if self.mpi_rank == 0:
+            # suppress 1/0 warnings from numpy linalg
+            with warnings.catch_warnings(RuntimeWarning):
+                warnings.simplefilter("ignore")
+
+                maps = self.solve_map(vec=vec, proj=proj, 
+                                      copy=True, fill=fill)
+            cond = self.proj_cond(proj=proj)
+            cond[cond == np.inf] = hp.UNSEEN
+        else:
+            maps = None
+            cond = None
+
+        return maps, cond
+
+

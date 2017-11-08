@@ -82,7 +82,8 @@ class Beam(object):
 
             if lmax is None:
                 # Going up to the Nyquist frequency set by beam scale
-                self.lmax = int(2*np.pi/np.radians(self.fwhm/60.))
+#                self.lmax = int(2*np.pi/np.radians(self.fwhm/60.))
+                self.lmax = 700
             else:
                 self.lmax = lmax
 
@@ -100,10 +101,14 @@ class Beam(object):
         (I and pol) using FWHM and lmax.
         '''
         
-        blmI, blmm2 = tools.gauss_blm(self.fwhm, self.lmax, pol=True)
-        blmp2 = np.zeros(blmm2.size, dtype=np.complex128)
+#        blmI, blmm2 = tools.gauss_blm(self.fwhm, self.lmax, pol=True)
+#        blmp2 = np.zeros(blmm2.size, dtype=np.complex128)
                                 
-        self.blm = (blmI, blmm2, blmp2)
+        blm = tools.gauss_blm(self.fwhm, self.lmax, pol=False)
+        blm = tools.get_copol_blm(blm, c2_fwhm=self.fwhm)
+
+        self.blm = blm
+#        self.blm = (blmI, blmm2, blmp2)
         self.btype = 'Gaussian'
 
     def reuse_beam(self, partner):

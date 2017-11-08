@@ -422,7 +422,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
 
     # calculate tod in one go
     chunks = ss.partition_mission(int(4*60*ss.fsamp))
-    ss.scan_instrument(mapmaking=False)
+    ss.scan_instrument(binning=False)
 
     # Store the tod and pixel indices made with symmetric beam
     # Note that this is the part after the instrument rotation
@@ -466,7 +466,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     # Reset instrument rotation and HWP and scan again
     ss.set_instr_rot(period=rot_period)
     ss.set_hwp_mod(mode='continuous', freq=hwp_freq)
-    ss.scan_instrument(mapmaking=False)
+    ss.scan_instrument(binning=False)
 
     # Figure comparing the raw detector timelines for the two versions
     # For subpixel offsets, the bottom plot shows you that sudden shifts
@@ -511,70 +511,112 @@ def test_mpi():
     # Load up alm and blm
     lmax = 700
     ell, cls = get_cls()
+    np.random.seed(39)
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+#    alm = (alm[0], alm[1]*0, alm[2]*0)
 
     mlen = 60000 # mission length
+    ra0 = -10
+    dec0 = -57.5
+    az_throw = 50
+    fwhm = 43
     b2 = ScanStrategy(mlen, # mission duration in sec.
-                      sample_rate=1, # sample rate in Hz
-                      location='spole', # South pole instrument
-                      mpi=True) # not necessary
+                      sample_rate=13.21, # sample rate in Hz
+                      location='spole') # South pole instrument
+#                      mpi=False) # not necessary
+    import time
+    b2.set_ctime(time.time()+8*3600)
+    b2.create_focal_plane(nrow=1, ncol=3, fov=10)
 
+    chunks = b2.partition_mission(0.6*b2.mlen*b2.fsamp)
+#    chunks = b2.partition_mission()
 
-    b2.create_focal_plane(nrow=3, ncol=3, fov=10)
+    b2.allocate_maps(nside=256)
 
-#    if b2.mpi_rank == 1:
-#        for beam in b2.beams:
-#            print beam[0]
-#            print beam[1]
-
-    chunks = b2.partition_mission(0.5*b2.mlen)
-#    b2.constant_el_scan(**b2.chunks[0])
-
-    b2.allocate_maps()
-
-    rot_period = 0.5 * b2.mlen
+    rot_period = 0.1 * b2.mlen
     b2.set_instr_rot(period=rot_period)
 
     # Set HWP rotation
-    b2.set_hwp_mod(mode='continuous', freq=1)
+    b2.set_hwp_mod(mode='continuous', freq=10)
 
+    b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
+                           dec0=dec0, az_throw=az_throw, nside=256,
+                           el_min=45)
 
-    b2.scan_instrument_mpi(alm, max_spin=0, verbose=2, nside=128)
-
-    print np.any(b2.vec)
-#    if False:
-#        for beam in b2.beams:
-#            print beam[0]
-#            print beam[1]
-
-#    det = b2.beams[0][0]
-#    print det
-#    det.gen_gaussian_blm()
-#    print det.blm
-
-#    partner = b2.beams[0][1]
-#    partner.reuse_beam(det)
-
-#    b2 = MPIBase()
-#    b2 = Instrument()
-#    print b2.mpi
-#    print b2.mpi_size
-#    print b2.mpi_rank
-
-    # Divide beam objects over cores
-
-    # write function that only selects the A beam
-    # write function that selects corr. B beam
-
-    # per core, loop over beams
-        # init spinmaps
-            # get tod for A and B serially
+    maps, cond = b2.solve_for_map()
+    
+    if b2.mpi_rank == 0:
+        print 'plotting results'        
         
-#    a_beams = []
-#    for beam in b2.beams:
-#        if beam.pol == 'A':
-#            a_beams.append(beam)
-#    print [b.name for b in a_beams]
+        cond[cond == np.inf] = hp.UNSEEN
+        az_throw = 50
+        ## Plotting results
+        cart_opts = dict(rot=[ra0, dec0, 0],
+                lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
+                latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
+                 unit=r'[$\mu K_{\mathrm{CMB}}$]')
+
+        # plot solved maps
+        plt.figure()
+        hp.cartview(maps[0], min=-250, max=250, **cart_opts)
+        plt.savefig('../scratch/img/test_mpi_map_I.png')
+        plt.close()
+
+        plt.figure()
+        hp.cartview(maps[1], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/test_mpi_map_Q.png')
+        plt.close()
+
+        plt.figure()
+        hp.cartview(maps[2], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/test_mpi_map_U.png')
+        plt.close()
+
+        # plot smoothed input maps, diff maps and spectra
+        nside = hp.get_nside(maps[0])
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
+        maps_raw = hp.alm2map(alm, nside, verbose=False)
+
+        plt.figure()
+        hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
+        plt.savefig('../scratch/img/raw_mpi_map_I.png')
+        plt.close()
+
+        plt.figure()
+        hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/raw_mpi_map_Q.png')
+        plt.close()
+
+        plt.figure()
+        hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/raw_mpi_map_U.png')
+        plt.close()
+
+        # plot diff maps
+        plt.figure()
+        hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
+        plt.savefig('../scratch/img/diff_mpi_map_I.png')
+        plt.close()
+
+        plt.figure()
+        hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
+        plt.savefig('../scratch/img/diff_mpi_map_Q.png')
+        plt.close()
+
+        plt.figure()
+        hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
+        plt.savefig('../scratch/img/diff_mpi_map_U.png')
+        plt.close()
+
+
+        cart_opts.pop('min', None)
+        cart_opts.pop('max', None)
+        cart_opts.pop('unit', None)
+        plt.figure()
+        hp.cartview(cond, min=2, max=5, unit='condition number',
+                    **cart_opts)
+        plt.savefig('../scratch/img/test_mpi_map_cond.png')
+        plt.close()
 
 
 def single_detector(nsamp=1000):
