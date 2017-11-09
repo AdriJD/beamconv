@@ -1,5 +1,6 @@
 import os
 import sys
+from warnings import catch_warnings, simplefilter
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -22,8 +23,43 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
+ 
+def plot_map(map_arr, write_dir, write_name,
+             plot_func=hp.mollview, **kwargs):
+    
+    filename = os.path.join(write_dir, write_name)
 
-#def plot_maps(maps, 
+    plt.figure()
+    with catch_warnings(RuntimeWarning):
+        simplefilter("ignore")
+    plot_func(map_arr, **kwargs)
+    plt.savefig(filename+'.png')
+    plt.close()
+    
+
+def plot_iqu(maps, write_dir, write_name, sym_limits=None,
+             **kwargs):
+    '''
+    Plot a (set of I, Q, U) map(s) and write to disk.
+    
+    Arguments
+    ---------
+    '''
+
+    if not hasattr(sym_limits, "__iter__"):
+        sym_limits = [sym_limits] * 3
+
+    for pidx, pol in enumerate(['I', 'Q', 'U']):
+
+        maxx = kwargs.pop('max', sym_limits[pidx])
+        try:
+            minn = -maxx
+        except TypeError:
+            minn = maxx
+            
+        plot_map(maps[pidx], write_dir, write_name+'_'+pol,
+                min=minn, max=maxx, **kwargs)
+
 
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=10*60,
@@ -62,19 +98,19 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         respectively (default : None)
     '''
 
+    mlen = 24 * 60 * 60 # hardcoded mission length
+
     # Create LCDM realization
     ell, cls = get_cls()
     np.random.seed(25) # make sure all MPI ranks use the same seed
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
-    mlen = 24 * 60 * 60 # hardcoded mission length
-
     b2 = ScanStrategy(mlen, # mission duration in sec.
-                      sample_rate=12.01, # sample rate in Hz
+                      sample_rate=1.01, # sample rate in Hz
                       location='spole') # Instrument at south pole 
 
     # Create a 3 x 3 square grid of Gaussian beams
-    b2.create_focal_plane(nrow=3, ncol=3, fov=5, 
+    b2.create_focal_plane(nrow=1, ncol=1, fov=5, 
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
@@ -98,81 +134,50 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                            nside_spin=256)
     
     # Solve for the maps
-    maps, cond = b2.solve_for_map()
+    maps, cond = b2.solve_for_map(fill=np.nan)
 
     # Plotting
     if b2.mpi_rank == 0:
         print 'plotting results'        
-
-        cond[cond == np.inf] = hp.UNSEEN
 
         cart_opts = dict(rot=[ra0, dec0, 0],
                 lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
                 latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
                  unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
-        # plot solved maps
-        plt.figure()
-        hp.cartview(maps[0], min=-250, max=250, **cart_opts)
-        plt.savefig('../scratch/img/test_map_I.png')
-        plt.close()
+        # plot rescanned maps
+        plot_iqu(maps, '../scratch/img/', 'rescan_bicep', 
+                 sym_limits=[250, 5, 5], 
+                 plot_func=hp.cartview, **cart_opts)
 
-        plt.figure()
-        hp.cartview(maps[1], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/test_map_Q.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps[2], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/test_map_U.png')
-        plt.close()
-
-        # plot smoothed input maps, diff maps and spectra
+        # plot smoothed input maps
         nside = hp.get_nside(maps[0])
         hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
         maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-        plt.figure()
-        hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
-        plt.savefig('../scratch/img/raw_map_I.png')
-        plt.close()
+        plot_iqu(maps_raw, '../scratch/img/', 'raw_bicep', 
+                 sym_limits=[250, 5, 5], 
+                 plot_func=hp.cartview, **cart_opts)
 
-        plt.figure()
-        hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/raw_map_Q.png')
-        plt.close()
+        # plot difference maps
+        for arr in maps_raw:
+            # replace stupid UNSEEN crap
+            arr[arr==hp.UNSEEN] = np.nan
 
-        plt.figure()
-        hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/raw_map_U.png')
-        plt.close()
+        diff = maps_raw - maps
 
-        # plot diff maps
-        plt.figure()
-        hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
-        plt.savefig('../scratch/img/diff_map_I.png')
-        plt.close()
+        plot_iqu(diff, '../scratch/img/', 'diff_bicep', 
+                 sym_limits=[1e-6, 1e-6, 1e-6], 
+                 plot_func=hp.cartview, **cart_opts)
 
-        plt.figure()
-        hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
-        plt.savefig('../scratch/img/diff_map_Q.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
-        plt.savefig('../scratch/img/diff_map_U.png')
-        plt.close()
-
-
-        cart_opts.pop('min', None)
-        cart_opts.pop('max', None)
+        # plot condition number map
         cart_opts.pop('unit', None)
-        plt.figure()
-        hp.cartview(cond, min=2, max=5, unit='condition number',
-                    **cart_opts)
-        plt.savefig('../scratch/img/test_map_cond.png')
-        plt.close()
 
+        plot_map(cond, '../scratch/img/', 'cond_bicep',
+                 min=2, max=5, unit='condition number',
+                 plot_func=hp.cartview, **cart_opts)
+
+        # plot input spectrum
         cls[3][cls[3]<=0.] *= -1.
         dell = ell * (ell + 1) / 2. / np.pi
         plt.figure()
@@ -184,7 +189,6 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.xlabel(r'Multipole [$\ell$]')
         plt.savefig('../scratch/img/cls.png')
         plt.close()
-
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
                ra0=[-10, 0], dec0=[-57.5, 0],

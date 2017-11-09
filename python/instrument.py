@@ -1294,7 +1294,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 maps = self.solve_map(vec=vec, proj=proj, 
                                       copy=True, fill=fill)
             cond = self.proj_cond(proj=proj)
-            cond[cond == np.inf] = hp.UNSEEN
+            cond[cond == np.inf] = fill
         else:
             maps = None
             cond = None
