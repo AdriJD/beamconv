@@ -24,10 +24,29 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
  
-def plot_map(map_arr, write_dir, write_name,
+def plot_map(map_arr, write_dir, tag,
              plot_func=hp.mollview, **kwargs):
+    '''
+    Plot map using one of the healpy plotting 
+    functions and write to disk.
     
-    filename = os.path.join(write_dir, write_name)
+    Arguments
+    ---------
+    map_arr : array-like
+        Healpix map to plot
+    write_dir : str
+        Path to directory where map is saved
+    tag : str
+        Filename = <tag>.png
+    
+    Keyword arguments
+    -----------------
+    plot_func : <function>
+        healpy plotting function (default : mollview)
+    kwargs : <healpy_plot_opts>        
+    '''
+    
+    filename = os.path.join(write_dir, tag)
 
     plt.figure()
     with catch_warnings(RuntimeWarning):
@@ -37,13 +56,26 @@ def plot_map(map_arr, write_dir, write_name,
     plt.close()
     
 
-def plot_iqu(maps, write_dir, write_name, sym_limits=None,
-             **kwargs):
+def plot_iqu(maps, write_dir, tag,
+             sym_limits=None, **kwargs):
     '''
-    Plot a (set of I, Q, U) map(s) and write to disk.
+    Plot a (set of I, Q, U) map(s) and write each
+    to disk.
     
     Arguments
     ---------
+    sym_limits : scalar, array-like
+        Colorbar limits assuming symemtric limits.
+        If array-like, assume limits for I, Q, U
+        maps
+    write_dir : str
+        Path to directory where map is saved
+    tag : str
+        Filename = <tag>.png
+
+    Keyword arguments
+    -----------------
+    kwargs : {plot_map_opts, healpy_plt_opts}
     '''
 
     if not hasattr(sym_limits, "__iter__"):
@@ -57,9 +89,8 @@ def plot_iqu(maps, write_dir, write_name, sym_limits=None,
         except TypeError:
             minn = maxx
             
-        plot_map(maps[pidx], write_dir, write_name+'_'+pol,
+        plot_map(maps[pidx], write_dir, tag+'_'+pol,
                 min=minn, max=maxx, **kwargs)
-
 
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=10*60,
@@ -74,25 +105,25 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     Keyword arguments
     ---------
 
-    lmax : int, optional
+    lmax : int, 
         bandlimit (default : 700)
-    mmax : int, optional
+    mmax : int, 
         assumed azimuthal bandlimit beams (symmetric in this example
         so 2 would suffice) (default : 5)
-    fwhm : float, optional
+    fwhm : float, 
         The beam FWHM in arcmin (default : 40)
-    ra0 : float, optional
+    ra0 : float, 
         Ra coord of centre region (default : -10)
-    dec0 : float, optional (default : -57.5)
+    dec0 : float,  (default : -57.5)
         Ra coord of centre region
-    az_throw : float, optional
+    az_throw : float, 
         Scan width in azimuth (in degrees) (default : 50)
-    scan_speed : float, optional
+    scan_speed : float, 
         Scan speed in deg/s (default : 1)
-    rot_period : float, optional
+    rot_period : float, 
         The instrument rotation period in sec
         (default : 600)
-    hwp_mode : str, optional
+    hwp_mode : str, None
         HWP modulation mode, either "continuous", 
         "stepped" or None. Use freq of 1 or 1/10800 Hz
         respectively (default : None)
@@ -191,67 +222,64 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.close()
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
-               ra0=[-10, 0], dec0=[-57.5, 0],
-               az_throw=50, scan_speed=1, rot_period=0,
-               hwp_mode='continuous'):
+                 ra0=[-10, 170], dec0=[-57.5, 0],
+                 az_throw=50, scan_speed=1, rot_period=0,
+                 hwp_mode='continuous'):
     '''
-    Simulates a fraction of an atacama-based telescope. Prefers to scan  
-    the bicep patch but will scan other patches if the first is not
-    visible.
+    Simulates 48h of an atacama-based telescope with a 3 x 3 grid
+    of Gaussian beams pairs. Prefers to scan the bicep patch but 
+    will try to scan the ABS_B patch if the first is not visible.
 
-    Arguments
+    Keyword arguments
     ---------
 
-    lmax : int, optional
+    lmax : int
         bandlimit (default : 700)
-    mmax : int, optional
+    mmax : int
         assumed azimuthal bandlimit beams (symmetric in this example
         so 2 would suffice) (default : 5)
-    fwhm : float, optional
+    fwhm : float
         The beam FWHM in arcmin (default : 40)
-    ra0 : float, optional
-        Ra coord of centre region (default : -10)
-    dec0 : float, optional (default : -57.5)
-        Ra coord of centre region
-    az_throw : float, optional
+    ra0 : float, array-like
+        Ra coord of centre region (default : [-10., 85.])
+    dec0 : float, array-like
+        Ra coord of centre region (default : [-57.5, 0.])
+    az_throw : float
         Scan width in azimuth (in degrees) (default : 10)
-    scan_speed : float, optional
+    scan_speed : float
         Scan speed in deg/s (default : 1)
-    rot_period : float, optional
+    rot_period : float
         The instrument rotation period in sec
         (default : 600)
-    hwp_mode : str, optional
+    hwp_mode : str, None
         HWP modulation mode, either "continuous", 
         "stepped" or None. Use freq of 1 or 1/10800 Hz
         respectively (default : continuous)
     '''
 
-    # Load up alm and blm
+    mlen = 48 * 60 * 60 # hardcoded mission length
+
+    # Create LCDM realization
     ell, cls = get_cls()
+    np.random.seed(25) # make sure all MPI ranks use the same seed
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
-    blm = tools.gauss_blm(fwhm, lmax, pol=False)
-    blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
+    ac = ScanStrategy(mlen, # mission duration in sec.
+                      sample_rate=12.01, # sample rate in Hz
+                      location='atacama') # Instrument at south pole 
 
-    # init scan strategy and instrument
-    ac = ScanStrategy(24*60*60, # mission duration in sec.
-                      sample_rate=100, # 10 Hz sample rate
-                      location='atacama') # South pole instrument
+    # Create a 3 x 3 square grid of Gaussian beams
+    ac.create_focal_plane(nrow=3, ncol=3, fov=5, 
+                          lmax=lmax, fwhm=fwhm)
 
+    # calculate tods in two chunks
+    chunks = ac.partition_mission(0.5*ac.mlen*ac.fsamp) 
 
-    # Calculate spinmaps, stored internally
-    print('\nCalculating spin-maps')
-    ac.get_spinmaps(alm, blm, mmax, nside_spin=256, verbose=False)
-    print('...spin-maps stored')
+    # Allocate and assign parameters for mapmaking
+    ac.allocate_maps(nside=256)
 
-    # Initiate focal plane
-    ac.set_focal_plane(nrow=1, ncol=1, fov=10)
-
-    # Give every detector a random polarization angle
-    ac.polangs = np.random.randint(0, 360, ac.ndet)
-
-    # Rotate instrument (period in sec)
-    ac.set_instr_rot(period=rot_period, angles=np.arange(0, 360, 10))
+    # set instrument rotation
+    ac.set_instr_rot(period=rot_period)
 
     # Set HWP rotation
     if hwp_mode == 'continuous':
@@ -259,100 +287,65 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     elif hwp_mode == 'stepped':
         ac.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
-    # calculate tod in chunks of # samples
-    chunks = ac.partition_mission(int(2*24*60*60*ac.fsamp))
+    # Generate timestreams, bin them and store as attributes
+    ac.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
+                           dec0=dec0, az_throw=az_throw, 
+                           nside_spin=256,
+                           el_min=45)
+    
+    # Solve for the maps
+    maps, cond = ac.solve_for_map(fill=np.nan)
 
-    # Allocate and assign parameters for mapmaking
-    ac.allocate_maps(nside=256)
+    # Plotting
+    if ac.mpi_rank == 0:
+        print 'plotting results'        
 
-    # Generating timestreams + maps and storing as attributes
-    ac.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
-                       scan_speed=scan_speed, 
-                       el_min=45) # set minimum elevation range
+        moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
-    maps = ac.solve_map(vec=ac.vec, proj=ac.proj, copy=True,
-                        fill=hp.UNSEEN)
-    cond = ac.proj_cond(proj=ac.proj)
-    cond[cond == np.inf] = hp.UNSEEN
+        # plot rescanned maps
+        plot_iqu(maps, '../scratch/img/', 'rescan_atacama', 
+                 sym_limits=[250, 5, 5], 
+                 plot_func=hp.mollview, **moll_opts)
 
+        # plot smoothed input maps
+        nside = hp.get_nside(maps[0])
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
+        maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-    ## Plotting results
-    moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
+        plot_iqu(maps_raw, '../scratch/img/', 'raw_atacama', 
+                 sym_limits=[250, 5, 5], 
+                 plot_func=hp.mollview, **moll_opts)
 
-    # plot solved maps
-    plt.figure()
-    hp.mollview(maps[0], min=-250, max=250, **moll_opts)
-    plt.savefig('../scratch/img/test_act_map_I.png')
-    plt.close()
+        # plot difference maps
+        for arr in maps_raw:
+            # replace stupid UNSEEN crap
+            arr[arr==hp.UNSEEN] = np.nan
 
-    plt.figure()
-    hp.mollview(maps[1], min=-5, max=5, **moll_opts)
-    plt.savefig('../scratch/img/test_act_map_Q.png')
-    plt.close()
+        diff = maps_raw - maps
 
-    plt.figure()
-    hp.mollview(maps[2], min=-5, max=5, **moll_opts)
-    plt.savefig('../scratch/img/test_act_map_U.png')
-    plt.close()
+        plot_iqu(diff, '../scratch/img/', 'diff_atacama', 
+                 sym_limits=[1e-6, 1e-6, 1e-6], 
+                 plot_func=hp.mollview, **moll_opts)
 
-    # plot smoothed input maps, diff maps and spectra
-    nside = hp.get_nside(maps[0])
-    hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-    maps_raw = hp.alm2map(alm, nside, verbose=False)
+        # plot condition number map
+        moll_opts.pop('unit', None)
 
-    plt.figure()
-    hp.mollview(maps_raw[0], min=-250, max=250, **moll_opts)
-    plt.savefig('../scratch/img/raw_act_map_I.png')
-    plt.close()
+        plot_map(cond, '../scratch/img/', 'cond_atacama',
+                 min=2, max=5, unit='condition number',
+                 plot_func=hp.mollview, **moll_opts)
 
-    plt.figure()
-    hp.mollview(maps_raw[1], min=-5, max=5, **moll_opts)
-    plt.savefig('../scratch/img/raw_act_map_Q.png')
-    plt.close()
+        # plot input spectrum
+        cls[3][cls[3]<=0.] *= -1.
+        dell = ell * (ell + 1) / 2. / np.pi
+        plt.figure()
+        for i, label in enumerate(['TT', 'EE', 'BB', 'TE']):
+          plt.semilogy(ell, dell * cls[i], label=label)
 
-    plt.figure()
-    hp.mollview(maps_raw[2], min=-5, max=5, **moll_opts)
-    plt.savefig('../scratch/img/raw_act_map_U.png')
-    plt.close()
-
-    # plot diff maps
-    plt.figure()
-    hp.mollview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **moll_opts)
-    plt.savefig('../scratch/img/diff_act_map_I.png')
-    plt.close()
-
-    plt.figure()
-    hp.mollview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **moll_opts)
-    plt.savefig('../scratch/img/diff_act_map_Q.png')
-    plt.close()
-
-    plt.figure()
-    hp.mollview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **moll_opts)
-    plt.savefig('../scratch/img/diff_act_map_U.png')
-    plt.close()
-
-
-    moll_opts.pop('min', None)
-    moll_opts.pop('max', None)
-    moll_opts.pop('unit', None)
-    plt.figure()
-    hp.mollview(cond, min=2, max=5, unit='condition number',
-                **moll_opts)
-    plt.savefig('../scratch/img/test_act_map_cond.png')
-    plt.close()
-
-    cls[3][cls[3]<=0.] *= -1.
-    dell = ell * (ell + 1) / 2. / np.pi
-    plt.figure()
-    for i, label in enumerate(['TT', 'EE', 'BB', 'TE']):
-      plt.semilogy(ell, dell * cls[i], label=label)
-
-    plt.legend()
-    plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
-    plt.xlabel(r'Multipole [$\ell$]')
-    plt.savefig('../scratch/img/cls_act.png')
-    plt.close()
-
+        plt.legend()
+        plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
+        plt.xlabel(r'Multipole [$\ell$]')
+        plt.savefig('../scratch/img/cls.png')
+        plt.close()
 
 def offset_beam(az_off=0, el_off=0, polang=0, lmax=100, 
                 fwhm=200, hwp_freq=25., pol_only=True):
@@ -361,27 +354,27 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     Gaussian beam that has been rotated away from the boresight. 
     This means that the beam is highly asymmetric.
 
-    Arguments
+    Keyword arguments
     ---------
 
-    az_off : float, optional
+    az_off : float, 
         Azimuthal location of detector relative to boresight
         (default : 0.)
-    el_off : float, optional
+    el_off : float, 
         Elevation location of detector relative to boresight
         (default : 0.)
-    polang : float, optional
+    polang : float, 
         Detector polarization angle in degrees (defined for
         unrotated detector as offset from meridian) 
         (default : 0)
-    lmax : int, optional
+    lmax : int, 
         Maximum multipole number, (default : 200)
-    fwhm : float, optional
+    fwhm : float, 
         The beam FWHM used in this analysis [arcmin]
         (default : 100)
-    hwp_freq : float, optional
+    hwp_freq : float, 
         HWP spin frequency (continuous mode) (default : 25.)
-    pol_only : bool, optional
+    pol_only : bool, 
         Set unpolarized sky signal to zero (default : True)
     '''
 
@@ -665,9 +658,8 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
-#    scan_atacama(mmax=2, rot_period=60*60)
- 
-#    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
+#    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
+#    scan_atacama(mmax=2, rot_period=60*60) 
+    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
 #    test_mpi()
 
