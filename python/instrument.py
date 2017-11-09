@@ -180,15 +180,14 @@ class Instrument(MPIBase):
         self.azs = xx.flatten()
         self.els = yy.flatten()
 
-
-    def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           from_files=False):
+    def create_focal_plane(self, nrow=1, ncol=1, fov=10., 
+                           from_files=False, **kwargs):
         '''
         Create Beam objects for orthogonally polarized 
         detector pairs with pointing offsets lying on a 
         rectangular grid on the sky.
 
-        Arguments
+        Keyword arguments
         ---------
         nrow : int, optional
             Number of detectors per row (default: 1)
@@ -199,7 +198,19 @@ class Instrument(MPIBase):
             sky in degrees (default: 10.)
         from_files : bool, optional
             Load beam properties from files (default: False)
+        lmax : int
+            Bandlimit for all created beams
+        fwhm : float
+            FWHM for all gaussian beams
+            
+        Notes
+        -----
+        Any keywords mentioned above accepted by the Beam()
+        class will be assumed to hold for all beams created.
         '''
+
+        lmax = kwargs.get('lmax', None)
+        fwhm = kwargs.get('fwhm', 43)
 
         self.nrow = nrow
         self.ncol = ncol
@@ -216,12 +227,14 @@ class Instrument(MPIBase):
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
                 
                 beam_a = Beam(az=azs[az_idx], el=els[el_idx], 
-                             name=det_str+'A', polang=0.,
-                             pol='A', btype='Gaussian')
+                              name=det_str+'A', polang=0.,
+                              pol='A', btype='Gaussian',
+                              lmax=lmax, fwhm=fwhm)
 
                 beam_b = Beam(az=azs[az_idx], el=els[el_idx],
-                             name=det_str+'B', polang=90.,
-                             pol='B', btype='Gaussian')
+                              name=det_str+'B', polang=90.,
+                              pol='B', btype='Gaussian',
+                              lmax=lmax, fwhm=fwhm)
                 beams.append([beam_a, beam_b])
 
         assert (len(beams) == self.ndet/2.), 'Wrong number of detectors!'
@@ -714,8 +727,6 @@ class ScanStrategy(Instrument, qp.QMap):
         nside_spin = kwargs.pop('nside_spin', 256)
 
         if verbose and self.mpi_rank == 0:
-#            if self.mpi:
-#                self._comm.Barrier()
             print('Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 

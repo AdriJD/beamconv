@@ -23,65 +23,68 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
 
-def scan_bicep(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
+#def plot_maps(maps, 
+
+def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=10*60,
                hwp_mode=None):
     '''
-    Simulates a fraction of BICEP2-like scan strategy
+    Simulates a 24h BICEP2-like scan strategy
+    using a random LCDM realisation and a 3 x 3 grid
+    of Gaussian beams pairs. Bins tods into maps and
+    compares to smoothed input maps (no pair-
+    differencing). MPI-enabled.
 
-    Arguments
+    Keyword arguments
     ---------
 
     lmax : int, optional
-        bandlimit (default: 700)
+        bandlimit (default : 700)
     mmax : int, optional
         assumed azimuthal bandlimit beams (symmetric in this example
-        so 2 would suffice) (default: 5)
+        so 2 would suffice) (default : 5)
     fwhm : float, optional
-        The beam FWHM in arcmin (default: 40)
+        The beam FWHM in arcmin (default : 40)
     ra0 : float, optional
-        Ra coord of centre region (default: -10)
-    dec0 : float, optional (default: -57.5)
+        Ra coord of centre region (default : -10)
+    dec0 : float, optional (default : -57.5)
         Ra coord of centre region
     az_throw : float, optional
-        Scan width in azimuth (in degrees) (default: 10)
+        Scan width in azimuth (in degrees) (default : 50)
     scan_speed : float, optional
-        Scan speed in deg/s (default: 1)
+        Scan speed in deg/s (default : 1)
     rot_period : float, optional
         The instrument rotation period in sec
-        (default: 600)
+        (default : 600)
     hwp_mode : str, optional
         HWP modulation mode, either "continuous", 
         "stepped" or None. Use freq of 1 or 1/10800 Hz
-        respectively (default: None)
+        respectively (default : None)
     '''
 
-    # Load up alm and blm
+    # Create LCDM realization
     ell, cls = get_cls()
+    np.random.seed(25) # make sure all MPI ranks use the same seed
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
-    blm = tools.gauss_blm(fwhm, lmax, pol=False)
-    blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
+    mlen = 24 * 60 * 60 # hardcoded mission length
 
-    # init scan strategy and instrument
-    b2 = ScanStrategy(30*60*60, # mission duration in sec.
-                      sample_rate=10, # 10 Hz sample rate
-                      location='spole') # South pole instrument
+    b2 = ScanStrategy(mlen, # mission duration in sec.
+                      sample_rate=12.01, # sample rate in Hz
+                      location='spole') # Instrument at south pole 
 
+    # Create a 3 x 3 square grid of Gaussian beams
+    b2.create_focal_plane(nrow=3, ncol=3, fov=5, 
+                          lmax=lmax, fwhm=fwhm)
 
-    # Calculate spinmaps, stored internally
-    print('\nCalculating spin-maps')
-    b2.get_spinmaps(alm, blm, mmax, nside_spin=256, verbose=False)
-    print('...spin-maps stored')
+    # calculate tods in two chunks
+    chunks = b2.partition_mission(0.5*b2.mlen*b2.fsamp) 
 
-    # Initiate focal plane
-    b2.set_focal_plane(nrow=3, ncol=3, fov=5)
+    # Allocate and assign parameters for mapmaking
+    b2.allocate_maps(nside=256)
 
-    # Give every detector a random polarization angle
-    b2.polangs = np.random.randint(0, 360, b2.ndet)
-
-    # Rotate instrument (period in sec)
-    b2.set_instr_rot(period=rot_period, angles=np.arange(0, 360, 10))
+    # set instrument rotation
+    b2.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
 
     # Set HWP rotation
     if hwp_mode == 'continuous':
@@ -89,101 +92,98 @@ def scan_bicep(lmax=700, mmax=5, fwhm=40, ra0=-10, dec0=-57.5,
     elif hwp_mode == 'stepped':
         b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
-    # calculate tod in chunks of # samples
-    chunks = b2.partition_mission(int(10*60*60*b2.fsamp))
+    # Generate timestreams, bin them and store as attributes
+    b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
+                           dec0=dec0, az_throw=az_throw, 
+                           nside_spin=256)
+    
+    # Solve for the maps
+    maps, cond = b2.solve_for_map()
 
-    # Allocate and assign parameters for mapmaking
-    b2.allocate_maps(nside=256)
+    # Plotting
+    if b2.mpi_rank == 0:
+        print 'plotting results'        
 
-    # Generating timestreams + maps and storing as attributes
-    b2.scan_instrument(az_throw=az_throw, ra0=ra0, dec0=dec0,
-                       scan_speed=scan_speed)
+        cond[cond == np.inf] = hp.UNSEEN
 
-    maps = b2.solve_map(vec=b2.vec, proj=b2.proj, copy=True,
-                        fill=hp.UNSEEN)
-    cond = b2.proj_cond(proj=b2.proj)
-    cond[cond == np.inf] = hp.UNSEEN
+        cart_opts = dict(rot=[ra0, dec0, 0],
+                lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
+                latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
+                 unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
+        # plot solved maps
+        plt.figure()
+        hp.cartview(maps[0], min=-250, max=250, **cart_opts)
+        plt.savefig('../scratch/img/test_map_I.png')
+        plt.close()
 
-    ## Plotting results
-    cart_opts = dict(rot=[ra0, dec0, 0],
-            lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
-            latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
-             unit=r'[$\mu K_{\mathrm{CMB}}$]')
+        plt.figure()
+        hp.cartview(maps[1], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/test_map_Q.png')
+        plt.close()
 
-    # plot solved maps
-    plt.figure()
-    hp.cartview(maps[0], min=-250, max=250, **cart_opts)
-    plt.savefig('../scratch/img/test_map_I.png')
-    plt.close()
+        plt.figure()
+        hp.cartview(maps[2], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/test_map_U.png')
+        plt.close()
 
-    plt.figure()
-    hp.cartview(maps[1], min=-5, max=5, **cart_opts)
-    plt.savefig('../scratch/img/test_map_Q.png')
-    plt.close()
+        # plot smoothed input maps, diff maps and spectra
+        nside = hp.get_nside(maps[0])
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
+        maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-    plt.figure()
-    hp.cartview(maps[2], min=-5, max=5, **cart_opts)
-    plt.savefig('../scratch/img/test_map_U.png')
-    plt.close()
+        plt.figure()
+        hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
+        plt.savefig('../scratch/img/raw_map_I.png')
+        plt.close()
 
-    # plot smoothed input maps, diff maps and spectra
-    nside = hp.get_nside(maps[0])
-    hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-    maps_raw = hp.alm2map(alm, nside, verbose=False)
+        plt.figure()
+        hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/raw_map_Q.png')
+        plt.close()
 
-    plt.figure()
-    hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
-    plt.savefig('../scratch/img/raw_map_I.png')
-    plt.close()
+        plt.figure()
+        hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
+        plt.savefig('../scratch/img/raw_map_U.png')
+        plt.close()
 
-    plt.figure()
-    hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
-    plt.savefig('../scratch/img/raw_map_Q.png')
-    plt.close()
+        # plot diff maps
+        plt.figure()
+        hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
+        plt.savefig('../scratch/img/diff_map_I.png')
+        plt.close()
 
-    plt.figure()
-    hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
-    plt.savefig('../scratch/img/raw_map_U.png')
-    plt.close()
+        plt.figure()
+        hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
+        plt.savefig('../scratch/img/diff_map_Q.png')
+        plt.close()
 
-    # plot diff maps
-    plt.figure()
-    hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
-    plt.savefig('../scratch/img/diff_map_I.png')
-    plt.close()
-
-    plt.figure()
-    hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
-    plt.savefig('../scratch/img/diff_map_Q.png')
-    plt.close()
-
-    plt.figure()
-    hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
-    plt.savefig('../scratch/img/diff_map_U.png')
-    plt.close()
+        plt.figure()
+        hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
+        plt.savefig('../scratch/img/diff_map_U.png')
+        plt.close()
 
 
-    cart_opts.pop('min', None)
-    cart_opts.pop('max', None)
-    cart_opts.pop('unit', None)
-    plt.figure()
-    hp.cartview(cond, min=2, max=5, unit='condition number',
-                **cart_opts)
-    plt.savefig('../scratch/img/test_map_cond.png')
-    plt.close()
+        cart_opts.pop('min', None)
+        cart_opts.pop('max', None)
+        cart_opts.pop('unit', None)
+        plt.figure()
+        hp.cartview(cond, min=2, max=5, unit='condition number',
+                    **cart_opts)
+        plt.savefig('../scratch/img/test_map_cond.png')
+        plt.close()
 
-    cls[3][cls[3]<=0.] *= -1.
-    dell = ell * (ell + 1) / 2. / np.pi
-    plt.figure()
-    for i, label in enumerate(['TT', 'EE', 'BB', 'TE']):
-      plt.semilogy(ell, dell * cls[i], label=label)
+        cls[3][cls[3]<=0.] *= -1.
+        dell = ell * (ell + 1) / 2. / np.pi
+        plt.figure()
+        for i, label in enumerate(['TT', 'EE', 'BB', 'TE']):
+          plt.semilogy(ell, dell * cls[i], label=label)
 
-    plt.legend()
-    plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
-    plt.xlabel(r'Multipole [$\ell$]')
-    plt.savefig('../scratch/img/cls.png')
-    plt.close()
+        plt.legend()
+        plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
+        plt.xlabel(r'Multipole [$\ell$]')
+        plt.savefig('../scratch/img/cls.png')
+        plt.close()
 
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
@@ -199,27 +199,27 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     ---------
 
     lmax : int, optional
-        bandlimit (default: 700)
+        bandlimit (default : 700)
     mmax : int, optional
         assumed azimuthal bandlimit beams (symmetric in this example
-        so 2 would suffice) (default: 5)
+        so 2 would suffice) (default : 5)
     fwhm : float, optional
-        The beam FWHM in arcmin (default: 40)
+        The beam FWHM in arcmin (default : 40)
     ra0 : float, optional
-        Ra coord of centre region (default: -10)
-    dec0 : float, optional (default: -57.5)
+        Ra coord of centre region (default : -10)
+    dec0 : float, optional (default : -57.5)
         Ra coord of centre region
     az_throw : float, optional
-        Scan width in azimuth (in degrees) (default: 10)
+        Scan width in azimuth (in degrees) (default : 10)
     scan_speed : float, optional
-        Scan speed in deg/s (default: 1)
+        Scan speed in deg/s (default : 1)
     rot_period : float, optional
         The instrument rotation period in sec
-        (default: 600)
+        (default : 600)
     hwp_mode : str, optional
         HWP modulation mode, either "continuous", 
         "stepped" or None. Use freq of 1 or 1/10800 Hz
-        respectively (default: continuous)
+        respectively (default : continuous)
     '''
 
     # Load up alm and blm
@@ -362,23 +362,23 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
 
     az_off : float, optional
         Azimuthal location of detector relative to boresight
-        (default: 0.)
+        (default : 0.)
     el_off : float, optional
         Elevation location of detector relative to boresight
-        (default: 0.)
+        (default : 0.)
     polang : float, optional
         Detector polarization angle in degrees (defined for
         unrotated detector as offset from meridian) 
-        (default: 0)
+        (default : 0)
     lmax : int, optional
-        Maximum multipole number, (default: 200)
+        Maximum multipole number, (default : 200)
     fwhm : float, optional
         The beam FWHM used in this analysis [arcmin]
-        (default: 100)
+        (default : 100)
     hwp_freq : float, optional
-        HWP spin frequency (continuous mode) (default: 25.)
+        HWP spin frequency (continuous mode) (default : 25.)
     pol_only : bool, optional
-        Set unpolarized sky signal to zero (default: True)
+        Set unpolarized sky signal to zero (default : True)
     '''
 
     # Load up alm and blm
@@ -632,7 +632,7 @@ def single_detector(nsamp=1000):
     Arguments
     ---------
 
-    nsamp : int (default: 1000)
+    nsamp : int (default : 1000)
         The length of the generated timestreams in number of samples
 
     '''
@@ -661,9 +661,9 @@ def single_detector(nsamp=1000):
 
 if __name__ == '__main__':
 
-#    scan_bicep(mmax=2, hwp_mode='continuous')
+    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
 #    scan_atacama(mmax=2, rot_period=60*60)
  
 #    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
-    test_mpi()
+#    test_mpi()
 

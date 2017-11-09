@@ -14,13 +14,17 @@ class Beam(object):
         load_map=False):
         '''
 
+        Arguments
+        ---------
+        az : float 
+            Azimuthal location of detector relative to boresight
+            in degrees
+        el : float 
+            Elevation location of detector relative to boresight
+            in degrees
+
         Keyword arguments
         ---------
-
-        az : float (default: 0.)
-            Azimuthal location of detector relative to boresight
-        el : float (default: 0.)
-            Elevation location of detector relative to boresight
         polang : float (default: 0.)
             The polarization orientation of the beam/detector [deg]
         name : str (default: None)
@@ -87,7 +91,6 @@ class Beam(object):
                 # Going up to the Nyquist frequency set by beam scale 
                 # Note: added factor 1.4 oversampling, seems to be needed
                 self.lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
-#                self.lmax = 701
             else:
                 self.lmax = lmax
 
