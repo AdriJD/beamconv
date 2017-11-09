@@ -32,8 +32,8 @@ def plot_map(map_arr, write_dir, write_name,
     plt.figure()
     with catch_warnings(RuntimeWarning):
         simplefilter("ignore")
-    plot_func(map_arr, **kwargs)
-    plt.savefig(filename+'.png')
+        plot_func(map_arr, **kwargs)
+        plt.savefig(filename+'.png')
     plt.close()
     
 
@@ -106,11 +106,11 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
     b2 = ScanStrategy(mlen, # mission duration in sec.
-                      sample_rate=1.01, # sample rate in Hz
+                      sample_rate=12.01, # sample rate in Hz
                       location='spole') # Instrument at south pole 
 
     # Create a 3 x 3 square grid of Gaussian beams
-    b2.create_focal_plane(nrow=1, ncol=1, fov=5, 
+    b2.create_focal_plane(nrow=3, ncol=3, fov=5, 
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
