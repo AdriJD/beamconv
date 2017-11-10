@@ -549,7 +549,7 @@ class ScanStrategy(Instrument, qp.QMap):
         ---------
         chunksize : int
             Chunk size in samples. If left None, use
-            full mission lenght (default : None)
+            full mission length (default : None)
 
         Returns
         -------

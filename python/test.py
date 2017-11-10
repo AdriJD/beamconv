@@ -10,6 +10,7 @@ import healpy as hp
 import tools
 from instrument import ScanStrategy, MPIBase, Instrument
 from detector import Beam
+from plot_tools import *
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
@@ -25,73 +26,7 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
  
-def plot_map(map_arr, write_dir, tag,
-             plot_func=hp.mollview, **kwargs):
-    '''
-    Plot map using one of the healpy plotting 
-    functions and write to disk.
-    
-    Arguments
-    ---------
-    map_arr : array-like
-        Healpix map to plot
-    write_dir : str
-        Path to directory where map is saved
-    tag : str
-        Filename = <tag>.png
-    
-    Keyword arguments
-    -----------------
-    plot_func : <function>
-        healpy plotting function (default : mollview)
-    kwargs : <healpy_plot_opts>        
-    '''
-    
-    filename = os.path.join(write_dir, tag)
 
-    plt.figure()
-    with catch_warnings(RuntimeWarning):
-        simplefilter("ignore")
-        plot_func(map_arr, **kwargs)
-        plt.savefig(filename+'.png')
-    plt.close()
-    
-
-def plot_iqu(maps, write_dir, tag,
-             sym_limits=None, **kwargs):
-    '''
-    Plot a (set of I, Q, U) map(s) and write each
-    to disk.
-    
-    Arguments
-    ---------
-    sym_limits : scalar, array-like
-        Colorbar limits assuming symemtric limits.
-        If array-like, assume limits for I, Q, U
-        maps
-    write_dir : str
-        Path to directory where map is saved
-    tag : str
-        Filename = <tag>.png
-
-    Keyword arguments
-    -----------------
-    kwargs : {plot_map_opts, healpy_plt_opts}
-    '''
-
-    if not hasattr(sym_limits, "__iter__"):
-        sym_limits = [sym_limits] * 3
-
-    for pidx, pol in enumerate(['I', 'Q', 'U']):
-
-        maxx = kwargs.pop('max', sym_limits[pidx])
-        try:
-            minn = -maxx
-        except TypeError:
-            minn = maxx
-            
-        plot_map(maps[pidx], write_dir, tag+'_'+pol,
-                min=minn, max=maxx, **kwargs)
 
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=10*60,
