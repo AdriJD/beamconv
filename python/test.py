@@ -583,9 +583,8 @@ def single_detector(nsamp=1000):
 
 
 if __name__ == '__main__':
-
-#    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
-#    scan_atacama(mmax=2, rot_period=60*60) 
-    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
-#    test_mpi()
+    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
+    # scan_atacama(mmax=2, rot_period=60*60) 
+    # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
+    # test_mpi()
 
