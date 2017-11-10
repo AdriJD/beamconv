@@ -645,6 +645,37 @@ class ScanStrategy(Instrument, qp.QMap):
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
         self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
+    def update_ctime(self, start=None, end=None):
+
+        pass
+
+
+    def scan_fixed_point(self, ra0=-10, dec0=-57.5, verbose=True):
+        '''
+        Gets the az and el pointing timelines required to observe a fixed point 
+        on the sky.
+        '''
+
+        for cidx, chunk in enumerate(self.chunks):
+
+            if verbose:
+                print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
+                    chunk['start'], chunk['end']))
+
+            ctime = np.arange(start, end+1, dtype=float)
+            ctime /= float(self.fsamp)
+            ctime += self.ctime0
+            self.ctime = ctime
+
+            ra0 = np.atleast_1d(ra0)
+            dec0 = np.atleast_1d(dec0)
+            npatches = dec0.shape[0]
+
+            az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
+                self.lon, self.lat, ctime[::check_len])
+
+
+
     def scan_instrument(self, verbose=True, mapmaking=True,
                         **kwargs):
         '''
@@ -813,6 +844,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(add_to_global=True)
 
+
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
             check_interval=600, el_min=45,
@@ -830,7 +862,7 @@ class ScanStrategy(Instrument, qp.QMap):
             If array, consider items as scan
             centres ordered by preference.
         dec0 : float, array-like
-            Ra coordinate of centre of scan in degrees.
+            Dec coordinate of centre of scan in degrees.
             If array, same shape as ra0.
         az_throw : float
             Scan width in azimuth (in degrees)
@@ -870,7 +902,7 @@ class ScanStrategy(Instrument, qp.QMap):
         npatches = dec0.shape[0]
 
         az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
-                                      self.lon, self.lat, ctime[::check_len])
+            self.lon, self.lat, ctime[::check_len])
 
         # check and fix cases where boresight el < el_min
         n = 1
@@ -1271,7 +1303,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.proj += self.depo['proj']
 
 
-    def solve_for_map(self, fill=hp.UNSEEN):
+    def solve_for_map(self, fill=hp.UNSEEN, return_proj=False):
         '''
         Solve for the output map given the stored
         vec map and proj matrix.
@@ -1312,6 +1344,8 @@ class ScanStrategy(Instrument, qp.QMap):
             maps = None
             cond = None
 
-        return maps, cond
+        if return_proj:
+            return maps, cond, proj
 
+        return maps, cond
 
