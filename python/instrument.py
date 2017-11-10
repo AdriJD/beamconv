@@ -21,14 +21,14 @@ class MPIBase(object):
         Keyword arguments
         ---------
         mpi : bool
-            If False, do not use MPI regardless of MPI env. 
+            If False, do not use MPI regardless of MPI env.
             otherwise, let code decide based on env. vars
             (default : True)
         '''
 
         super(MPIBase, self).__init__(**kwargs)
 
-        # Check whether MPI is working 
+        # Check whether MPI is working
         # add your own environment variable if needed
         # Open MPI environment variable
         ompi_size = os.getenv('OMPI_COMM_WORLD_SIZE')
@@ -37,11 +37,11 @@ class MPIBase(object):
 
         if not (ompi_size or pmi_size) or not mpi:
             self.mpi = False
-        
+
         else:
             try:
                 from mpi4py import MPI
-            
+
                 self.mpi = True
                 self._mpi_double = MPI.DOUBLE
                 self._mpi_sum = MPI.SUM
@@ -71,7 +71,7 @@ class MPIBase(object):
         '''
         Sum arrays on all ranks elementwise into an
         array living in the root process.
-        
+
         Arguments
         ---------
         arr_loc : array-like
@@ -81,7 +81,7 @@ class MPIBase(object):
         Returns
         -------
         arr : array-like or None
-            Reduced numpy array with same shape and dtype as 
+            Reduced numpy array with same shape and dtype as
             arr_loc on root process, None for other ranks
             (arr_loc if not using MPI)
         '''
@@ -91,9 +91,9 @@ class MPIBase(object):
 
         if self.mpi_rank == 0:
             arr = np.empty_like(arr_loc)
-        else: 
+        else:
             arr = None
-            
+
         self._comm.Reduce(arr_loc, arr, op=self._mpi_sum, root=0)
 
         return arr
@@ -138,7 +138,7 @@ class Instrument(MPIBase):
 
         if not self.lat or not self.lon:
             raise ValueError('Specify location of telescope')
-        
+
         super(Instrument, self).__init__(**kwargs)
 
     def set_focal_plane(self, nrow=1, ncol=1, fov=10):
@@ -163,7 +163,7 @@ class Instrument(MPIBase):
 
         '''
 
-        warn('you should use `create_focal_plane()`', 
+        warn('you should use `create_focal_plane()`',
              DeprecationWarning)
 
         self.nrow = nrow
@@ -180,11 +180,12 @@ class Instrument(MPIBase):
         self.azs = xx.flatten()
         self.els = yy.flatten()
 
-    def create_focal_plane(self, nrow=1, ncol=1, fov=10., 
-                           from_files=False, **kwargs):
+    def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
+                           from_files=False, no_pairs=False,
+                           **kwargs):
         '''
-        Create Beam objects for orthogonally polarized 
-        detector pairs with pointing offsets lying on a 
+        Create Beam objects for orthogonally polarized
+        detector pairs with pointing offsets lying on a
         rectangular grid on the sky.
 
         Keyword arguments
@@ -198,11 +199,13 @@ class Instrument(MPIBase):
             sky in degrees (default: 10.)
         from_files : bool, optional
             Load beam properties from files (default: False)
+        no_pairs : bool
+            Do not create detector pairs (default : False)
         lmax : int
             Bandlimit for all created beams
         fwhm : float
             FWHM for all gaussian beams
-            
+
         Notes
         -----
         Any keywords mentioned above accepted by the Beam()
@@ -225,16 +228,21 @@ class Instrument(MPIBase):
             for el_idx in xrange(els.size):
 
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
-                
-                beam_a = Beam(az=azs[az_idx], el=els[el_idx], 
-                              name=det_str+'A', polang=0.,
+
+                polang = kwargs.get('polang', 0)
+
+                beam_a = Beam(az=azs[az_idx], el=els[el_idx],
+                              name=det_str+'A', polang=polang,
                               pol='A', btype='Gaussian',
                               lmax=lmax, fwhm=fwhm)
 
-                beam_b = Beam(az=azs[az_idx], el=els[el_idx],
-                              name=det_str+'B', polang=90.,
-                              pol='B', btype='Gaussian',
-                              lmax=lmax, fwhm=fwhm)
+                if not no_pairs:
+                    beam_b = Beam(az=azs[az_idx], el=els[el_idx],
+                                  name=det_str+'B', polang=polang+90.,
+                                  pol='B', btype='Gaussian',
+                                  lmax=lmax, fwhm=fwhm)
+                else:
+                    beam_b = None
                 beams.append([beam_a, beam_b])
 
         assert (len(beams) == self.ndet/2.), 'Wrong number of detectors!'
@@ -250,7 +258,7 @@ class Instrument(MPIBase):
                 sub_size[:int(remainder)] += 1
 
             start = np.sum(sub_size[:self.mpi_rank], dtype=int)
-            end = start + sub_size[self.mpi_rank] 
+            end = start + sub_size[self.mpi_rank]
 
             self.beams = beams[start:end]
 
@@ -358,7 +366,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Start time in unix time (default : None)
         sample_rate : float
              Sample rate in Hz (default : 100)
-        kwargs : {mpi_opts, instr_opts, qmap_opts}            
+        kwargs : {mpi_opts, instr_opts, qmap_opts}
         '''
 
         self.set_sample_rate(sample_rate)
@@ -377,15 +385,15 @@ class ScanStrategy(Instrument, qp.QMap):
                      self._qp_version, qp.version()))
 
         # Set some useful qpoint/qmap options
-        qmap_opts = dict(pol=True, 
-                         fast_math=False, 
-                         mean_aber=True, 
+        qmap_opts = dict(pol=True,
+                         fast_math=False,
+                         mean_aber=True,
                          accuracy='low',
                          fast_pix=True)
 
         for key in qmap_opts:
             kwargs.setdefault(key, qmap_opts[key])
-        
+
         super(ScanStrategy, self).__init__(**kwargs)
 
     def __del__(self):
@@ -438,7 +446,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def set_instr_rot(self, period=None, start_ang=0.,
                       angles=None):
         '''
-        Set options that allow instrument to periodically 
+        Set options that allow instrument to periodically
         rotate around the boresight.
 
         Keyword arguments
@@ -500,7 +508,8 @@ class ScanStrategy(Instrument, qp.QMap):
             Starting angle for the HWP in deg
         angles : array-like, optional
             Rotation angles for stepped HWP. If not set,
-            use 22.5 degree steps.
+            use 22.5 degree steps. If set, ignores
+            start_ang.
         reflectivity : float, optional
             Not yet implemented
         '''
@@ -508,6 +517,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.hwp_dict['mode'] = mode
         self.hwp_dict['freq'] = freq
         self.hwp_dict['angle'] = start_ang
+        self.hwp_dict['start_ang'] = start_ang
         self.hwp_dict['remainder'] = 0 # sec remaining for step
         self.hwp_dict['reflectivity'] = reflectivity
 
@@ -526,7 +536,9 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         self.hwp_angle_gen = tools.angle_gen(
             self.hwp_dict['angles'])
-
+        self.hwp_dict['angle'] = self.hwp_dict['start_ang']
+        self.hwp_dict['remainder'] = 0
+        
     def partition_mission(self, chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
@@ -549,7 +561,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if not chunksize or chunksize >= nsamp:
             chunksize = int(nsamp)
-            
+
         chunksize = int(chunksize)
         nchunks = int(np.ceil(nsamp / float(chunksize)))
         chunks = []
@@ -655,12 +667,12 @@ class ScanStrategy(Instrument, qp.QMap):
             print('  Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 
-        # perhaps add loop over channel pairs (per core) here? 
+        # perhaps add loop over channel pairs (per core) here?
         # move get_spinmaps before loop share beam is set (all detectors use same beam)
         # otherwise, run get_spinmaps for every pair
 
         # for that, you would need to have loaded a beam per channel pair
-        
+
 
         for cidx, chunk in enumerate(self.chunks):
 
@@ -682,12 +694,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # Cycling through detectors and scanning
                 for chnidx in xrange(self.ndet):
-                    
+
                     az_off = self.azs[chnidx]
                     el_off = self.els[chnidx]
                     polang = self.polangs[chnidx]
 
-                    self.scan(az_off=az_off, el_off=el_off, 
+                    self.scan(az_off=az_off, el_off=el_off,
                               polang=polang, **subchunk)
 
                     if mapmaking:
@@ -707,12 +719,12 @@ class ScanStrategy(Instrument, qp.QMap):
         Arguments
         ---------
         alm : tuple
-            Tuple containing (almI, almE, almB) as 
+            Tuple containing (almI, almE, almB) as
             Healpix-formatted complex numpy arrays
 
         Keyword arguments
         ---------
-        verbose : int 
+        verbose : int
             Prints status reports (0 : nothing, 1: some,
             2: all) (defaul: 1)
         binning : bool, optional
@@ -721,7 +733,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Extra kwargs are assumed input to
             `constant_el_scan()` or `get_spinmaps()`
         '''
-        
+
         # pop get_spinmaps kwargs
         max_spin = kwargs.pop('max_spin', 5)
         nside_spin = kwargs.pop('nside_spin', 256)
@@ -731,12 +743,12 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.nrow, self.ncol))
 
         # let every core loop over max number of beams per core
-        # this makes sure that cores still participate in 
+        # this makes sure that cores still participate in
         # calculating boresight quaternion
         nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
 
         for bidx in xrange(nmax):
-            
+
             if bidx > 0:
                 # reset instrument and hwp rotation
                 self.reset_instr_rot()
@@ -752,12 +764,15 @@ class ScanStrategy(Instrument, qp.QMap):
             if verbose == 2:
                 print('\n[rank {:03d}]: working on: \n{} \n{}'.format(
                         self.mpi_rank, str(beam_a), str(beam_b)))
-            if verbose == 1 and beam_a and beam_b:                
+            if verbose == 1 and beam_a and beam_b:
                 print('[rank {:03d}]: working on: {}, {}'.format(
                         self.mpi_rank, beam_a.name, beam_b.name))
 
-            if beam_a:                
-                beam_a.gen_gaussian_blm()                
+            if beam_a: # Note, only valid for Gaussian beams for now
+
+                if not hasattr(beam_a, 'blm'):
+                    beam_a.gen_gaussian_blm()
+
                 self.get_spinmaps(alm, beam_a.blm, max_spin=max_spin,
                                   nside_spin=nside_spin, verbose=(verbose==2))
 
@@ -771,6 +786,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Make the boresight move
                 ces_opts = kwargs.copy()
                 ces_opts.update(chunk)
+
                 self.constant_el_scan(**ces_opts)
 
                 # if required, loop over boresight rotations
@@ -784,22 +800,22 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # rotate instrument if needed
                     self.rotate_instr()
-                        
+
                     # scan and bin
                     if beam_a:
-                        self.scan(az_off=beam_a.az, el_off=beam_a.el, 
-                                  polang=beam_a.polang, **subchunk)                            
+                        self.scan(az_off=beam_a.az, el_off=beam_a.el,
+                                  polang=beam_a.polang, **subchunk)
                         if binning:
                             self.bin_tod(add_to_global=True)
                     if beam_b:
-                        self.scan(az_off=beam_b.az, el_off=beam_b.el, 
+                        self.scan(az_off=beam_b.az, el_off=beam_b.el,
                                   polang=beam_b.polang, **subchunk)
                         if binning:
                             self.bin_tod(add_to_global=True)
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
-            check_interval=600, el_min=45, 
+            check_interval=600, el_min=45,
             start=None, end=None):
 
         '''
@@ -828,7 +844,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 triangle : (default) triangle wave with total
                            width=az_throw
         check_interval : float
-            Check whether elevation is not below `el_min` 
+            Check whether elevation is not below `el_min`
             at this rate in seconds (default : 600)
         el_min : float
             Lower elevation limit in degrees (default : 45)
@@ -839,10 +855,10 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         chunk_len = end - start + 1 # Note, you end on "end"
-        check_len = int(check_interval * self.fsamp) # min_el checks        
+        check_len = int(check_interval * self.fsamp) # min_el checks
 
         nchecks = int(np.ceil(chunk_len / float(check_len)))
-        p_len = check_len * nchecks # longer than chunk for nicer slicing 
+        p_len = check_len * nchecks # longer than chunk for nicer slicing
 
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
@@ -868,14 +884,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
             else:
                 # give up and keep boresight fixed at el_min
-                el0[el0<el_min] = el_min            
+                el0[el0<el_min] = el_min
                 warn('Keeping el0 at {:.1f} for part of scan'.format(el_min),
                     RuntimeWarning)
             n += 1
 
         # Scan boresight, note that it will slowly drift away from az0, el0
         if vel_prf is 'triangle':
-            scan_period = 2 * az_throw / float(scan_speed) 
+            scan_period = 2 * az_throw / float(scan_speed)
             if scan_period == 0.:
                 az = np.zeros(chunk_len)
             else:
@@ -909,7 +925,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # Calculate boresight quaternion in parallel
 
             sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = np.divmod(chunk_len, 
+            quot, remainder = np.divmod(chunk_len,
                                         self.mpi_size)
             sub_size += quot
 
@@ -918,7 +934,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 sub_size[:int(remainder)] += 1
 
             sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
-            sub_end = sub_start + sub_size[self.mpi_rank] 
+            sub_end = sub_start + sub_size[self.mpi_rank]
 
             q_bore = np.empty(chunk_len * 4, dtype=float)
 
@@ -931,15 +947,15 @@ class ScanStrategy(Instrument, qp.QMap):
 
             sub_size *= 4 # for the flattened quat array
 
-            offsets = np.zeros(self.mpi_size) 
-            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4 
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
 
             # combine all sections on all ranks
             self._comm.Allgatherv(q_boresub,
                             [q_bore, sub_size, offsets, self._mpi_double])
             self.q_bore = q_bore.reshape(chunk_len, 4)
 
-        else:            
+        else:
             self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, ctime)
 
@@ -966,7 +982,7 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         # NOTE nicer if you give q_off directly instead of az_off, el_off
-        # we use a offset quaternion without polang. 
+        # we use a offset quaternion without polang.
         # We apply polang at the beam level later.
         q_off = self.det_offset(az_off, el_off, 0)
 
@@ -977,7 +993,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # rotate the polang of the centroid, but not the centroid
         # around the boresight. It's q_bore * q_rot * q_off
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
-        q_off = tools.quat_left_mult(q_rot, q_off) 
+        q_off = tools.quat_left_mult(q_rot, q_off)
 
         # store for mapmaking
         self.q_off = q_off
@@ -1012,7 +1028,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                       self.ctime[self.qidx_start:self.qidx_end+1],
                                       self.q_bore[qidx_start:qidx_end+1],
                                       q_hwp=None, sindec=False, return_pa=True)
-        
+
         np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
 
@@ -1024,6 +1040,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
             exppais = np.exp(1j * n * pa)
             tod_c += self.func_c[nidx,pix] * exppais
+
+        # Cant you put this HWP stuff into a seperate function?
 
         # if needed, compute hwp angle array.
         if self.hwp_dict['freq']:
@@ -1045,6 +1063,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 step_size = int(self.fsamp / float(freq)) # samples per step
                 start_ang = self.hwp_dict['angle']
+#                start_ang = self.hwp_angle_gen.next()
                 hwp_ang = np.zeros(tod_size, dtype=float)
                 nsteps = int(np.ceil(tod_size / float(step_size)))
 
@@ -1075,6 +1094,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # update mod 2pi start angle for next chunk
                 self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
                 self.hwp_ang = hwp_ang
+
         else:
             hwp_ang = 0.
             self.hwp_ang = 0
@@ -1093,7 +1113,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if n > 0:
                 tod += 2 * np.real(self.func[n,pix]) * np.cos(n * pa)
                 tod -= 2 * np.imag(self.func[n,pix]) * np.sin(n * pa)
-
+    
         self.tod = tod
 
     def get_spinmaps(self, alm, blm, max_spin=5, nside_spin=256,
@@ -1109,7 +1129,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Tuple of (alm, almE, almB)
         blm : tuple of array-like
             Tuple of (blmI, blmm2, blmp2)
-            
+
         Keyword arguments
         -----------------
         max_spin : int, optional
@@ -1123,18 +1143,16 @@ class ScanStrategy(Instrument, qp.QMap):
         # NOTE it would be nice to have a symmetric beam option
         # that only makes it run over n=0, -2 and 2.
 
-        # Turning off healpy printing
-#        if not verbose:
- #           sys.stdout = open(os.devnull, 'w') # Suppressing screen output
-
         self.N = max_spin + 1
         self.nside_spin = nside_spin
         lmax = hp.Alm.getlmax(alm[0].size)
 
         # Make sure bandlimits beam and sky match
         lmax_beam = hp.Alm.getlmax(blm[0].size)
+
         if lmax > lmax_beam:
             alm = tools.trunc_alm(alm, lmax_beam)
+            lmax = lmax_beam
         elif lmax_beam > lmax:
             blm = tools.trunc_alm(blm, lmax)
 
@@ -1221,16 +1239,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
             start += end
 
-        # Turning printing back on
-#        if not verbose:
-#            sys.stdout = sys.__stdout__
-
     def bin_tod(self, init=True, add_to_global=False):
         '''
         Take internally stored tod and pointing
         and bin into map and projection matrices.
         '''
-        
+
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
         self.init_point(q_bore=self.q_bore[self.qidx_start:self.qidx_end+1],
@@ -1242,13 +1256,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         polang = -np.radians(self.polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
-        q_off = tools.quat_left_mult(q_off, q_polang) 
+        q_off = tools.quat_left_mult(q_off, q_polang)
 
         if init:
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
-            
+
         q_off = q_off[np.newaxis]
-#        print self.tod + self.mpi_rank * 1j
         tod = self.tod[np.newaxis]
         self.from_tod(q_off, tod=tod)
 
@@ -1260,7 +1273,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def solve_for_map(self, fill=hp.UNSEEN):
         '''
-        Solve for the output map given the stored 
+        Solve for the output map given the stored
         vec map and proj matrix.
         If MPI, reduce maps to root and solve there.
 
@@ -1291,7 +1304,7 @@ class ScanStrategy(Instrument, qp.QMap):
             with catch_warnings(RuntimeWarning):
                 simplefilter("ignore")
 
-                maps = self.solve_map(vec=vec, proj=proj, 
+                maps = self.solve_map(vec=vec, proj=proj,
                                       copy=True, fill=fill)
             cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill

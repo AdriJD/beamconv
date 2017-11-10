@@ -9,6 +9,7 @@ import numpy as np
 import healpy as hp
 import tools
 from instrument import ScanStrategy, MPIBase, Instrument
+from detector import Beam
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
@@ -386,54 +387,46 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     if pol_only:
         alm = (alm[0]*0., alm[1], alm[2])
 
-    blm = tools.gauss_blm(fwhm, lmax, pol=False)
-    blm = tools.get_copol_blm(blm.copy(), c2_fwhm=fwhm)
-
     # init scan strategy and instrument
     mlen = 240 # mission length
     ss = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=1, # sample rate in Hz
                       location='spole') # South pole instrument
 
-    # Calculate spinmaps. Only need mmax=2 for symmetric beam.
-    print('\nCalculating spin-maps')
-    # pixels smaller than beam
-    ss.get_spinmaps(alm, blm, max_spin=2, nside_spin=512,
-                    verbose=False)
-    print('...spin-maps stored')
+    # create single detector 
+    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True, 
+                          polang=polang, lmax=lmax, fwhm=fwhm)
 
-    # Initiate focal plane
-    ss.nrow = 1
-    ss.ncol = 1
-    ss.ndet = 1
-    ss.azs = np.array([az_off])
-    ss.els = np.array([el_off])
-    ss.polangs = np.array([polang])
+    # move detector away from boresight
+    ss.beams[0][0].az = az_off
+    ss.beams[0][0].el = el_off
 
-    # Rotate instrument halfway through
-    rot_period = 0.5 * ss.mlen
-    ss.set_instr_rot(period=rot_period)
+    # Start instrument rotated
+    rot_period =  ss.mlen
+    ss.set_instr_rot(period=rot_period, start_ang=45)
 
     # Set HWP rotation
-    ss.set_hwp_mod(mode='continuous', freq=hwp_freq)
+    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45, 
+                   angles=[34, 12, 67])
 
-    # calculate tod in one go
-    chunks = ss.partition_mission(int(4*60*ss.fsamp))
-    ss.scan_instrument(binning=False)
+    # calculate tod in one go (beam is symmetric so mmax=2 suffices)
+    chunks = ss.partition_mission()
+    ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
+                           max_spin=2)
 
     # Store the tod and pixel indices made with symmetric beam
-    # Note that this is the part after the instrument rotation
     tod_sym = ss.tod.copy()
     pix_sym = ss.pix.copy()
 
     # now repeat with asymmetric beam and no detector offset
     # set offsets to zero such that tods are generated using
     # only the boresight pointing.
-    ss.azs = np.array([0])
-    ss.els = np.array([0])
-    ss.polangs = np.array([0])
+    ss.beams[0][0].az = 0
+    ss.beams[0][0].el = 0
+    ss.beams[0][0].polang = 0
 
     # Convert beam spin modes to E and B modes and rotate them
+    blm = ss.beams[0][0].blm
     blmI = blm[0].copy()
     blmE, blmB = tools.spin2eb(blm[1], blm[2])
 
@@ -448,59 +441,57 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     theta = np.radians(90 - dec)
     psi = np.radians(-pa)
 
+    # rotate blm
     hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
 
     # convert beam coeff. back to spin representation.
     blmm2, blmp2 = tools.eb2spin(blmE, blmB)
-    blm = (blmI, blmm2, blmp2)
+    ss.beams[0][0].blm = (blmI, blmm2, blmp2)
 
-    # Now we calculate all spin maps. So we can deal with
-    # an arbitrary beam bandlimited at lmax
-    print('\nCalculating spin-maps...')
-    ss.get_spinmaps(alm, blm, max_spin=lmax, verbose=False)
-    print('...spin-maps stored')
 
-    # Reset instrument rotation and HWP and scan again
-    ss.set_instr_rot(period=rot_period)
-    ss.set_hwp_mod(mode='continuous', freq=hwp_freq)
-    ss.scan_instrument(binning=False)
+    ss.reset_instr_rot()
+    ss.reset_hwp_mod()
+
+    ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
+                           max_spin=lmax) # now we use all spin modes
 
     # Figure comparing the raw detector timelines for the two versions
     # For subpixel offsets, the bottom plot shows you that sudden shifts
     # in the differenced tods are due to the pointing for the symmetric
     # case hitting a different pixel than the boresight pointing.
-    plt.figure()
-    gs = gridspec.GridSpec(5, 9)
-    ax1 = plt.subplot(gs[:2, :6])
-    ax2 = plt.subplot(gs[2:4, :6])
-    ax3 = plt.subplot(gs[-1, :6])
-    ax4 = plt.subplot(gs[:, 6:])
+    if ss.mpi_rank == 0:
+        plt.figure()
+        gs = gridspec.GridSpec(5, 9)
+        ax1 = plt.subplot(gs[:2, :6])
+        ax2 = plt.subplot(gs[2:4, :6])
+        ax3 = plt.subplot(gs[-1, :6])
+        ax4 = plt.subplot(gs[:, 6:])
 
-    samples = np.arange(tod_sym.size)
-    ax1.plot(samples, ss.tod, label='Asymmetric Gaussian', linewidth=0.7)
-    ax1.plot(samples, tod_sym, label='Symmetric Gaussian', linewidth=0.7,
-             alpha=0.5)
-    ax1.legend()
+        samples = np.arange(tod_sym.size)
+        ax1.plot(samples, ss.tod, label='Asymmetric Gaussian', linewidth=0.7)
+        ax1.plot(samples, tod_sym, label='Symmetric Gaussian', linewidth=0.7,
+                 alpha=0.5)
+        ax1.legend()
 
-    ax1.tick_params(labelbottom='off')
-    sigdiff = ss.tod - tod_sym
-    ax2.plot(samples, sigdiff,ls='None', marker='.', markersize=2.)
-    ax2.tick_params(labelbottom='off')
-    ax3.plot(samples, (pix_sym - ss.pix).astype(bool).astype(int), 
-             ls='None', marker='.', markersize=2.)
-    ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
-    ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
-    ax3.set_xlabel('Sample number')
-    ax3.set_ylabel('different pixel?')
-    ax3.set_ylim([-0.25,1.25])
-    ax3.set_yticks([0, 1])
+        ax1.tick_params(labelbottom='off')
+        sigdiff = ss.tod - tod_sym
+        ax2.plot(samples, sigdiff,ls='None', marker='.', markersize=2.)
+        ax2.tick_params(labelbottom='off')
+        ax3.plot(samples, (pix_sym - ss.pix).astype(bool).astype(int), 
+                 ls='None', marker='.', markersize=2.)
+        ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
+        ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
+        ax3.set_xlabel('Sample number')
+        ax3.set_ylabel('different pixel?')
+        ax3.set_ylim([-0.25,1.25])
+        ax3.set_yticks([0, 1])
 
-    ax4.hist(sigdiff, 128, label='Difference')
-    ax4.set_xlabel(r'Difference [$\mu K_{\mathrm{CMB}}$]')
-    ax4.tick_params(labelleft='off')
+        ax4.hist(sigdiff, 128, label='Difference')
+        ax4.set_xlabel(r'Difference [$\mu K_{\mathrm{CMB}}$]')
+        ax4.tick_params(labelleft='off')
 
-    plt.savefig('../scratch/img/tods.png')
-    plt.close()
+        plt.savefig('../scratch/img/tods.png')
+        plt.close()
 
 
 def test_mpi():
@@ -659,7 +650,7 @@ def single_detector(nsamp=1000):
 if __name__ == '__main__':
 
 #    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
-    scan_atacama(mmax=2, rot_period=60*60) 
-#    offset_beam(az_off=7, el_off=-4, polang=85, pol_only=True)
+#    scan_atacama(mmax=2, rot_period=60*60) 
+    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
 #    test_mpi()
 

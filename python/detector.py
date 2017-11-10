@@ -72,8 +72,7 @@ class Beam(object):
             # You don't want to load this at init.
             # Better to have to have to seperate files.
             self.blm = bdict['blm']
-            self.blmm2 = bdict['blmm2']
-            self.blmm2 = bdict['blmp2']
+
 
         else:
             # Populating attributes from init call
