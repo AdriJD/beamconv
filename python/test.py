@@ -10,7 +10,7 @@ import healpy as hp
 import tools
 from instrument import ScanStrategy, MPIBase, Instrument
 from detector import Beam
-from plot_tools import *
+from plot_tools import plot_map, plot_iqu
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
@@ -26,8 +26,6 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
  
-
-
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=10*60,
                hwp_mode=None):
@@ -428,124 +426,6 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
         plt.savefig('../scratch/img/tods.png')
         plt.close()
 
-
-def test_mpi():
-
-    # Load up alm and blm
-    lmax = 700
-    ell, cls = get_cls()
-    np.random.seed(22) # make sure all cores create the same map
-    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
-#    alm = (alm[0], alm[1]*0, alm[2]*0)
-
-    mlen = 60000 # mission length
-    ra0 = -10
-    dec0 = -57.5
-    az_throw = 50
-    fwhm = 43
-    b2 = ScanStrategy(mlen, # mission duration in sec.
-                      sample_rate=13.21, # sample rate in Hz
-                      location='atacama', 
-                      fast_math=False)
-
-#                      mpi=False) # not necessary
-#    import time
-#    b2.set_ctime(time.time()-4*3600)
-    b2.create_focal_plane(nrow=2, ncol=2, fov=5)
-
-    chunks = b2.partition_mission(0.6*b2.mlen*b2.fsamp)
-#    chunks = b2.partition_mission()
-
-    b2.allocate_maps(nside=512)
-
-    rot_period = 0.1 * b2.mlen
-    b2.set_instr_rot(period=rot_period, angles=np.linspace(0, 360, 20))
-
-    # Set HWP rotation
-#    b2.set_hwp_mod(mode='continuous', freq=10)
-    b2.set_hwp_mod(mode='stepped', freq=1/1820.)
-
-    b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
-                           dec0=dec0, az_throw=az_throw, 
-                           nside_spin=512,
-                           el_min=45)
-
-    maps, cond = b2.solve_for_map()
-    
-    if b2.mpi_rank == 0:
-        print 'plotting results'        
-        
-        cond[cond == np.inf] = hp.UNSEEN
-        az_throw = 50
-        ## Plotting results
-        cart_opts = dict(rot=[ra0, dec0, 0],
-                lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
-                latra=[-min(0.375*az_throw, 45), min(0.375*az_throw, 45)],
-                 unit=r'[$\mu K_{\mathrm{CMB}}$]')
-
-        # plot solved maps
-        plt.figure()
-        hp.cartview(maps[0], min=-250, max=250, **cart_opts)
-        plt.savefig('../scratch/img/test_mpi_map_I.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps[1], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/test_mpi_map_Q.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps[2], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/test_mpi_map_U.png')
-        plt.close()
-
-        # plot smoothed input maps, diff maps and spectra
-        nside = hp.get_nside(maps[0])
-        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-        maps_raw = hp.alm2map(alm, nside, verbose=False)
-
-        plt.figure()
-        hp.cartview(maps_raw[0], min=-250, max=250, **cart_opts)
-        plt.savefig('../scratch/img/raw_mpi_map_I.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps_raw[1], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/raw_mpi_map_Q.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps_raw[2], min=-5, max=5, **cart_opts)
-        plt.savefig('../scratch/img/raw_mpi_map_U.png')
-        plt.close()
-
-        # plot diff maps
-        plt.figure()
-        hp.cartview(maps[0] - maps_raw[0], min=-1e-6, max=1e-6, **cart_opts)
-        plt.savefig('../scratch/img/diff_mpi_map_I.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps[1] - maps_raw[1], min=-1e-6, max=1e-6, **cart_opts)
-        plt.savefig('../scratch/img/diff_mpi_map_Q.png')
-        plt.close()
-
-        plt.figure()
-        hp.cartview(maps[2] - maps_raw[2], min=-1e-6, max=1e-6, **cart_opts)
-        plt.savefig('../scratch/img/diff_mpi_map_U.png')
-        plt.close()
-
-
-        cart_opts.pop('min', None)
-        cart_opts.pop('max', None)
-        cart_opts.pop('unit', None)
-        plt.figure()
-        hp.cartview(cond, min=2, max=5, unit='condition number',
-                    **cart_opts)
-        plt.savefig('../scratch/img/test_mpi_map_cond.png')
-        plt.close()
-
-
 def single_detector(nsamp=1000):
     '''
     Generates a timeline for a set of individual detectors scanning the sky. The
@@ -581,10 +461,9 @@ def single_detector(nsamp=1000):
 
     #### FINISH THIS ####
 
-
 if __name__ == '__main__':
-    scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
+    # scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60) 
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
-    # test_mpi()
+    test_mpi()
 
