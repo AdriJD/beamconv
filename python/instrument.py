@@ -1286,7 +1286,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # use q_off quat with polang (and instr. ang) included.
         q_off = self.q_off
 
-        polang = -np.radians(self.polang)
+        polang = -np.radians(self.polang) # why is there a minus needed here?
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
 

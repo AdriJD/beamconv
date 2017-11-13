@@ -107,14 +107,10 @@ class Beam(object):
         (I and pol) using FWHM and lmax.
         '''
         
-#        blmI, blmm2 = tools.gauss_blm(self.fwhm, self.lmax, pol=True)
-#        blmp2 = np.zeros(blmm2.size, dtype=np.complex128)
-                                
         blm = tools.gauss_blm(self.fwhm, self.lmax, pol=False)
         blm = tools.get_copol_blm(blm, c2_fwhm=self.fwhm)
 
         self.blm = blm
-#        self.blm = (blmI, blmm2, blmp2)
         self.btype = 'Gaussian'
 
     def reuse_beam(self, partner):
@@ -132,6 +128,29 @@ class Beam(object):
 
         self.blm = partner.blm
         self.btype = partner.btype        
+
+    def get_offsets(self):
+        '''
+        Return detector offset. Detector offsets are defined
+        as the sequence Rz(polang), Ry(el), Rx(az). Rz is defined 
+        as the rotation around the boresight by angle `polang`
+        which is measured relative to the southern side of 
+        the local meridian in a clockwise manner when looking 
+        towards the sky (Rh rot.), (i.e. the `Healpix convention`). 
+        Followed by Ry and Rx, which are rotations in elevation 
+        and azimuth with respect to the local horizon and meridian.
+        
+        Returns
+        -------
+        az : float
+            Azimuth of offset in degrees
+        el : float
+            Elevation of offset in degrees
+        polang : float 
+            Polarization angle in degrees
+        '''
+        
+        pass
 
     def load_eg_beams(self, bdir):
         '''
