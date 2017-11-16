@@ -88,16 +88,31 @@ class Beam(object):
             self.fwhm = fwhm
             self.dead = dead
 
-            if lmax is None:
-                # Going up to the Nyquist frequency set by beam scale 
-                # Note: added factor 1.4 oversampling, seems to be needed
-                self.lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
-            else:
-                self.lmax = lmax
+            self.lmax = lmax           
+            self.mmax = mmax
             
-            # set mmax to lmax or something 
-            self.mmax = min(i for i in [mmax, lmax] if i is not None)
+    @property
+    def lmax(self):
+        return self.__lmax
+    
+    @lmax.setter
+    def lmax(self, lmax):
+        if lmax is None:
+            # Going up to 1.4 naieve Nyquist frequency set by beam scale 
+            self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
+        else:
+            self.__lmax = lmax
 
+    @property
+    def mmax(self):
+        return self.__mmax
+
+    @mmax.setter
+    def mmax(self, mmax):
+        # set mmax to lmax if not set        
+        self.__mmax = min(i for i in [mmax, self.lmax] \
+                              if i is not None)
+                    
     def __str__(self):
 
         return "name   : {} \nbtype  : {} \nalive  : {} \nFWHM"\

@@ -239,9 +239,12 @@ class Instrument(MPIBase):
         no_pairs : bool
             Do not create detector pairs (default : False)
         lmax : int
-            Bandlimit for all created beams
+            Bandlimit for all created beams (default : None)
+        mmax : int
+            Azimuthal bandlimit for all created beams
+            (default : 2)
         fwhm : float
-            FWHM for all gaussian beams
+            FWHM for all gaussian beams (default : 43)
 
         Notes
         -----
@@ -250,7 +253,11 @@ class Instrument(MPIBase):
         '''
 
         lmax = kwargs.get('lmax', None)
+        mmax = kwargs.get('mmax', 2) # Since symmetric beams
         fwhm = kwargs.get('fwhm', 43)
+
+        common_opts = dict(lmax=lmax, mmax=mmax,
+                           fwhm=fwhm, btype='Gaussian')
 
         self.nrow = nrow
         self.ncol = ncol
@@ -270,14 +277,12 @@ class Instrument(MPIBase):
 
                 beam_a = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'A', polang=polang,
-                              pol='A', btype='Gaussian',
-                              lmax=lmax, fwhm=fwhm)
+                              pol='A', **common_opts)
 
                 if not no_pairs:
                     beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                                   name=det_str+'B', polang=polang+90.,
-                                  pol='B', btype='Gaussian',
-                                  lmax=lmax, fwhm=fwhm)
+                                  pol='B', **common_opts)
                 else:
                     beam_b = None
                 beams.append([beam_a, beam_b])
@@ -302,12 +307,50 @@ class Instrument(MPIBase):
         else:
             self.beams = beams
 
-    def create_reflected_ghost(Beam):
+    def create_reflected_ghost(beam, **kwargs):
         '''
-        
+        Create a reflected ghost based on a detector
+        offset. Azimuth and elevation are multiplied by -1.
+        Polarization angle stays the same.        
+
         Arguments
         ---------
+        beam : Beam object
+
+        Keyword arguments
+        -----------------
+        lmax : int
+            Bandlimit for ghost beam (default : None)
+        mmax : int
+            Azimuthal bandlimit for ghost beam (default : 2)
+        fwhm : float
+            FWHM for Gaussian ghost beam (default : beam.fwhm)
+
+        Notes
+        -----
+        Any keywords mentioned above accepted by the Beam()
+        class will be assumed to hold for the ghost.
+        
+        Returns
+        -------
+        ghost : Beam object            
         '''
+
+        lmax = kwargs.get('lmax', None)
+        mmax = kwargs.get('mmax', 2) # Since symmetric ghost
+        fwhm = kwargs.get('fwhm', beam.fwhm)
+        
+        ghost = Beam(az=-beam.az, 
+                     el=-beam.el,
+                     polang=beam.polang,
+                     name=beam.name + '_ghost',
+                     btype='Gaussian',
+                     dead=beam.dead,
+                     fwhm=fwhm,
+                     lmax=lmax,
+                     mmax=mmax)
+
+        return ghost
 
     def kill_channels(self, killfrac=0.2):
         '''

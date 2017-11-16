@@ -152,7 +152,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.legend()
         plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
         plt.xlabel(r'Multipole [$\ell$]')
-        plt.savefig('../scratch/img/cls.png')
+        plt.savefig('../scratch/img/cls_bicep.png')
         plt.close()
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
@@ -278,7 +278,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         plt.legend()
         plt.ylabel(r'$D_{\ell}$ [$\mu K^2_{\mathrm{CMB}}$]')
         plt.xlabel(r'Multipole [$\ell$]')
-        plt.savefig('../scratch/img/cls.png')
+        plt.savefig('../scratch/img/cls_atacama.png')
         plt.close()
 
 def offset_beam(az_off=0, el_off=0, polang=0, lmax=100, 
@@ -464,6 +464,6 @@ def single_detector(nsamp=1000):
 if __name__ == '__main__':
     # scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60) 
-    scan_atacama(mmax=2, rot_period=60*60) 
-    # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
+    # scan_atacama(mmax=2, rot_period=60*60) 
+    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
 
