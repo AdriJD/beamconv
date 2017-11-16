@@ -67,6 +67,43 @@ class MPIBase(object):
         else:
             return 1
 
+    def broadcast_array(self, arr):
+        '''
+        Broadcast array from root process to all other ranks.
+        
+        Arguments
+        ---------
+        arr : array-like or None
+            Array to be broadcasted. Not-None on root 
+            process, can be None on other ranks.            
+
+        Returns
+        -------
+        bcast_arr : array-like
+            input array (arr) on all ranks.
+        '''
+
+        if not self.mpi:
+            return arr
+
+        # Broadcast meta info first
+        if self.mpi_rank == 0:
+            shape = arr.shape
+            dtype = arr.dtype
+        else:
+            shape = None
+            dtype = None
+        shape, dtype = self._comm.bcast((shape, dtype), root=0)
+    
+        if self.mpi_rank == 0:
+            bcast_arr = arr
+        else:
+            bcast_arr = np.empty(shape, dtype=dtype)
+
+        self._comm.Bcast(bcast_arr, root=0)
+        
+        return bcast_arr
+
     def reduce_array(self, arr_loc):
         '''
         Sum arrays on all ranks elementwise into an
@@ -264,6 +301,13 @@ class Instrument(MPIBase):
 
         else:
             self.beams = beams
+
+    def create_reflected_ghost(Beam):
+        '''
+        
+        Arguments
+        ---------
+        '''
 
     def kill_channels(self, killfrac=0.2):
         '''
@@ -744,7 +788,8 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.proj += self.depo['proj']
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
-                        **kwargs):
+                            create_memmap=False,
+                            **kwargs):
         '''
 
         Arguments
@@ -760,6 +805,12 @@ class ScanStrategy(Instrument, qp.QMap):
             2: all) (defaul: 1)
         binning : bool, optional
             If True, bin tods into vec and proj.
+        create_memmap : bool
+            If True, store boresight quaternion (q_bore)
+            in memory-mapped file on disk and read in 
+            q_bore from file on subsequent passes. If
+            False, recalculate q_bore for each detector
+            pair. (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `get_spinmaps()`
@@ -773,6 +824,14 @@ class ScanStrategy(Instrument, qp.QMap):
             print('Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 
+        # init memmap on root
+        if create_memmap:
+            if self.mpi_rank == 0:
+                self.mmap = np.memmap('q_bore.npy', dtype=float, 
+                                      mode='w+', shape=(self.nsamp, 4),
+                                      order='C')
+            else:
+                self.mmap = None
         # let every core loop over max number of beams per core
         # this makes sure that cores still participate in
         # calculating boresight quaternion
@@ -818,6 +877,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 ces_opts = kwargs.copy()
                 ces_opts.update(chunk)
 
+                if bidx > 0:
+                    ces_opts.update(dict(use_precomputed=True))
                 self.constant_el_scan(**ces_opts)
 
                 # if required, loop over boresight rotations
@@ -844,10 +905,9 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(add_to_global=True)
 
-
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, el_step=None, vel_prf='triangle',
-            check_interval=600, el_min=45,
+            check_interval=600, el_min=45, use_precomputed=False,
             start=None, end=None):
 
         '''
@@ -880,22 +940,36 @@ class ScanStrategy(Instrument, qp.QMap):
             at this rate in seconds (default : 600)
         el_min : float
             Lower elevation limit in degrees (default : 45)
+        use_precomputed : bool
+            Load up precomputed boresight quaternion if 
+            memory-map is present (default : False)
         start : int
             Start on this sample
         end : int
             End on this sample
         '''
 
+        ctime = np.arange(start, end+1, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
+        self.ctime = ctime
+
+        # read q_bore from disk if needed (and skip rest)
+        if use_precomputed and hasattr(self, 'mmap'):
+            if self.mpi_rank == 0:
+                self.q_bore = self.mmap[start:end+1]
+            else:
+                self.q_bore = None
+
+            self.q_bore = self.broadcast_array(self.q_bore)
+
+            return 
+
         chunk_len = end - start + 1 # Note, you end on "end"
         check_len = int(check_interval * self.fsamp) # min_el checks
 
         nchecks = int(np.ceil(chunk_len / float(check_len)))
         p_len = check_len * nchecks # longer than chunk for nicer slicing
-
-        ctime = np.arange(start, end+1, dtype=float)
-        ctime /= float(self.fsamp)
-        ctime += self.ctime0
-        self.ctime = ctime
 
         ra0 = np.atleast_1d(ra0)
         dec0 = np.atleast_1d(dec0)
@@ -990,6 +1064,13 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, ctime)
+
+        # store boresight quat in memmap if needed
+        if hasattr(self, 'mmap'):
+            if self.mpi_rank == 0:
+                self.mmap[start:end+1] = self.q_bore
+            # wait for I/O
+            self._comm.barrier()
 
     def scan(self, az_off=None, el_off=None, polang=0,
              start=None, end=None):

@@ -225,7 +225,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     ac.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
                            dec0=dec0, az_throw=az_throw, 
                            nside_spin=256,
-                           el_min=45)
+                           el_min=45, create_memmap=True)
     
     # Solve for the maps
     maps, cond = ac.solve_for_map(fill=np.nan)

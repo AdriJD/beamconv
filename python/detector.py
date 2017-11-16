@@ -10,8 +10,8 @@ class Beam(object):
     An object representing detector centroid and spatial information
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-        pol='A', btype='Gaussian', fwhm=43, lmax=None, dead=False, bdict=None,
-        load_map=False):
+        pol='A', btype='Gaussian', fwhm=43, lmax=None, mmax=None, 
+        dead=False, bdict=None, load_map=False):
         '''
 
         Arguments
@@ -43,6 +43,8 @@ class Beam(object):
             Detector beam FWHM in arcmin (default : 43)
         lmax : int
             Bandlimit beam. If None, use 1.4*2*pi/fwhm. (default : None)
+        mmax : int 
+            Azimuthal band-limit beam. If None, use lmax (default : None)
         bdict : dict
             Dictionary with kwargs. Will overwrite all other provided kwargs
             (default : None)
@@ -92,6 +94,9 @@ class Beam(object):
                 self.lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
             else:
                 self.lmax = lmax
+            
+            # set mmax to lmax or something 
+            self.mmax = min(i for i in [mmax, lmax] if i is not None)
 
     def __str__(self):
 
