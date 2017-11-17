@@ -27,7 +27,7 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     return cls[0], cls[1:]
  
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
-               az_throw=50, scan_speed=2.8, rot_period=10*60,
+               az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
                hwp_mode=None):
     '''
     Simulates a 24h BICEP2-like scan strategy
@@ -79,7 +79,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
-    chunks = b2.partition_mission(0.5*b2.mlen*b2.fsamp) 
+    chunks = b2.partition_mission(0.5*b2.nsamp) 
 
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps(nside=256)
@@ -94,9 +94,10 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
     # Generate timestreams, bin them and store as attributes
-    b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
+    b2.scan_instrument_mpi(alm, verbose=2, ra0=ra0,
                            dec0=dec0, az_throw=az_throw, 
-                           nside_spin=256)
+                           nside_spin=256,
+                           max_spin=mmax)
     
     # Solve for the maps
     maps, cond = b2.solve_for_map(fill=np.nan)
@@ -334,7 +335,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     ss.beams[0][0].az = az_off
     ss.beams[0][0].el = el_off
 
-    # Start instrument rotated
+    # Start instrument rotated (just to make things complicated)
     rot_period =  ss.mlen
     ss.set_instr_rot(period=rot_period, start_ang=45)
 
@@ -380,7 +381,6 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     # convert beam coeff. back to spin representation.
     blmm2, blmp2 = tools.eb2spin(blmE, blmB)
     ss.beams[0][0].blm = (blmI, blmm2, blmp2)
-
 
     ss.reset_instr_rot()
     ss.reset_hwp_mod()
@@ -462,8 +462,8 @@ def single_detector(nsamp=1000):
     #### FINISH THIS ####
 
 if __name__ == '__main__':
-    # scan_bicep(mmax=2, hwp_mode='continuous', fwhm=28, lmax=1000)
+    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60) 
     # scan_atacama(mmax=2, rot_period=60*60) 
-    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
+    # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
 

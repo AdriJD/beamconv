@@ -552,6 +552,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         self.rot_dict['period'] = period
         self.rot_dict['angle'] = start_ang
+        self.rot_dict['start_ang'] = start_ang
         self.rot_dict['remainder'] = 0.
 
         if angles is None:
@@ -569,6 +570,8 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         self.rot_angle_gen = tools.angle_gen(
             self.rot_dict['angles'])
+        self.rot_dict['angle'] = self.rot_dict['start_ang']
+        self.rot_dict['remainder'] = 0
 
     def rotate_instr(self):
         '''
@@ -582,8 +585,9 @@ class ScanStrategy(Instrument, qp.QMap):
                     freq=None, start_ang=0.,
                     angles=None, reflectivity=None):
         '''
-        Modulate the polarized sky signal using a stepped or
-        continuously rotating half-wave plate.
+        Set options for modulating the polarized sky signal
+        using a (stepped or continuously) rotating half-wave 
+        plate.
 
         Keyword arguments
         ---------
@@ -605,7 +609,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.hwp_dict['freq'] = freq
         self.hwp_dict['angle'] = start_ang
         self.hwp_dict['start_ang'] = start_ang
-        self.hwp_dict['remainder'] = 0 # sec remaining for step
+        self.hwp_dict['remainder'] = 0 # num. samp. from last step
         self.hwp_dict['reflectivity'] = reflectivity
 
         if angles is None:
@@ -785,13 +789,6 @@ class ScanStrategy(Instrument, qp.QMap):
             print('  Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
 
-        # perhaps add loop over channel pairs (per core) here?
-        # move get_spinmaps before loop share beam is set (all detectors use same beam)
-        # otherwise, run get_spinmaps for every pair
-
-        # for that, you would need to have loaded a beam per channel pair
-
-
         for cidx, chunk in enumerate(self.chunks):
 
             if verbose:
@@ -824,9 +821,6 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.bin_tod()
 
                         # Adding to global maps
-                        # when MPI these are only global maps to
-                        # the rank. Still do this
-
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
 
@@ -834,6 +828,7 @@ class ScanStrategy(Instrument, qp.QMap):
                             create_memmap=False,
                             **kwargs):
         '''
+        blablba
 
         Arguments
         ---------
@@ -886,6 +881,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # reset instrument and hwp rotation
                 self.reset_instr_rot()
                 self.reset_hwp_mod()
+
             try:
                 beampair = self.beams[bidx]
             except IndexError:
@@ -933,8 +929,9 @@ class ScanStrategy(Instrument, qp.QMap):
                                       subchunk['start'], subchunk['end']))
 
 
-                    # rotate instrument if needed
+                    # rotate instrument and hwp if needed
                     self.rotate_instr()
+                    self.rotate_hwp(**subchunk)
 
                     # scan and bin
                     if beam_a:
@@ -1115,6 +1112,89 @@ class ScanStrategy(Instrument, qp.QMap):
             # wait for I/O
             self._comm.barrier()
 
+    def rotate_hwp(self, start=None, end=None):
+        '''
+        Evolve the HWP forward by a number of samples 
+        given by `chunk_size` (given the current HWP 
+        parameters). See `set_hwp_mod()`. Stores array
+        with HWP angle per sample if HWP frequency is
+        set. Otherwise stores current HWP angle.
+        
+        Keyword arguments
+        ---------
+        start : int
+            Start on this sample
+        end : int
+            End on this sample
+        '''
+
+        chunk_size = int(end - start + 1) # size in samples
+
+        # If HWP does not move, just return current angle
+        if not self.hwp_dict['freq']:
+
+            self.hwp_ang = self.hwp_dict['angle']
+            return 
+
+        # if needed, compute hwp angle array.
+        freq = self.hwp_dict['freq'] # cycles per sec for cont. rot hwp
+        start_ang = np.radians(self.hwp_dict['angle'])
+
+        if self.hwp_dict['mode'] == 'continuous':
+
+            self.hwp_ang = np.linspace(start_ang,
+                   start_ang + 2 * np.pi * chunk_size / float(freq * self.fsamp),
+                   num=chunk_size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
+
+            # update mod 2pi start angle for next chunk
+            self.hwp_dict['angle'] = np.degrees(np.mod(self.hwp_ang[-1], 2*np.pi))
+            return 
+
+        if self.hwp_dict['mode'] == 'stepped':
+
+            step_size = int(self.fsamp / float(freq)) # samples per HWP step
+
+            hwp_ang = np.zeros(chunk_size, dtype=float)
+            nsteps = int(np.ceil(chunk_size / float(step_size)))
+
+            startidx = 0
+            # loop over one extra step to account for possible remainder
+            for sidx, step in enumerate(xrange(nsteps+1)):
+
+                if sidx == 0 and self.hwp_dict['remainder'] != 0:
+
+                    # handle remaining time in hwp period                            
+                    hwp_ang[:self.hwp_dict['remainder']] += start_ang
+                    startidx = self.hwp_dict['remainder']
+
+                elif sidx > 0:
+                    if startidx + step_size >= chunk_size:
+                        # i.e. complete hwp step does not fit in
+                        # chunk anymore (or fits precisely)
+                        endidx = chunk_size
+
+                        if startidx < endidx:
+                            # i.e. nstep != 1
+                            # rotate hwp
+                            hwp_ang[startidx:endidx] += np.radians(
+                                self.hwp_angle_gen.next())
+
+                        # we're in the last chunk so break loop
+                        self.hwp_dict['remainder'] = step_size - endidx + startidx
+                        break
+
+                    else:
+                        endidx = startidx + step_size
+
+                        hwp_ang[startidx:endidx] += np.radians(
+                            self.hwp_angle_gen.next())
+                    startidx += step_size
+
+            # update mod 2pi start angle for next chunk
+            self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
+            self.hwp_ang = hwp_ang
+
+
     def scan(self, az_off=None, el_off=None, polang=0,
              start=None, end=None):
         '''
@@ -1155,7 +1235,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.q_off = q_off
         self.polang = polang
 
-        tod_size = end - start + 1
+        tod_size = end - start + 1 # size in samples
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
         # normal chunk len
@@ -1197,63 +1277,16 @@ class ScanStrategy(Instrument, qp.QMap):
             exppais = np.exp(1j * n * pa)
             tod_c += self.func_c[nidx,pix] * exppais
 
-        # Cant you put this HWP stuff into a seperate function?
+        # check for HWP angle array
+        if self.hwp_ang is None:
+            hwp_ang = 0
 
-        # if needed, compute hwp angle array.
-        if self.hwp_dict['freq']:
-
-            freq = self.hwp_dict['freq'] # cycles per sec for cont.
-            start_ang = np.radians(self.hwp_dict['angle'])
-
-            if self.hwp_dict['mode'] == 'continuous':
-
-                hwp_ang = np.linspace(start_ang,
-                       start_ang + 2 * np.pi * tod_size / float(freq * self.fsamp),
-                       num=tod_size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
-
-                # update mod 2pi start angle for next chunk
-                self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
-                self.hwp_ang = hwp_ang
-
-            if self.hwp_dict['mode'] == 'stepped':
-
-                step_size = int(self.fsamp / float(freq)) # samples per step
-                start_ang = self.hwp_dict['angle']
-#                start_ang = self.hwp_angle_gen.next()
-                hwp_ang = np.zeros(tod_size, dtype=float)
-                nsteps = int(np.ceil(tod_size / float(step_size)))
-
-                startidx = 0
-                for sidx, step in enumerate(xrange(nsteps+1)):
-                    if sidx == 0 and self.hwp_dict['remainder'] != 0:
-                        hwp_ang[:self.hwp_dict['remainder']] += np.radians(start_ang)
-                        startidx = self.hwp_dict['remainder']
-                    else:
-                        if startidx + step_size > tod_size:
-
-                            endidx = tod_size - 1
-                            self.hwp_dict['remainder'] = startidx + step_size - endidx
-                            hwp_ang[startidx:endidx] += np.radians(
-                                self.hwp_angle_gen.next())
-
-                            # we're in the last chunk
-                            break
-
-                        else:
-                            endidx = startidx + step_size
-
-                            hwp_ang[startidx:endidx] += np.radians(
-                                self.hwp_angle_gen.next())
-
-                        startidx += step_size
-
-                # update mod 2pi start angle for next chunk
-                self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
-                self.hwp_ang = hwp_ang
-
+            if self.hwp_dict:
+                # HWP options set, but not executed
+                warn('call rotate_hwp() to have HWP modulation',
+                     RuntimeWarning)
         else:
-            hwp_ang = 0.
-            self.hwp_ang = 0
+            hwp_ang = self.hwp_ang
 
         # modulate by hwp angle and polarization angle
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
@@ -1342,7 +1375,8 @@ class ScanStrategy(Instrument, qp.QMap):
             start += end
 
         # Pol
-        self.func_c = np.zeros((2*self.N-1, 12*nside_spin**2), dtype=np.complex128) # all spin spheres
+        # all spin spheres
+        self.func_c = np.zeros((2*self.N-1, 12*nside_spin**2), dtype=np.complex128) 
 
         almp2 = -1 * (alm[1] + 1j * alm[2])
         almm2 = -1 * (alm[1] - 1j * alm[2])

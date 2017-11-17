@@ -7,24 +7,21 @@ import tools
 
 class Beam(object):
     '''
-    An object representing detector centroid and spatial information
+    A class representing detector centroid and beam information
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
         pol='A', btype='Gaussian', fwhm=43, lmax=None, mmax=None, 
         dead=False, bdict=None, load_map=False):
         '''
 
-        Arguments
+        Keyword arguments
         ---------
         az : float 
             Azimuthal location of detector relative to boresight
-            in degrees
+            in degrees (default : 0.)
         el : float 
             Elevation location of detector relative to boresight
-            in degrees
-
-        Keyword arguments
-        ---------
+            in degrees (default : 0.)
         polang : float (default: 0.)
             The polarization orientation of the beam/detector [deg]
         name : str (default: None)
@@ -50,7 +47,6 @@ class Beam(object):
             (default : None)
         load_map : bool
             Not yet implemented
-
         '''
 
         if bdict:
@@ -78,7 +74,6 @@ class Beam(object):
 
         else:
             # Populating attributes from init call
-
             self.az = az
             self.el = el
             self.polang = polang
