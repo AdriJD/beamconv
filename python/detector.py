@@ -2,6 +2,7 @@ import sys
 import time
 import warnings
 import glob
+import inspect
 import numpy as np
 import tools
 
@@ -11,7 +12,8 @@ class Beam(object):
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
         pol='A', btype='Gaussian', fwhm=43, lmax=None, mmax=None, 
-        dead=False, bdict=None, load_map=False):
+        dead=False, ghost=False, amplitude=1., bdict=None,
+        load_map=False):
         '''
 
         Keyword arguments
@@ -42,6 +44,12 @@ class Beam(object):
             Bandlimit beam. If None, use 1.4*2*pi/fwhm. (default : None)
         mmax : int 
             Azimuthal band-limit beam. If None, use lmax (default : None)
+        ghost : bool
+            Whether the beam is a ghost or not (default : False)
+        amplitude : scalar
+            Total throughput of beam, i.e. integral of beam over the sphere. 
+            ( \int d\omega B(\omega) Y_00(\omega) \equiv amplitude ). This
+            means that b00 = amplitude / sqrt(4 pi) (default : 1.)
         bdict : dict
             Dictionary with kwargs. Will overwrite all other provided kwargs
             (default : None)
@@ -82,10 +90,24 @@ class Beam(object):
             self.btype = btype
             self.fwhm = fwhm
             self.dead = dead
+            self.__ghost = ghost
+            self.amplitude = amplitude
 
             self.lmax = lmax           
             self.mmax = mmax
-            
+
+            # ghosts are not allowed to have ghosts
+            if not self.ghost:
+                self.ghosts = []
+                self.ghost_count = 0
+            if self.ghost:
+                # if two ghosts share ghost_idx, they share blm
+                self.ghost_idx = 0
+
+    @property
+    def ghost(self):
+        return self.__ghost
+
     @property
     def lmax(self):
         return self.__lmax
@@ -94,6 +116,9 @@ class Beam(object):
     def lmax(self, lmax):
         if lmax is None:
             # Going up to 1.4 naieve Nyquist frequency set by beam scale 
+            # it's a bit silly that lmax now requires fwhm (lmax is more
+            # general I'd say). Perhaps just set a default lmax and be done
+            # with it.
             self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
         else:
             self.__lmax = lmax
@@ -120,18 +145,84 @@ class Beam(object):
         '''
         Generate symmetric Gaussian beam coefficients
         (I and pol) using FWHM and lmax.
+
+        Notes
+        -----
+        harmonic coefficients are multiplied by factor
+        sqrt(4 pi / (2 ell + 1)) and scaled by 
+        `amplitude` attribute (see `Beam.__init__()`).
         '''
         
         blm = tools.gauss_blm(self.fwhm, self.lmax, pol=False)
+        if self.amplitude != 1:
+            blm *= self.amplitude
         blm = tools.get_copol_blm(blm, c2_fwhm=self.fwhm)
 
         self.blm = blm
         self.btype = 'Gaussian'
 
+    def create_ghost(self, tag='ghost', ghost_idx=0,
+                     **kwargs):
+        '''
+        Append a ghost Beam object to the ghosts attribute.
+        This method will raise an error when called from a 
+        ghost Beam object.
+
+        Keyword Arguments
+        -----------------
+        tag : str
+            Identifier string appended like <name>_<tag>
+            where <name> is parent beam's name. If empty string,
+            or None, just use parent Beam name. (default : ghost)
+        kwargs : {beam_opts}
+        
+        Notes
+        ----
+        Valid Keyword arguments are those accepted by 
+        `Beam.__init__()` with the exception of `name`,
+        which is ignored and `ghost`, which is always set.
+        Unspecified kwargs are copied from parent beam.
+        '''
+        
+        if self.ghost:
+            raise RuntimeError('Ghost cannot have ghosts')
+
+        parent_name = self.name
+        kwargs.pop('name', None)
+        if tag:
+            if parent_name:
+                name = parent_name + ('_' + tag)
+            else:
+                name = tag
+        else:
+            name = parent_name
+
+        ghost_opts = dict(az=self.az,
+                           el=self.el,
+                           polang=self.polang,
+                           name=name,
+                           pol=self.pol,
+                           btype=self.btype,
+                           fwhm=self.fwhm,
+                           dead=self.dead,                          
+                           lmax=self.lmax,
+                           mmax=self.mmax)
+
+        ghost_opts.update(kwargs)
+        ghost_opts.update(dict(ghost=True))
+        ghost = Beam(**ghost_opts)
+
+        # set ghost_idx
+        ghost.ghost_idx = self.ghost_count
+        self.ghost_count += 1
+
+        self.ghosts.append(ghost)
+
     def reuse_beam(self, partner):
         '''
         Copy pointers to already initialized beam by
-        another Beam instance.
+        another Beam instance. If both beams are 
+        ghosts, beam takes partner's `ghost_idx`.
 
         Arguments
         ---------
@@ -141,12 +232,18 @@ class Beam(object):
         if not isinstance(partner, Beam):
             raise TypeError('partner must be Beam object')
 
+        if partner.ghost and self.ghost:
+            self.ghost_idx = partner.ghost_idx
+
         self.blm = partner.blm
-        self.btype = partner.btype        
+        self.btype = partner.btype
+        self.lmax = partner.lmax
+        self.mmax = partner.mmax
+        self.amplitude = partner.amplitude
 
     def get_offsets(self):
         '''
-        Return detector offset. Detector offsets are defined
+        Return (unrotated) detector offsets. Detector offsets are defined
         as the sequence Rz(polang), Ry(el), Rx(az). Rz is defined 
         as the rotation around the boresight by angle `polang`
         which is measured relative to the southern side of 
@@ -165,7 +262,7 @@ class Beam(object):
             Polarization angle in degrees
         '''
         
-        pass
+        return self.az, self.el, self.polang
 
     def load_eg_beams(self, bdir):
         '''
@@ -188,7 +285,6 @@ class Beam(object):
         '''
 
         pass
-
 
 class Detector():
     '''

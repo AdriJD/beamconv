@@ -250,47 +250,6 @@ def eb2spin(almE, almB):
 
     return almm2, almp2
 
-def extract_func_kwargs(func, kwargs, pop=False, others_ok=True, warn=False):
-    """
-    Extract arguments for a given function from a kwargs dictionary
-
-    Arguments
-    ---------
-    func : function or callable
-        This function's keyword arguments will be extracted.
-    kwargs : dict
-        Dictionary of keyword arguments from which to extract.
-        NOTE: pass the kwargs dict itself, not **kwargs
-    pop : bool, optional
-        Whether to pop matching arguments from kwargs.
-    others_ok : bool
-        If False, an exception will be raised when kwargs contains keys
-        that are not keyword arguments of func.
-    warn : bool
-        If True, a warning is issued when kwargs contains keys that are not
-        keyword arguments of func.  Use with `others_ok=True`.
-
-    Returns
-    -------
-    Dict of items from kwargs for which func has matching keyword arguments
-    """
-    spec = inspect.getargspec(func)
-    func_args = set(spec.args[-len(spec.defaults):])
-    ret = {}
-    for k in kwargs.keys():
-        if k in func_args:
-            if pop:
-                ret[k] = kwargs.pop(k)
-            else:
-                ret[k] = kwargs.get(k)
-        elif not others_ok:
-            msg = "Found invalid keyword argument: {}".format(k)
-            raise TypeError(msg)
-    if warn and kwargs:
-        s = ', '.join(kwargs.keys())
-        warn("Ignoring invalid keyword arguments: {}".format(s), Warning)
-    return ret
-
 def radec2ind_hp(ra, dec, nside):
     '''
     Turn qpoint ra and dec output into healpix ring-order

@@ -70,12 +70,12 @@ class MPIBase(object):
     def broadcast_array(self, arr):
         '''
         Broadcast array from root process to all other ranks.
-        
+
         Arguments
         ---------
         arr : array-like or None
-            Array to be broadcasted. Not-None on root 
-            process, can be None on other ranks.            
+            Array to be broadcasted. Not-None on root
+            process, can be None on other ranks.
 
         Returns
         -------
@@ -94,14 +94,14 @@ class MPIBase(object):
             shape = None
             dtype = None
         shape, dtype = self._comm.bcast((shape, dtype), root=0)
-    
+
         if self.mpi_rank == 0:
             bcast_arr = arr
         else:
             bcast_arr = np.empty(shape, dtype=dtype)
 
         self._comm.Bcast(bcast_arr, root=0)
-        
+
         return bcast_arr
 
     def reduce_array(self, arr_loc):
@@ -141,7 +141,7 @@ class Instrument(MPIBase):
     '''
 
     def __init__(self, location='spole', lat=None, lon=None,
-                 ghost_dc=0., **kwargs):
+                 **kwargs):
         '''
         Set location of telescope on earth.
 
@@ -155,8 +155,6 @@ class Instrument(MPIBase):
             Longitude in degrees
         lat : float, optional
             Latitude in degrees
-        ghost_dc : float, optional
-            Ghost level. Not implemented yet
         kwargs : {mpi_opts}
         '''
 
@@ -238,26 +236,28 @@ class Instrument(MPIBase):
             Load beam properties from files (default: False)
         no_pairs : bool
             Do not create detector pairs (default : False)
-        lmax : int
-            Bandlimit for all created beams (default : None)
-        mmax : int
-            Azimuthal bandlimit for all created beams
-            (default : 2)
-        fwhm : float
-            FWHM for all gaussian beams (default : 43)
+        kwargs : {beam_opts}
 
         Notes
         -----
-        Any keywords mentioned above accepted by the Beam()
-        class will be assumed to hold for all beams created.
+        "B"-detector's polarization angle is A's angle + 90.
+
+        Any keywords accepted by the `Beam` class will be
+        assumed to hold for all beams created, with the
+        exception of (`az`, `el`, `name`, `ghost`), which
+        are ignored. `polang` is used for A detectors, B
+        detectors get polang + 90.
         '''
 
-        lmax = kwargs.get('lmax', None)
-        mmax = kwargs.get('mmax', 2) # Since symmetric beams
-        fwhm = kwargs.get('fwhm', 43)
+        # Ignore these kwargs and warn user
+        for key in ['az', 'el', 'name', 'ghost']:
+            arg = kwargs.pop(key, None)
+            if arg:
+                warn('{}={} option to `Beam.__init__()` is ignored'
+                     .format(key, arg))
 
-        common_opts = dict(lmax=lmax, mmax=mmax,
-                           fwhm=fwhm, btype='Gaussian')
+        # polang needs to be dealt with seperately
+        polang = kwargs.pop('polang', 0.)
 
         self.nrow = nrow
         self.ncol = ncol
@@ -273,18 +273,17 @@ class Instrument(MPIBase):
 
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
 
-                polang = kwargs.get('polang', 0)
-
                 beam_a = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'A', polang=polang,
-                              pol='A', **common_opts)
+                              pol='A', **kwargs)
 
                 if not no_pairs:
                     beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                                   name=det_str+'B', polang=polang+90.,
-                                  pol='B', **common_opts)
+                                  pol='B', **kwargs)
                 else:
                     beam_b = None
+
                 beams.append([beam_a, beam_b])
 
         assert (len(beams) == self.ndet/2.), 'Wrong number of detectors!'
@@ -295,6 +294,7 @@ class Instrument(MPIBase):
             sub_size = np.zeros(self.mpi_size, dtype=int)
             quot, remainder = np.divmod(len(beams), self.mpi_size)
             sub_size += quot
+
             if remainder:
                 # give first ranks extra beam pairs
                 sub_size[:int(remainder)] += 1
@@ -307,50 +307,55 @@ class Instrument(MPIBase):
         else:
             self.beams = beams
 
-    def create_reflected_ghost(beam, **kwargs):
+    def create_reflected_ghosts(self, beams, ghost_tag='refl_ghost',
+                                **kwargs):
         '''
-        Create a reflected ghost based on a detector
-        offset. Azimuth and elevation are multiplied by -1.
-        Polarization angle stays the same.        
+        Create reflected ghosts based on detector
+        offset (azimuth and elevation are multiplied by -1).
+        Polarization angles stay the same.
+        Ghosts are appended to `ghosts` attribute of beams.
 
         Arguments
         ---------
-        beam : Beam object
+        beams : Beam object, array-like
+            Single Beam object or array-like of Beam
+            objects.
 
         Keyword arguments
         -----------------
-        lmax : int
-            Bandlimit for ghost beam (default : None)
-        mmax : int
-            Azimuthal bandlimit for ghost beam (default : 2)
-        fwhm : float
-            FWHM for Gaussian ghost beam (default : beam.fwhm)
+        ghost_tag : str
+            Tag to append to parents beam name, see
+            `Beam.create_ghost()` (default : refl_ghost)
+        kwargs : {create_ghost_opts}
 
         Notes
         -----
-        Any keywords mentioned above accepted by the Beam()
-        class will be assumed to hold for the ghost.
-        
+        Any keywords mentioned above accepted by the
+        `Beam.create_ghost` method will be set for
+        all created ghosts.
+        Set ghost level with the `amplitude` keyword
+        (see `Beam.__init__()`)
+
         Returns
         -------
-        ghost : Beam object            
+        ghost : Beam object
         '''
 
-        lmax = kwargs.get('lmax', None)
-        mmax = kwargs.get('mmax', 2) # Since symmetric ghost
-        fwhm = kwargs.get('fwhm', beam.fwhm)
-        
-        ghost = Beam(az=-beam.az, 
-                     el=-beam.el,
-                     polang=beam.polang,
-                     name=beam.name + '_ghost',
-                     btype='Gaussian',
-                     dead=beam.dead,
-                     fwhm=fwhm,
-                     lmax=lmax,
-                     mmax=mmax)
+        # tag overrules ghost_tag
+        kwargs.setdefault('tag', ghost_tag)
 
-        return ghost
+        beams = np.atleast_2d(beams) #2D: we have pairs
+        for pair in beams:
+            for beam in pair:
+                if beam is None:
+                    continue
+                # Note, in python integers are immutable
+                # so ghost offset is not updated when
+                # beam offset is updated.
+                refl_ghost_opts = dict(az=-beam.az,
+                                       el=-beam.el)
+                kwargs.update(refl_ghost_opts)
+                beam.create_ghost(**kwargs)
 
     def kill_channels(self, killfrac=0.2):
         '''
@@ -393,41 +398,6 @@ class Instrument(MPIBase):
             beams.append(Beam(bdict=bdata))
 
         self.beams = beams
-
-
-    def get_blm(self, lmax, channel=None, fwhm=None, pol=True):
-        '''
-        Load or create healpix-formatted blm array(s) for specified
-        channels.
-
-        Arguments
-        ---------
-        channel
-        lmax
-        fwhm : float
-            FWHM of symmetric gaussian beam in arcmin. If this
-            option is set, return blm array(s) with symmetric
-            gaussian beam in appropriate slices in blm
-
-        Returns
-        -------
-        blm (blm, blmm2) : (tuple of) array(s).
-            Healpix-formatted beam blm array.
-            Also returns blmm2 if pol is set
-
-        '''
-
-        # for now, just create a blm array with sym, gaussian beam
-        if fwhm:
-            return tools.gauss_blm(fwhm, lmax, pol=True)
-
-    def get_blm_spider(self):
-        pass
-
-    def get_ghost(self):
-        pass
-    # function that introduces ghosts, i.e add detector offsets and corresponding beams
-
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -586,7 +556,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     angles=None, reflectivity=None):
         '''
         Set options for modulating the polarized sky signal
-        using a (stepped or continuously) rotating half-wave 
+        using a (stepped or continuously) rotating half-wave
         plate.
 
         Keyword arguments
@@ -629,7 +599,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_dict['angles'])
         self.hwp_dict['angle'] = self.hwp_dict['start_ang']
         self.hwp_dict['remainder'] = 0
-        
+
     def partition_mission(self, chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
@@ -724,7 +694,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def allocate_maps(self, nside=256):
         '''
-        Allocate space in memory for map-related numpy arrays
+        Allocate space in memory for healpy map-related numpy arrays
 
         Keyword arguments
         -----------------
@@ -743,7 +713,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def scan_fixed_point(self, ra0=-10, dec0=-57.5, verbose=True):
         '''
-        Gets the az and el pointing timelines required to observe a fixed point 
+        Gets the az and el pointing timelines required to observe a fixed point
         on the sky.
         '''
 
@@ -828,7 +798,10 @@ class ScanStrategy(Instrument, qp.QMap):
                             create_memmap=False,
                             **kwargs):
         '''
-        blablba
+        Loop over beam pairs, calculates boresight pointing
+        in parallel, rotates or modulates instrument if
+        needed, calculates beam-convolved tods, and,
+        optionally, bins tods.
 
         Arguments
         ---------
@@ -845,16 +818,16 @@ class ScanStrategy(Instrument, qp.QMap):
             If True, bin tods into vec and proj.
         create_memmap : bool
             If True, store boresight quaternion (q_bore)
-            in memory-mapped file on disk and read in 
+            in memory-mapped file on disk and read in
             q_bore from file on subsequent passes. If
             False, recalculate q_bore for each detector
             pair. (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
-            `constant_el_scan()` or `get_spinmaps()`
+            `constant_el_scan()` or `init_spinmaps()`
         '''
 
-        # pop get_spinmaps kwargs
+        # pop init_spinmaps kwargs
         max_spin = kwargs.pop('max_spin', 5)
         nside_spin = kwargs.pop('nside_spin', 256)
 
@@ -865,7 +838,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # init memmap on root
         if create_memmap:
             if self.mpi_rank == 0:
-                self.mmap = np.memmap('q_bore.npy', dtype=float, 
+                self.mmap = np.memmap('q_bore.npy', dtype=float,
                                       mode='w+', shape=(self.nsamp, 4),
                                       order='C')
             else:
@@ -897,13 +870,26 @@ class ScanStrategy(Instrument, qp.QMap):
                 print('[rank {:03d}]: working on: {}, {}'.format(
                         self.mpi_rank, beam_a.name, beam_b.name))
 
+            # Give the beam objects some Gaussian blms
             if beam_a: # Note, only valid for Gaussian beams for now
-
+                
                 if not hasattr(beam_a, 'blm'):
                     beam_a.gen_gaussian_blm()
 
-                self.get_spinmaps(alm, beam_a.blm, max_spin=max_spin,
+                # We give the ghosts identical Gaussian beams
+                if beam_a.ghosts:
+
+                    for gidx in xrange(beam_a.ghost_count):
+                        if gidx == 0:
+                            beam_a.ghosts[gidx].gen_gaussian_blm()
+                        else:
+                            beam_a.ghosts[gidx].reuse_beam(beam_a.ghosts[0])
+                            # This is a bit ugly at the moment
+                            beam_b.ghosts[gidx].reuse_beam(beam_a.ghosts[0])
+
+                self.init_spinmaps(alm, beam_obj=beam_a, max_spin=max_spin,
                                   nside_spin=nside_spin, verbose=(verbose==2))
+
 
             for cidx, chunk in enumerate(self.chunks):
 
@@ -916,6 +902,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 ces_opts = kwargs.copy()
                 ces_opts.update(chunk)
 
+                # Use precomputed pointing on subsequent passes
+                # Note, not used if memmap is not initialized
                 if bidx > 0:
                     ces_opts.update(dict(use_precomputed=True))
                 self.constant_el_scan(**ces_opts)
@@ -935,13 +923,27 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # scan and bin
                     if beam_a:
-                        self.scan(az_off=beam_a.az, el_off=beam_a.el,
-                                  polang=beam_a.polang, **subchunk)
+                        self.scan(beam_a, **subchunk)
+
+                        # add ghost signal if present
+                        if any(beam_a.ghosts):
+                            for ghost in beam_a.ghosts:
+                                self.scan(ghost,
+                                          add_to_tod=True,
+                                          **subchunk)
+
                         if binning:
                             self.bin_tod(add_to_global=True)
+
                     if beam_b:
-                        self.scan(az_off=beam_b.az, el_off=beam_b.el,
-                                  polang=beam_b.polang, **subchunk)
+                        self.scan(beam_b, **subchunk)
+
+                        if any(beam_b.ghosts):
+                            for ghost in beam_b.ghosts:
+                                self.scan(ghost,
+                                          add_to_tod=True,
+                                          **subchunk)
+
                         if binning:
                             self.bin_tod(add_to_global=True)
 
@@ -981,7 +983,7 @@ class ScanStrategy(Instrument, qp.QMap):
         el_min : float
             Lower elevation limit in degrees (default : 45)
         use_precomputed : bool
-            Load up precomputed boresight quaternion if 
+            Load up precomputed boresight quaternion if
             memory-map is present (default : False)
         start : int
             Start on this sample
@@ -1003,7 +1005,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             self.q_bore = self.broadcast_array(self.q_bore)
 
-            return 
+            return
 
         chunk_len = end - start + 1 # Note, you end on "end"
         check_len = int(check_interval * self.fsamp) # min_el checks
@@ -1114,12 +1116,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def rotate_hwp(self, start=None, end=None):
         '''
-        Evolve the HWP forward by a number of samples 
-        given by `chunk_size` (given the current HWP 
+        Evolve the HWP forward by a number of samples
+        given by `chunk_size` (given the current HWP
         parameters). See `set_hwp_mod()`. Stores array
         with HWP angle per sample if HWP frequency is
         set. Otherwise stores current HWP angle.
-        
+
         Keyword arguments
         ---------
         start : int
@@ -1134,7 +1136,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if not self.hwp_dict['freq']:
 
             self.hwp_ang = self.hwp_dict['angle']
-            return 
+            return
 
         # if needed, compute hwp angle array.
         freq = self.hwp_dict['freq'] # cycles per sec for cont. rot hwp
@@ -1148,7 +1150,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # update mod 2pi start angle for next chunk
             self.hwp_dict['angle'] = np.degrees(np.mod(self.hwp_ang[-1], 2*np.pi))
-            return 
+            return
 
         if self.hwp_dict['mode'] == 'stepped':
 
@@ -1163,7 +1165,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 if sidx == 0 and self.hwp_dict['remainder'] != 0:
 
-                    # handle remaining time in hwp period                            
+                    # handle remaining time in hwp period
                     hwp_ang[:self.hwp_dict['remainder']] += start_ang
                     startidx = self.hwp_dict['remainder']
 
@@ -1195,27 +1197,41 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_ang = hwp_ang
 
 
-    def scan(self, az_off=None, el_off=None, polang=0,
-             start=None, end=None):
+    def scan(self, beam_obj,
+             add_to_tod=False, start=None, end=None):
+
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
 
-        Arguments
+        Kewword arguments
         ---------
 
         az_off : float (default: None)
-            The detector azimuthal offset relative to borsight [deg]
+            The detector azimuthal offset relative to boresight [deg]
         el_off : float (default: None)
-            The detector elevation offset relative to borsight [deg].
-            Use ScanStrategy attribute if n
+            The detector elevation offset relative to boresight [deg].
         polang : float (default: None)
             Detector polarization angle
+        add_to_tod : bool
+            Add resulting TOD to existing tod attribute and do not
+            internally store the detector offset pointing.
+            (default: False)
         start : int
             Start on this sample
         end : int
             End on this sample
         '''
+
+        az_off = beam_obj.az
+        el_off = beam_obj.el
+        polang = beam_obj.polang
+        
+        if not beam_obj.ghost:
+            func, func_c = self.spinmaps['main_beam']
+        else:
+            ghost_idx = beam_obj.ghost_idx
+            func, func_c = self.spinmaps['ghosts'][ghost_idx]
 
         # NOTE nicer if you give q_off directly instead of az_off, el_off
         # we use a offset quaternion without polang.
@@ -1230,10 +1246,6 @@ class ScanStrategy(Instrument, qp.QMap):
         # around the boresight. It's q_bore * q_rot * q_off
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
         q_off = tools.quat_left_mult(q_rot, q_off)
-
-        # store for mapmaking
-        self.q_off = q_off
-        self.polang = polang
 
         tod_size = end - start + 1 # size in samples
         tod_c = np.zeros(tod_size, dtype=np.complex128)
@@ -1269,13 +1281,18 @@ class ScanStrategy(Instrument, qp.QMap):
         pix = tools.radec2ind_hp(ra, dec, self.nside_spin)
 
         # expose pixel indices for test centroid
-        self.pix = pix
+        # and store pointing offset for mapmaking
+        if not add_to_tod:
+            self.pix = pix
+            self.q_off = q_off
+            self.polang = polang
 
         # Fill complex array
+        # extract N from shape func!!!!
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
             exppais = np.exp(1j * n * pa)
-            tod_c += self.func_c[nidx,pix] * exppais
+            tod_c += func_c[nidx,pix] * exppais
 
         # check for HWP angle array
         if self.hwp_ang is None:
@@ -1294,19 +1311,23 @@ class ScanStrategy(Instrument, qp.QMap):
         tod = np.real(tod_c) # shares memory with tod_c
 
         # add unpolarized tod
+        # extract N from shape func!!!!
         for nidx, n in enumerate(xrange(-self.N+1, self.N)):
 
             if n == 0: #avoid expais since its one anyway
-                tod += np.real(self.func[n,pix])
+                tod += np.real(func[n,pix])
 
             if n > 0:
-                tod += 2 * np.real(self.func[n,pix]) * np.cos(n * pa)
-                tod -= 2 * np.imag(self.func[n,pix]) * np.sin(n * pa)
-    
-        self.tod = tod
+                tod += 2 * np.real(func[n,pix]) * np.cos(n * pa)
+                tod -= 2 * np.imag(func[n,pix]) * np.sin(n * pa)
 
-    def get_spinmaps(self, alm, blm, max_spin=5, nside_spin=256,
-                     verbose=True):
+        if add_to_tod and hasattr(self, 'tod'):
+            self.tod += tod
+        else:
+            self.tod = tod
+
+    def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
+                     verbose=True, beam_obj=None):
         '''
         Compute convolution of map with different spin modes
         of the beam. Computed per spin, so creates spinmmap
@@ -1326,17 +1347,69 @@ class ScanStrategy(Instrument, qp.QMap):
             (default : 5)
         nside_spin : int
             Nside of spin maps (default : 256)
-
+        beam_obj : <Beam> object
+            If provided, create spinmaps for main beam and
+            all ghosts (if present). `ghost_idx` attribute 
+            decides whether ghosts have distinct beams. See
+            `Beam.__init__()`
         '''
 
         # NOTE it would be nice to have a symmetric beam option
         # that only makes it run over n=0, -2 and 2.
 
+        # this block iterates the function to create spinmaps for
+        # the main beam and unique ghost beams (if present)
+        # spinmaps are stored internally in self.spinmaps dict.
+        if beam_obj:
+            
+            self.spinmaps = {'main_beam' : [],
+                             'ghosts': []}
+
+            max_s = min(beam_obj.mmax, max_spin)
+            blm = beam_obj.blm # main beam
+
+            # calculate spinmaps for main beam
+            func, func_c = self.init_spinmaps(alm, blm=blm, max_spin=max_s,
+                                              nside_spin=nside_spin, 
+                                              verbose=verbose)
+            self.spinmaps['main_beam'][:] = func, func_c
+            
+            if beam_obj.ghosts:
+
+                # find unique ghost beams
+                assert len(beam_obj.ghosts) == beam_obj.ghost_count
+
+                g_indices = np.empty(beam_obj.ghost_count, dtype=int) # ghost_indices
+
+                for gidx, ghost in enumerate(beam_obj.ghosts):
+                    g_indices[gidx] = ghost.ghost_idx
+
+                unique, u_indices = np.unique(g_indices, return_index=True)
+
+                # calculate spinmaps for unique ghost beams
+                for uidx, u in enumerate(unique):
+
+                    self.spinmaps['ghosts'].append([]) 
+
+                    # use the blms from the first occurrence of unique 
+                    # ghost_idx
+                    ghost = beam_obj.ghosts[u_indices[uidx]]
+
+                    blm = ghost.blm
+                    max_s = min(ghost.mmax, max_spin)
+
+                    func, func_c = self.init_spinmaps(alm, blm=blm, max_spin=max_s,
+                                                      nside_spin=nside_spin, 
+                                                      verbose=verbose)
+
+                    self.spinmaps['ghosts'][u][:] = func, func_c
+            return                            
+
         self.N = max_spin + 1
         self.nside_spin = nside_spin
         lmax = hp.Alm.getlmax(alm[0].size)
 
-        # Make sure bandlimits beam and sky match
+        # Match up bandlimits beam and sky
         lmax_beam = hp.Alm.getlmax(blm[0].size)
 
         if lmax > lmax_beam:
@@ -1346,16 +1419,16 @@ class ScanStrategy(Instrument, qp.QMap):
             blm = tools.trunc_alm(blm, lmax)
 
         # Unpolarized sky and beam first
-        self.func = np.zeros((self.N, 12*nside_spin**2),
+        func = np.zeros((self.N, 12*nside_spin**2),
                              dtype=np.complex128) # s <=0 spheres
 
         start = 0
-        for n in xrange(self.N): # note n is s
+        for n in xrange(self.N): # note, n is spin
             end = lmax + 1 - n
             if n == 0: # scalar transform
 
                 flmn = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
-                self.func[n,:] += hp.alm2map(flmn, nside_spin, verbose=False)
+                func[n,:] += hp.alm2map(flmn, nside_spin, verbose=False)
 
             else: # spin transforms
 
@@ -1370,13 +1443,13 @@ class ScanStrategy(Instrument, qp.QMap):
                 flmnm = 1j * (flmn - flmmn) / 2.
                 spinmaps = hp.alm2map_spin([flmnp, flmnm], nside_spin, n, lmax,
                                            lmax)
-                self.func[n,:] = spinmaps[0] + 1j * spinmaps[1]
+                func[n,:] = spinmaps[0] + 1j * spinmaps[1]
 
             start += end
 
         # Pol
         # all spin spheres
-        self.func_c = np.zeros((2*self.N-1, 12*nside_spin**2), dtype=np.complex128) 
+        func_c = np.zeros((2*self.N-1, 12*nside_spin**2), dtype=np.complex128)
 
         almp2 = -1 * (alm[1] + 1j * alm[2])
         almm2 = -1 * (alm[1] - 1j * alm[2])
@@ -1414,28 +1487,42 @@ class ScanStrategy(Instrument, qp.QMap):
                 spinmaps = [hp.alm2map(-ps_flm_p, nside_spin, verbose=False),
                             hp.alm2map(-ms_flm_m, nside_spin, verbose=False)]
 
-                self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
+                func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             else:
                 # positive spin
                 spinmaps = hp.alm2map_spin([ps_flm_p, ps_flm_m],
                                            nside_spin, n, lmax, lmax)
-                self.func_c[self.N+n-1,:] = spinmaps[0] + 1j * spinmaps[1]
+                func_c[self.N+n-1,:] = spinmaps[0] + 1j * spinmaps[1]
 
                 # negative spin
                 spinmaps = hp.alm2map_spin([ms_flm_p, ms_flm_m],
                                            nside_spin, n, lmax, lmax)
-                self.func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
+                func_c[self.N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             start += end
 
-    def bin_tod(self, init=True, add_to_global=False):
+        return func, func_c
+
+    def bin_tod(self, az_off=None, el_off=None, polang=None,
+                init=True, add_to_global=False):
         '''
-        Take internally stored tod and pointing
+        Take internally stored tod and boresight 
+        pointing, combine with detector offset,
         and bin into map and projection matrices.
+
+        Keyword arguments
+        -----------------
+        az_off : float (default: None)
+            The detector azimuthal offset relative to boresight [deg]
+        el_off : float (default: None)
+            The detector elevation offset relative to boresight [deg].
+        polang : 
+        init : bool
+        add_to_global : 
         '''
 
-        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)) #from qpoint
 
         self.init_point(q_bore=self.q_bore[self.qidx_start:self.qidx_end+1],
                         ctime=self.ctime[self.qidx_start:self.qidx_end+1],
