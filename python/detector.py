@@ -135,6 +135,23 @@ class Beam(object):
             raise ValueError("main beam cannot have ghost_idx")
 
     @property
+    def dead(self):
+        return self.__dead
+
+    @dead.setter
+    def dead(self, val):
+        '''
+        Make sure ghosts are also declared dead when main beam is
+        '''
+        self.__dead = val
+        try:
+            for ghost in self.ghosts:
+                ghost.__dead = val
+        except AttributeError:
+            # instance is ghost
+            pass
+
+    @property
     def lmax(self):
         return self.__lmax
     
@@ -145,9 +162,6 @@ class Beam(object):
         '''
         if val is None and fwhm:
             # Going up to 1.4 naieve Nyquist frequency set by beam scale 
-            # it's a bit silly that lmax now requires fwhm (lmax is more
-            # general I'd say). Perhaps just set a default lmax and be done
-            # with it.
             self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
         else:
             self.__lmax = max(val, 0)

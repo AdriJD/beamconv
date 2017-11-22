@@ -67,6 +67,14 @@ class MPIBase(object):
         else:
             return 1
 
+    def barrier(self):
+        '''
+        MPI barrier that does nothing if not MPI
+        '''
+        if not self.mpi:
+            return
+        self._comm.Barrier()            
+        
     def broadcast_array(self, arr):
         '''
         Broadcast array from root process to all other ranks.
@@ -235,7 +243,9 @@ class Instrument(MPIBase):
         from_files : bool, optional
             Load beam properties from files (default: False)
         no_pairs : bool
-            Do not create detector pairs (default : False)
+            Do not create detector pairs, i.e. only create
+            A detector and let B detector be dead
+            (default : False)
         kwargs : {beam_opts}
 
         Notes
@@ -256,8 +266,9 @@ class Instrument(MPIBase):
                 warn('{}={} option to `Beam.__init__()` is ignored'
                      .format(key, arg))
 
-        # polang needs to be dealt with seperately
+        # polang and dead need to be dealt with seperately
         polang = kwargs.pop('polang', 0.)
+        dead = kwargs.pop('dead', False)
 
         self.nrow = nrow
         self.ncol = ncol
@@ -275,14 +286,12 @@ class Instrument(MPIBase):
 
                 beam_a = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'A', polang=polang,
-                              pol='A', **kwargs)
+                              dead=dead, pol='A', **kwargs)
 
-                if not no_pairs:
-                    beam_b = Beam(az=azs[az_idx], el=els[el_idx],
-                                  name=det_str+'B', polang=polang+90.,
-                                  pol='B', **kwargs)
-                else:
-                    beam_b = None
+                beam_b = Beam(az=azs[az_idx], el=els[el_idx],
+                              name=det_str+'B', polang=polang+90.,
+                              dead=dead or no_pairs, pol='B',
+                              **kwargs)
 
                 beams.append([beam_a, beam_b])
 
@@ -326,15 +335,16 @@ class Instrument(MPIBase):
         ghost_tag : str
             Tag to append to parents beam name, see
             `Beam.create_ghost()` (default : refl_ghost)
-        kwargs : {create_ghost_opts}
+        kwargs : {create_ghost_opts, beam_opts}
 
         Notes
         -----
         Any keywords mentioned above accepted by the
         `Beam.create_ghost` method will be set for
-        all created ghosts.
-        Set ghost level with the `amplitude` keyword
-        (see `Beam.__init__()`)
+        all created ghosts. E.g. set ghost level with
+        the `amplitude` keyword (see `Beam.__init__()`)
+
+        `az` and `el` kwargs are ignored.
 
         Returns
         -------
@@ -347,7 +357,7 @@ class Instrument(MPIBase):
         beams = np.atleast_2d(beams) #2D: we have pairs
         for pair in beams:
             for beam in pair:
-                if beam is None:
+                if not beam:
                     continue
                 # Note, in python integers are immutable
                 # so ghost offset is not updated when
@@ -788,7 +798,7 @@ class ScanStrategy(Instrument, qp.QMap):
                               polang=polang, **subchunk)
 
                     if mapmaking:
-                        self.bin_tod()
+                        self.bin_tod(add_to_global=False)
 
                         # Adding to global maps
                         self.vec += self.depo['vec']
@@ -834,6 +844,8 @@ class ScanStrategy(Instrument, qp.QMap):
         if verbose and self.mpi_rank == 0:
             print('Scanning with {:d} x {:d} grid of detectors'.format(
                 self.nrow, self.ncol))
+            sys.stdout.flush()
+        self.barrier() # just to have summary print statement on top
 
         # init memmap on root
         if create_memmap:
@@ -922,7 +934,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     self.rotate_hwp(**subchunk)
 
                     # scan and bin
-                    if beam_a:
+                    if not beam_a.dead:
                         self.scan(beam_a, **subchunk)
 
                         # add ghost signal if present
@@ -935,7 +947,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(add_to_global=True)
 
-                    if beam_b:
+                    if not beam_b.dead:
                         self.scan(beam_b, **subchunk)
 
                         if any(beam_b.ghosts):
@@ -1197,22 +1209,19 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_ang = hwp_ang
 
 
-    def scan(self, beam_obj,
-             add_to_tod=False, start=None, end=None):
+    def scan(self, beam_obj, add_to_tod=False, start=None, 
+             end=None):
 
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
 
-        Kewword arguments
+        Arguments
         ---------
+        beam_obj : <detector.Beam> object
 
-        az_off : float (default: None)
-            The detector azimuthal offset relative to boresight [deg]
-        el_off : float (default: None)
-            The detector elevation offset relative to boresight [deg].
-        polang : float (default: None)
-            Detector polarization angle
+        Kewword arguments
+        ---------        
         add_to_tod : bool
             Add resulting TOD to existing tod attribute and do not
             internally store the detector offset pointing.
@@ -1222,6 +1231,10 @@ class ScanStrategy(Instrument, qp.QMap):
         end : int
             End on this sample
         '''
+
+        if beam_obj.dead:
+            warn('scan() called with dead beam')
+            return
 
         az_off = beam_obj.az
         el_off = beam_obj.el
@@ -1347,7 +1360,7 @@ class ScanStrategy(Instrument, qp.QMap):
             (default : 5)
         nside_spin : int
             Nside of spin maps (default : 256)
-        beam_obj : <Beam> object
+        beam_obj : <detector.Beam> object
             If provided, create spinmaps for main beam and
             all ghosts (if present). `ghost_idx` attribute 
             decides whether ghosts have distinct beams. See
@@ -1505,7 +1518,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return func, func_c
 
     def bin_tod(self, az_off=None, el_off=None, polang=None,
-                init=True, add_to_global=False):
+                init=True, add_to_global=True):
         '''
         Take internally stored tod and boresight 
         pointing, combine with detector offset,
@@ -1513,13 +1526,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         -----------------
-        az_off : float (default: None)
-            The detector azimuthal offset relative to boresight [deg]
-        el_off : float (default: None)
-            The detector elevation offset relative to boresight [deg].
-        polang : 
+        az_off : float 
+            The detector azimuthal offset relative to boresight in deg
+            (default : None)
+        el_off : float 
+            The detector elevation offset relative to boresight in deg
+            (default : None)
+        polang : float
+            Polarization angle in deg (default : None)
         init : bool
-        add_to_global : 
+            Call `init_dest()` before binning (default : True)
+        add_to_global : bool
+            Add local maps to maps allocated by `allocate_maps`
+            (default : True)
         '''
 
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)) #from qpoint
@@ -1558,6 +1577,9 @@ class ScanStrategy(Instrument, qp.QMap):
         -----------------
         fill : scalar
             Fill value for unobserved pixels
+            (default : hp.UNSEEN)
+        return_proj : bool
+            Also return proj matrix (default : False)
 
         Returns
         -------
@@ -1565,6 +1587,9 @@ class ScanStrategy(Instrument, qp.QMap):
             Solved I, Q and U maps in shape (3, npix)
         cond : array-like
             Condition number map
+        proj : array-like
+            (Only when `return_proj` is set) Projection 
+            matrix (proj)
         '''
 
         if self.mpi:

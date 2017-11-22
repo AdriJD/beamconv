@@ -488,9 +488,9 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     # After this initialization, the code takes 
     # the ghosts into account without modifications
     b2.create_reflected_ghosts(b2.beams, amplitude=0.01, 
-                               ghost_tag='ghost_1')
+                               ghost_tag='ghost_1', dead=False)
     b2.create_reflected_ghosts(b2.beams, amplitude=0.01, 
-                               fwhm=100, ghost_tag='ghost_2')
+                               fwhm=100, ghost_tag='ghost_2', dead=False)
 
     # calculate tods in two chunks
     chunks = b2.partition_mission(0.5*b2.nsamp) 
