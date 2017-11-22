@@ -431,8 +431,7 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                hwp_mode=None):
     '''
     Similar test to `scan_bicep`, but includes reflected ghosts
-    '''
-    '''
+
     Simulates a 24h BICEP2-like scan strategy
     using a random LCDM realisation and a 3 x 3 grid
     of Gaussian beams pairs. Bins tods into maps and

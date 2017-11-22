@@ -11,7 +11,7 @@ class Beam(object):
     A class representing detector centroid and beam information
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-        pol='A', btype='Gaussian', fwhm=43, lmax=None, mmax=None, 
+        pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, 
         dead=False, ghost=False, amplitude=1., bdict=None,
         load_map=False):
         '''
@@ -88,17 +88,17 @@ class Beam(object):
             self.name = name
             self.pol = pol
             self.btype = btype
-            self.fwhm = fwhm
             self.dead = dead
-            self.__ghost = ghost
             self.amplitude = amplitude
 
             self.lmax = lmax           
             self.mmax = mmax
+            self.fwhm = fwhm
 
+            self.__ghost = ghost
             # ghosts are not allowed to have ghosts
             if not self.ghost:
-                self.ghosts = []
+                self.__ghosts = []
                 self.ghost_count = 0
             if self.ghost:
                 # if two ghosts share ghost_idx, they share blm
@@ -109,30 +109,78 @@ class Beam(object):
         return self.__ghost
 
     @property
+    def ghosts(self):
+        return self.__ghosts
+
+    @property
+    def ghost_count(self):
+        return self.__ghost_count
+
+    @ghost_count.setter
+    def ghost_count(self, count):
+        if not self.ghost:
+            self.__ghost_count = count
+        else:
+            raise ValueErrror("ghost cannot have ghost_count")
+
+    @property
+    def ghost_idx(self):
+        return self.__ghost_idx
+
+    @ghost_idx.setter
+    def ghost_idx(self, val):
+        if self.ghost:
+            self.__ghost_idx = val
+        else:
+            raise ValueError("main beam cannot have ghost_idx")
+
+    @property
     def lmax(self):
         return self.__lmax
     
     @lmax.setter
-    def lmax(self, lmax):
-        if lmax is None:
+    def lmax(self, val):
+        '''
+        Make sure lmax is >= 0 and defaults to something sensible
+        '''
+        if val is None and fwhm:
             # Going up to 1.4 naieve Nyquist frequency set by beam scale 
             # it's a bit silly that lmax now requires fwhm (lmax is more
             # general I'd say). Perhaps just set a default lmax and be done
             # with it.
             self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
         else:
-            self.__lmax = lmax
+            self.__lmax = max(val, 0)
 
+    @property
+    def fwhm(self):
+        return self.__fwhm
+
+    @fwhm.setter
+    def fwhm(self, val):
+        '''
+        Set beam fwhm. Returns absolute value of 
+        input and returns 1.4 * 2 * pi / lmax if
+        fwhm is None.        
+        '''
+        if not val and self.lmax:
+            val = (1.4 * 2. * np.pi) / self.lmax
+            self.__fwhm = np.degrees(val) * 60
+        else:
+            self.__fwhm = np.abs(val)
+            
     @property
     def mmax(self):
         return self.__mmax
 
     @mmax.setter
     def mmax(self, mmax):
-        # set mmax to lmax if not set        
+        '''
+        Set mmax to lmax if not set        
+        '''
         self.__mmax = min(i for i in [mmax, self.lmax] \
                               if i is not None)
-                    
+       
     def __str__(self):
 
         return "name   : {} \nbtype  : {} \nalive  : {} \nFWHM"\
