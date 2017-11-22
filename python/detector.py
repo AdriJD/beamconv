@@ -223,10 +223,9 @@ class Beam(object):
         self.blm = blm
         self.btype = 'Gaussian'
 
-    def create_ghost(self, tag='ghost', ghost_idx=0,
-                     **kwargs):
+    def create_ghost(self, tag='ghost', **kwargs):
         '''
-        Append a ghost Beam object to the ghosts attribute.
+        Append a ghost Beam object to the `ghosts` attribute.
         This method will raise an error when called from a 
         ghost Beam object.
 
@@ -235,7 +234,7 @@ class Beam(object):
         tag : str
             Identifier string appended like <name>_<tag>
             where <name> is parent beam's name. If empty string,
-            or None, just use parent Beam name. (default : ghost)
+            or None, just use parent Beam name. (default : ghost)            
         kwargs : {beam_opts}
         
         Notes
@@ -259,6 +258,7 @@ class Beam(object):
         else:
             name = parent_name
 
+        # mostly default to parent kwargs
         ghost_opts = dict(az=self.az,
                            el=self.el,
                            polang=self.polang,
@@ -270,6 +270,7 @@ class Beam(object):
                            lmax=self.lmax,
                            mmax=self.mmax)
 
+        # update options with specified kwargs
         ghost_opts.update(kwargs)
         ghost_opts.update(dict(ghost=True))
         ghost = Beam(**ghost_opts)

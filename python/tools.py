@@ -293,6 +293,10 @@ def angle_gen(angles):
     ---------
     angles : array-like
         Array to be cycled through
+        
+    Yields
+    ------
+    angle : scalar
     '''
 
     n = 0

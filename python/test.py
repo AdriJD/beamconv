@@ -426,6 +426,175 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
         plt.savefig('../scratch/img/tods.png')
         plt.close()
 
+def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100, 
+                      fwhm=200, hwp_freq=25., pol_only=True):
+    '''
+    Script that scans LCDM realization of sky with a detector
+    on the boresight that has no main beam but a full-amplitude
+    ghost at the specified offset eam. The signal is then binned
+    using the boresight pointing and compared to a map made by
+    a symmetric Gaussian beam that has been rotated away from 
+    the boresight. Results should agree.
+
+    Keyword arguments
+    ---------
+
+    az_off : float, 
+        Azimuthal location of detector relative to boresight
+        (default : 0.)
+    el_off : float, 
+        Elevation location of detector relative to boresight
+        (default : 0.)
+    polang : float, 
+        Detector polarization angle in degrees (defined for
+        unrotated detector as offset from meridian) 
+        (default : 0)
+    lmax : int, 
+        Maximum multipole number, (default : 200)
+    fwhm : float, 
+        The beam FWHM used in this analysis in arcmin
+        (default : 100)
+    hwp_freq : float, 
+        HWP spin frequency (continuous mode) (default : 25.)
+    pol_only : bool, 
+        Set unpolarized sky signal to zero (default : True)
+    '''
+
+    # Load up alm and blm
+    ell, cls = get_cls()
+    np.random.seed(30)
+    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+
+    if pol_only:
+        alm = (alm[0]*0., alm[1], alm[2])
+
+    # init scan strategy and instrument
+    mlen = 240 # mission length
+    ss = ScanStrategy(mlen, # mission duration in sec.
+                      sample_rate=1, # sample rate in Hz
+                      location='spole') # South pole instrument
+
+    # create single detector on boresight
+    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True, 
+                          polang=polang, lmax=lmax, fwhm=fwhm)
+
+    beam = ss.beams[0][0]
+
+    # set main beam to zero
+    beam.amplitude = 0.
+
+    # create Gaussian beam (would be done by code anyway otherwise)
+    beam.gen_gaussian_blm()
+
+    #explicitely set offset to zero
+    beam.az = 0.
+    beam.el = 0.
+    beam.polang = 0.
+
+    # create full-amplitude ghost
+    beam.create_ghost(az=az_off, el=el_off, polang=polang, 
+                      amplitude=1.)
+    ghost = beam.ghosts[0]
+    ghost.gen_gaussian_blm()
+
+    # Start instrument rotated (just to make things complicated)
+    rot_period =  ss.mlen
+    ss.set_instr_rot(period=rot_period, start_ang=45)
+
+    # Set HWP rotation
+    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45, 
+                   angles=[34, 12, 67])
+
+    # calculate tod in one go (beam is symmetric so mmax=2 suffices)
+    chunks = ss.partition_mission()
+    ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
+                           max_spin=2, verbose=2)
+
+    # Store the tod and pixel indices made with ghost
+    tod_ghost = ss.tod.copy()
+    pix_ghost = ss.pix.copy()
+
+    # now repeat with asymmetric beam and no detector offset
+    # set offsets to zero such that tods are generated using
+    # only the boresight pointing.
+
+    beam.amplitude = 1.
+    beam.gen_gaussian_blm()
+
+    # Convert beam spin modes to E and B modes and rotate them
+    blm = beam.blm
+    blmI = blm[0].copy()
+    blmE, blmB = tools.spin2eb(blm[1], blm[2])
+
+    # Rotate blm to match centroid.
+    # Note that rotate_alm uses the ZYZ euler convention.
+    # Note that we include polang here as first rotation.
+    q_off = ss.det_offset(az_off, el_off, polang)
+    ra, dec, pa = ss.quat2radecpa(q_off)
+
+    # convert between healpy and math angle conventions
+    phi = np.radians(ra - 180)
+    theta = np.radians(90 - dec)
+    psi = np.radians(-pa)
+
+    # rotate blm
+    hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+
+    # convert beam coeff. back to spin representation.
+    blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+    beam.blm = (blmI, blmm2, blmp2)
+
+    # reset instr. rot and hwp modulation
+    ss.reset_instr_rot()
+    ss.reset_hwp_mod()
+
+    # kill ghost 
+    ghost.dead = True
+    # spinmaps will still be created, so make as painless as possible
+    ghost.lmax = 1
+    ghost.mmax = 0
+
+    ss.scan_instrument_mpi(alm, binning=False, nside_spin=512, verbose=2,
+                           max_spin=lmax) # now we use all spin modes
+
+    # Figure comparing the raw detector timelines for the two versions
+    # For subpixel offsets, the bottom plot shows you that sudden shifts
+    # in the differenced tods are due to the pointing for the symmetric
+    # case hitting a different pixel than the boresight pointing.
+    if ss.mpi_rank == 0:
+        plt.figure()
+        gs = gridspec.GridSpec(5, 9)
+        ax1 = plt.subplot(gs[:2, :6])
+        ax2 = plt.subplot(gs[2:4, :6])
+        ax3 = plt.subplot(gs[-1, :6])
+        ax4 = plt.subplot(gs[:, 6:])
+
+        samples = np.arange(tod_ghost.size)
+        ax1.plot(samples, ss.tod, label='Asymmetric Gaussian', linewidth=0.7)
+        ax1.plot(samples, tod_ghost, label='Ghost', linewidth=0.7,
+                 alpha=0.5)
+        ax1.legend()
+
+        ax1.tick_params(labelbottom='off')
+        sigdiff = ss.tod - tod_ghost
+        ax2.plot(samples, sigdiff, ls='None', marker='.', markersize=2.)
+        ax2.tick_params(labelbottom='off')
+        ax3.plot(samples, (pix_ghost - ss.pix).astype(bool).astype(int), 
+                 ls='None', marker='.', markersize=2.)
+        ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
+        ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
+        ax3.set_xlabel('Sample number')
+        ax3.set_ylabel('different pixel?')
+        ax3.set_ylim([-0.25,1.25])
+        ax3.set_yticks([0, 1])
+
+        ax4.hist(sigdiff, 128, label='Difference')
+        ax4.set_xlabel(r'Difference [$\mu K_{\mathrm{CMB}}$]')
+        ax4.tick_params(labelleft='off')
+
+        plt.savefig('../scratch/img/tods_ghost.png')
+        plt.close()
+
 def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
                hwp_mode=None):
@@ -610,4 +779,5 @@ if __name__ == '__main__':
 #    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
 #    scan_atacama(mmax=2, rot_period=60*60) 
 #    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
-    test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
+#    test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
