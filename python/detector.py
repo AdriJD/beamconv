@@ -12,7 +12,8 @@ class Beam(object):
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
         pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, 
-        dead=False, ghost=False, amplitude=1., bdict=None,
+        dead=False, ghost=False, amplitude=1., blm_file=None, cross_pol_file=None,
+        bdict=None,
         load_map=False):
         '''
 
@@ -57,54 +58,27 @@ class Beam(object):
             Not yet implemented
         '''
 
-        # you don't need to do this, a dictionary can just be used as **kwargs
+        self.az = az
+        self.el = el
+        self.polang = polang
+        self.name = name
+        self.pol = pol
+        self.btype = btype
+        self.dead = dead
+        self.amplitude = amplitude
 
-        if bdict:
-            # Loading from a dictionary
+        self.lmax = lmax           
+        self.mmax = mmax
+        self.fwhm = fwhm
 
-            self.az = bdict['az']
-            self.el = bdict['el']
-            self.polang = bdict['polang']
-            self.name = bdict['name']
-            self.pol = bdict['pol']
-            self.btype = bdict['type']
-            self.fwhm = bdict['fwhm']
-            self.dead = bdict['dead']
-
-            self.cr = bdict['cr']
-            self.numel = bdict['numel']
-            self.bmap_path = bdict['bmap_path']
-#            if load_map:
-#                self.bmap = bmap # FIX this
-
-            # You don't want to load this at init.
-            # Better to have to have to seperate files.
-            self.blm = bdict['blm']
-
-
-        else:
-            # Populating attributes from init call
-            self.az = az
-            self.el = el
-            self.polang = polang
-            self.name = name
-            self.pol = pol
-            self.btype = btype
-            self.dead = dead
-            self.amplitude = amplitude
-
-            self.lmax = lmax           
-            self.mmax = mmax
-            self.fwhm = fwhm
-
-            self.__ghost = ghost
-            # ghosts are not allowed to have ghosts
-            if not self.ghost:
-                self.__ghosts = []
-                self.ghost_count = 0
-            if self.ghost:
-                # if two ghosts share ghost_idx, they share blm
-                self.ghost_idx = 0
+        self.__ghost = ghost
+        # ghosts are not allowed to have ghosts
+        if not self.ghost:
+            self.__ghosts = []
+            self.ghost_count = 0
+        if self.ghost:
+            # if two ghosts share ghost_idx, they share blm
+            self.ghost_idx = 0
 
     @property
     def ghost(self):
@@ -222,8 +196,46 @@ class Beam(object):
             blm *= self.amplitude
         blm = tools.get_copol_blm(blm, c2_fwhm=self.fwhm)
 
-        self.blm = blm
         self.btype = 'Gaussian'
+        self.blm = blm
+
+    def load_blm(self, filename, cross_pol_file=None, **kwargs):
+        '''
+        Load a .npy file containing a blm array, 
+        and array to populate `blm` attribute.
+
+        Arguments
+        ---------
+        filename : str
+            Absolute or relative path to file
+
+        Keyword arguments
+        -----------------
+        cross_pol_file : str, None
+            Absolute or relative path to .npy file
+            containing the cross polarization blm
+            (default : None)
+        kwargs : {tools.get_copol_blm_opts}
+
+        Notes
+        -----
+        Loaded blm are automatically scaled by given the `amplitude` 
+        attribute.
+        '''
+        
+        if cross_pol_file is None:
+            # assume co-polarized beam
+            blm = np.load(filename)
+
+            if self.amplitude != 1:
+                # scale beam if needed
+                blm *= self.amplitude
+
+            # create spin \pm 2 components
+            self.blm = tools.get_copol_blm(blm, **kwargs)
+
+        else:
+            raise NotImplementedError("be patient")
 
     def create_ghost(self, tag='ghost', **kwargs):
         '''
@@ -283,7 +295,7 @@ class Beam(object):
 
         self.ghosts.append(ghost)
 
-    def reuse_beam(self, partner):
+    def reuse_blm(self, partner):
         '''
         Copy pointers to already initialized beam by
         another Beam instance. If both beams are 
@@ -305,6 +317,30 @@ class Beam(object):
         self.lmax = partner.lmax
         self.mmax = partner.mmax
         self.amplitude = partner.amplitude
+
+    def delete_blm(self, del_ghosts_blm=False):
+        '''
+        Remove the `blm` attribute of the object. Does the same
+        for ghosts, if specified.
+
+        Keyword arguments
+        -----------------
+        del_ghost_blm : bool
+            If True, also remove blm attributes of all ghosts
+        '''
+
+        try:
+            del(self.blm)
+        except AttributeError:
+            # no blm attribute to begin with
+            pass
+
+        if any(self.ghosts) and del_ghosts_blm:
+            for ghost in self.ghosts:
+                try:
+                    del(ghost.blm)
+                except AttributeError:
+                    pass
 
     def get_offsets(self):
         '''
@@ -328,28 +364,6 @@ class Beam(object):
         '''
         
         return self.az, self.el, self.polang
-
-    def load_eg_beams(self, bdir):
-        '''
-        Loads a collection of elliptical Gaussian beams from parameters stored
-        in a pickle file.
-        '''
-
-        pass
-
-
-    def generate_eg_beams(self, nrow=1, ncol=1, fov=10, fwhm0=43,
-        emin=0.01, emax=0.05):
-        '''
-        Creates a set of elliptical Gaussian beams based on the recipe provided
-        in arguments
-
-        Arguments
-        ---------
-
-        '''
-
-        pass
 
 class Detector():
     '''

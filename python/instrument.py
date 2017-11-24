@@ -75,6 +75,36 @@ class MPIBase(object):
             return
         self._comm.Barrier()            
         
+    def scatter_list(self, list_tot, root=0):
+        '''
+        Scatter python list from `root` even if
+        list is not evenly divisible among ranks.
+
+        Arguments
+        ---------
+        list_tot : array-like
+            List or array to be scattered (in 0-axis).
+            Not-None on rank specified by `root`.
+
+        Keyword arguments
+        -----------------
+        root : int
+            Root rank (default : 0)
+        '''
+
+        if not self.mpi:
+            return list_tot
+
+        if self.mpi_rank == root:
+            arr = np.asarray(list_tot)
+            arrs = np.array_split(arr, self.mpi_size)
+        else:
+            arrs = None
+        
+        self._comm.scatter(arrs, root=root)
+
+        return arrs.tolist()
+
     def broadcast_array(self, arr):
         '''
         Broadcast array from root process to all other ranks.
@@ -142,6 +172,43 @@ class MPIBase(object):
         self._comm.Reduce(arr_loc, arr, op=self._mpi_sum, root=0)
 
         return arr
+
+    def distribute_array(self, arr):
+        '''
+        If MPI is enabled, give every rank a proportionate 
+        view of the total array (or list).
+
+        Arguments
+        ---------
+        arr : array-like
+            Full-sized array present on every rank
+        
+        Returns
+        -------
+        arr_loc : array-like
+            View of array unique to every rank.
+        '''
+        
+        if self.mpi:
+
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = np.divmod(len(arr), self.mpi_size)
+            sub_size += quot
+
+            if remainder:
+                # give first ranks extra element
+                sub_size[:int(remainder)] += 1
+
+            start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            end = start + sub_size[self.mpi_rank]
+
+            arr_loc = arr[start:end]
+
+        else:
+            arr_loc = arr
+        
+        return arr_loc
+
 
 class Instrument(MPIBase):
     '''
@@ -224,8 +291,7 @@ class Instrument(MPIBase):
         self.els = yy.flatten()
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           from_files=False, no_pairs=False,
-                           **kwargs):
+                           no_pairs=False, **kwargs):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
@@ -240,8 +306,6 @@ class Instrument(MPIBase):
         fov : float, optional
             Angular size of side of square focal plane on
             sky in degrees (default: 10.)
-        from_files : bool, optional
-            Load beam properties from files (default: False)
         no_pairs : bool
             Do not create detector pairs, i.e. only create
             A detector and let B detector be dead
@@ -254,19 +318,19 @@ class Instrument(MPIBase):
 
         Any keywords accepted by the `Beam` class will be
         assumed to hold for all beams created, with the
-        exception of (`az`, `el`, `name`, `ghost`), which
-        are ignored. `polang` is used for A detectors, B
-        detectors get polang + 90.
+        exception of (`az`, `el`, `pol`, `name`, `ghost`),
+        which are ignored. `polang` is used for A-detectors,
+        B-detectors get polang + 90.
         '''
 
         # Ignore these kwargs and warn user
-        for key in ['az', 'el', 'name', 'ghost']:
+        for key in ['az', 'el', 'pol', 'name', 'ghost']:
             arg = kwargs.pop(key, None)
             if arg:
                 warn('{}={} option to `Beam.__init__()` is ignored'
                      .format(key, arg))
 
-        # polang and dead need to be dealt with seperately
+        # some kwargs need to be dealt with seperately
         polang = kwargs.pop('polang', 0.)
         dead = kwargs.pop('dead', False)
 
@@ -298,23 +362,114 @@ class Instrument(MPIBase):
         assert (len(beams) == self.ndet/2.), 'Wrong number of detectors!'
 
         # If MPI, distribute beams over ranks
-        if self.mpi:
+        self.beams = self.distribute_array(beams)
 
-            sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = np.divmod(len(beams), self.mpi_size)
-            sub_size += quot
+    def load_focal_plane(self, bdir, tag=None, **kwargs):
+        '''
+        Create focal plane by loading up a collection
+        of beam properties. 
 
-            if remainder:
-                # give first ranks extra beam pairs
-                sub_size[:int(remainder)] += 1
+        Arguments
+        ---------
+        bdir : str
+            The absolute or relative path to the directory
+            with .pkl files containing <detector.Beam> options
+            in a dictionary.
 
-            start = np.sum(sub_size[:self.mpi_rank], dtype=int)
-            end = start + sub_size[self.mpi_rank]
+        Keyword arguments
+        -----------------
+        tag : str, None
+            If set to string, only load files that contain <tag>
+            (default : None)
+        kwargs : {beam_opts}
 
-            self.beams = beams[start:end]
+        Notes
+        -----
+        Raises a RuntimeError if no files are found.
+
+        Loaded beams are assumed to be the A-detectors of 
+        A-B detector pairs. Since it is assumed that the 
+        B-detectors share the A-detectors' beams (up to a
+        90 deg shift in polang: B-polang is A-polang + 90),
+        the B-detectors are generated using the A-detectors'
+        properties.
+
+        Appends "_A" or "_B" to beam names if provided,
+        depending on polarization of detector.
+
+        If a `beams` attribute already exists, this method
+        will append the beams to that list.
+
+        Any keywords accepted by the `Beam` class will be
+        assumed to hold for all beams created. with the
+        exception of (`pol`, `ghost`), which are 
+        ignored. `polang` is used for A-detectors,
+        B-detectors get polang + 90.
+        '''
+
+        import glob
+        import pickle
+
+        # do all I/O on root
+        if self.mpi_rank == 0:
+
+            beams = []
+
+            # Ignore these kwargs and warn user
+            for key in ['pol', 'ghost']:
+                arg = kwargs.pop(key, None)
+                if arg:
+                    warn('{}={} option to `Beam.__init__()` is ignored'
+                         .format(key, arg))
+
+            opj = os.path.join
+            tag = '' if tag is None else tag
+
+            file_list = glob.glob(opj(bdir, '*'+tag+'*.pkl'))
+
+            if not file_list:
+                raise RuntimeError(
+                    'No files matching <*{}*.pkl> found in {}'.format(
+                                                             tag, bdir))
+            file_list.sort()
+
+            for bfile in file_list:
+
+                pkl_file = open(bfile, 'rb')
+                beam_opts = pickle.load(pkl_file)
+                pkl_file.close()
+
+                name_a = beam_opts.pop('name', None)
+                name_b = name_a
+
+                if name_a:
+                    name_a += '_A'
+                    name_b += '_B'
+
+                # overrule options with given kwargs
+                beam_opts.update(kwargs)
+
+                beam_opts.pop('pol', None)
+                polang = beam_opts.pop('polang', 0)
+
+                beam_a = Beam(name=name_a, polang=polang,
+                              pol='A', **beam_opts)
+                beam_b = Beam(name=name_b, polang=polang+90.,
+                              pol='B', **beam_opts)
+
+                beams.append([beam_a, beam_b])
 
         else:
+            beams = None
+
+        # if MPI scatter to ranks
+        beams = self.scatter_list(beams, root=0)
+
+        # check for existing beams
+        if not hasattr(self, 'beams'):
             self.beams = beams
+        else:
+            self.beams += beams
 
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 **kwargs):
@@ -394,30 +549,6 @@ class Instrument(MPIBase):
                 # if even kill A, else kill B
                 quot, rem = divmod(kidx, 2)
                 self.beams[quot][rem].dead = True
-
-    def load_beam_directory(bdir):
-        '''
-        Create or append a collection of beams to the 
-        beams attribute by loading beam properties from
-        files.
-
-        Arguments
-        ---------
-        bdir : str
-            The path to the directory containing beam maps
-        '''
-
-        # Add 
-
-        beams = []
-        file_list = sorted(glob.glob(bdir+'*.pkl'))
-
-        for filei in file_list:
-
-            bdata = pickle.load(open(filei, 'r'))
-            beams.append(Beam(bdict=bdata))
-
-        self.beams = beams
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -907,7 +1038,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                         else:
                             if not hasattr(ghost_a, 'blm'):
-                                ghost_a.reuse_beam(beam_a.ghosts[0])
+                                ghost_a.reuse_blm(beam_a.ghosts[0])
 
                 # This is a bit ugly at the moment
                 if beam_b.ghosts:
@@ -917,16 +1048,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
                         if gidx == 0:
                             if not hasattr(ghost_b, 'blm'):
-                                ghost_b.reuse_beam(beam_a.ghosts[0])
+                                ghost_b.reuse_blm(beam_a.ghosts[0])
                         else:
                             if not hasattr(ghost_b, 'blm'):
 
-                                beam_b.ghosts[gidx].reuse_beam(beam_a.ghosts[0])
+                                beam_b.ghosts[gidx].reuse_blm(beam_a.ghosts[0])
 
 
                 self.init_spinmaps(alm, beam_obj=beam_a, max_spin=max_spin,
                                   nside_spin=nside_spin, verbose=(verbose==2))
 
+                # free blm attributes
+                beam_a.delete_blm(del_ghosts_blm=True)
+                beam_b.delete_blm(del_ghosts_blm=True)
 
             for cidx, chunk in enumerate(self.chunks):
 
