@@ -57,6 +57,8 @@ class Beam(object):
             Not yet implemented
         '''
 
+        # you don't need to do this, a dictionary can just be used as **kwargs
+
         if bdict:
             # Loading from a dictionary
 

@@ -316,7 +316,7 @@ class Instrument(MPIBase):
         else:
             self.beams = beams
 
-    def create_reflected_ghosts(self, beams, ghost_tag='refl_ghost',
+    def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 **kwargs):
         '''
         Create reflected ghosts based on detector
@@ -324,14 +324,12 @@ class Instrument(MPIBase):
         Polarization angles stay the same.
         Ghosts are appended to `ghosts` attribute of beams.
 
-        Arguments
-        ---------
-        beams : Beam object, array-like
-            Single Beam object or array-like of Beam
-            objects.
-
         Keyword arguments
         -----------------
+        beams : Beam object, array-like
+            Single Beam object or array-like of Beam
+            objects. If None, use beams attribute.
+            (default : None)
         ghost_tag : str
             Tag to append to parents beam name, see
             `Beam.create_ghost()` (default : refl_ghost)
@@ -345,11 +343,10 @@ class Instrument(MPIBase):
         the `amplitude` keyword (see `Beam.__init__()`)
 
         `az` and `el` kwargs are ignored.
-
-        Returns
-        -------
-        ghost : Beam object
         '''
+
+        if not beams:
+            beams = self.beams
 
         # tag overrules ghost_tag
         kwargs.setdefault('tag', ghost_tag)
@@ -367,37 +364,50 @@ class Instrument(MPIBase):
                 kwargs.update(refl_ghost_opts)
                 beam.create_ghost(**kwargs)
 
-    def kill_channels(self, killfrac=0.2):
+    def kill_channels(self, killfrac=0.2, pairs=False):
         '''
         Randomly identifies detectors in the beams list and sets their 'dead'
         attribute to True.
 
-        Arguments
+        Keyword arguments
         ---------
 
         killfrac : 0 < float < 1  (default: 0.2)
-            The relative number of detectors to kill
-
+            The fraction of detectors to kill
+        pairs : bool
+            If True, kill pairs of detectors 
+            (default : False)
         '''
+        if pairs:
+            ndet = self.ndet / 2
+        else:
+            ndet = self.ndet
 
-        killidx = np.random.randint(0, self.ndet, np.floor(killfrac*self.ndet))
+        kill_indices = np.random.choice(ndet, int(ndet*killfrac), replace=False)
+            
+        for kidx in kill_indices:
 
-        for beam in self.beams[killidx]:
-            beam.dead = True
-
+            if pairs:                
+                self.beams[kidx][0].dead = True
+                self.beams[kidx][1].dead = True
+            else:
+                # if even kill A, else kill B
+                quot, rem = divmod(kidx, 2)
+                self.beams[quot][rem].dead = True
 
     def load_beam_directory(bdir):
         '''
-        Loads a collection of beam maps to use for a scanning simulation. The
-        beam maps should be stored as a collection of pickled dictionaries.
+        Create or append a collection of beams to the 
+        beams attribute by loading beam properties from
+        files.
 
         Arguments
         ---------
-
         bdir : str
             The path to the directory containing beam maps
-
         '''
+
+        # Add 
 
         beams = []
         file_list = sorted(glob.glob(bdir+'*.pkl'))
@@ -417,7 +427,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     _qp_version = (1, 10, 0)
 
-    def __init__(self, duration, ctime0=None, sample_rate=100,
+    def __init__(self, duration, ctime0=None, sample_rate=30,
                  **kwargs):
         '''
         Initialize scan parameters
@@ -430,14 +440,15 @@ class ScanStrategy(Instrument, qp.QMap):
         Keyword arguments
         -----------------
         ctime0 : float
-            Start time in unix time (default : None)
+            Start time in unix time. If None, use
+            current time. (default : None)
         sample_rate : float
-             Sample rate in Hz (default : 100)
+             Sample rate in Hz (default : 30)
         kwargs : {mpi_opts, instr_opts, qmap_opts}
         '''
 
         self.set_sample_rate(sample_rate)
-        self.set_ctime(ctime0)
+        self.ctime0 = ctime0
         self.set_mission_len(duration)
 
         self.rot_dict = {}
@@ -470,20 +481,16 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         self.__del__
 
-
-    def set_ctime(self, ctime0=None):
-        '''
-        Set starting time.
-
-        Keyword arguments
-        ---------
-        ctime0 : int, optional
-            Unix time in seconds. If None, use current time.
-        '''
-        if ctime0:
-            self.ctime0 = ctime0
+    @property
+    def ctime0(self):
+        return self.__ctime0
+    
+    @ctime0.setter
+    def ctime0(self, val):
+        if val:
+            self.__ctime0 = val
         else:
-            self.ctime0 = time.time()
+            self.__ctime0 = time.time()
 
     def set_sample_rate(self, sample_rate=None):
         '''
