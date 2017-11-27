@@ -59,6 +59,8 @@ class Beam(object):
         self.btype = btype
         self.dead = dead
         self.amplitude = amplitude
+        self.blm_file = blm_file
+        self.cross_pol_file = cross_pol_file
 
         self.lmax = lmax           
         self.mmax = mmax
@@ -216,16 +218,18 @@ class Beam(object):
         attribute.
         '''
         
-        # Default to the blm_file attribute
-        if filename is None:
-            if self.blm_file:
-                blm = np.load(self.blm_file)                        
-            else:
-                raise ValueError(
-                 "Neither `filename` nor `blm_file` attribute given")
-
         if cross_pol_file is None:
             # assume co-polarized beam
+
+            if filename is None:
+
+                # Default to the blm_file attribute
+                if isinstance(self.blm_file, basestring):
+                    filename = self.blm_file
+                else:
+                    raise ValueError(
+                        "Neither `filename` nor `blm_file` attribute given")
+                        
             blm = np.load(filename)
 
             if self.amplitude != 1:

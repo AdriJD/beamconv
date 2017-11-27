@@ -139,7 +139,6 @@ def get_copol_blm(blm, normalize=False, deconv_q=False,
         The spin \pm 2 harmonic coefficients of the
         co-polarized beam.
     '''
-
     # normalize beams and extract spin-m2 beams
     lmax = hp.Alm.getlmax(blm.size)
     lm = hp.Alm.getlm(lmax)
@@ -158,7 +157,10 @@ def get_copol_blm(blm, normalize=False, deconv_q=False,
         if m < lmax:
             end = getidx(lmax, m+1, m+1)
         else:
+            # we're in the very last element
             start = end
+            end += 1 # add one, otherwise you have empty array
+            assert end == hp.Alm.getsize(lmax)
         if m == 0:
             #+2 here because spin-2, so we can't have nonzero ell=1 bins
             blmm2[start+2:end] = np.conj(blm[2*lmax+1:3*lmax])

@@ -72,7 +72,29 @@ class TestTools(unittest.TestCase):
         self.assertEqual(n, alm_t.size)
 
         return
-    
+
+
+    def test_get_copol_blm(self):
+        '''
+        Test if converting the unpolarized beam to 
+        the copolarized expressions follows the expression in 
+        Hivon 2016.
+        '''
+        blm_in = np.array([1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 5],
+                          dtype=np.complex128)
+        
+        blm, blmm2, blmp2 = tools.get_copol_blm(blm_in, normalize=False,
+                                                deconv_q=False, c2_fwhm=None)
+
+        # derived using eq.24 in hivon 2016 (gamma=sigma=0)
+        blmm2_expd = np.array([0, 0, 3, 3, 3, 0, -2, -2, -2, 1, 1, 1, 2, 2, 3],
+                                  dtype=np.complex128)
+        blmp2_expd = np.array([0, 0, 3, 3, 3, 0, 0, 4, 4, 0, 0, 5, 0, 0, 0],
+                                  dtype=np.complex128)
+
+        np.testing.assert_array_almost_equal(blm_in, blm)
+        np.testing.assert_array_almost_equal(blmm2_expd, blmm2)
+        np.testing.assert_array_almost_equal(blmp2_expd, blmp2)
 
 if __name__ == '__main__':
     unittest.main()

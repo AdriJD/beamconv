@@ -19,13 +19,18 @@ in I, Q, and U to generate a signal timeline that can then be binned into a map.
 
 ### Example Usage
 
+See examples in `cmb_beams/test.py`
+
 ### Installation
 
-For example
 ```
-sudo setup.py install
+python setup.py install --user
+```
+run unittests:
+
+```
+python setup.py test
 ```
 
 ### Usage
 
-See examples in `python/test.py`
