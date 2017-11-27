@@ -199,11 +199,11 @@ class Beam(object):
 
         Arguments
         ---------
-        filename : str
-            Absolute or relative path to file
-
         Keyword arguments
         -----------------
+        filename : str
+            Absolute or relative path to file. If None,
+            try the `blm_file`.
         cross_pol_file : str, None
             Absolute or relative path to .npy file
             containing the cross polarization blm
@@ -217,6 +217,7 @@ class Beam(object):
         '''
         
         # this should try attributes blm_files etc to get files
+        # i.e. if filename is None, use the blm_file attribute
 
         if cross_pol_file is None:
             # assume co-polarized beam
@@ -331,7 +332,7 @@ class Beam(object):
             pass
 
         if any(self.ghosts) and del_ghosts_blm:
-            for ghost in self.ghosts:
+\            for ghost in self.ghosts:
                 try:
                     del(ghost.blm)
                 except AttributeError:
