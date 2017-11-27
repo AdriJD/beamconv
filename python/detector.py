@@ -11,10 +11,10 @@ class Beam(object):
     A class representing detector centroid and beam information
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-        pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, 
-        dead=False, ghost=False, amplitude=1., blm_file=None, cross_pol_file=None)
+         pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
+         dead=False, ghost=False, amplitude=1., blm_file=None,
+         cross_pol_file=None):
         '''
-
         Keyword arguments
         ---------
         az : float 
@@ -192,7 +192,7 @@ class Beam(object):
         self.btype = 'Gaussian'
         self.blm = blm
 
-    def load_blm(self, filename, cross_pol_file=None, **kwargs):
+    def load_blm(self, filename=None, cross_pol_file=None, **kwargs):
         '''
         Load a .npy file containing a blm array, 
         and use array to populate `blm` attribute.
@@ -203,7 +203,7 @@ class Beam(object):
         -----------------
         filename : str
             Absolute or relative path to file. If None,
-            try the `blm_file`.
+            default to the `blm_file` attribute. 
         cross_pol_file : str, None
             Absolute or relative path to .npy file
             containing the cross polarization blm
@@ -216,8 +216,13 @@ class Beam(object):
         attribute.
         '''
         
-        # this should try attributes blm_files etc to get files
-        # i.e. if filename is None, use the blm_file attribute
+        # Default to the blm_file attribute
+        if filename is None:
+            if self.blm_file:
+                blm = np.load(self.blm_file)                        
+            else:
+                raise ValueError(
+                 "Neither `filename` nor `blm_file` attribute given")
 
         if cross_pol_file is None:
             # assume co-polarized beam
@@ -332,7 +337,7 @@ class Beam(object):
             pass
 
         if any(self.ghosts) and del_ghosts_blm:
-\            for ghost in self.ghosts:
+            for ghost in self.ghosts:
                 try:
                     del(ghost.blm)
                 except AttributeError:
