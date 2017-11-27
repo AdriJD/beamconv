@@ -958,7 +958,8 @@ class ScanStrategy(Instrument, qp.QMap):
             Prints status reports (0 : nothing, 1: some,
             2: all) (defaul: 1)
         binning : bool, optional
-            If True, bin tods into vec and proj.
+            If True, bin tods into `vec` and `proj` 
+            attributes
         create_memmap : bool
             If True, store boresight quaternion (q_bore)
             in memory-mapped file on disk and read in

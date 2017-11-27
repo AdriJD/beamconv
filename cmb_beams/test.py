@@ -25,7 +25,7 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
- 
+
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
                hwp_mode=None):
@@ -739,7 +739,6 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.savefig('../scratch/img/cls_ghost.png')
         plt.close()
     
-
 def single_detector(nsamp=1000):
     '''
     Generates a timeline for a set of individual detectors scanning the sky. The
