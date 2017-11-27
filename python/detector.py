@@ -12,9 +12,7 @@ class Beam(object):
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
         pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, 
-        dead=False, ghost=False, amplitude=1., blm_file=None, cross_pol_file=None,
-        bdict=None,
-        load_map=False):
+        dead=False, ghost=False, amplitude=1., blm_file=None, cross_pol_file=None)
         '''
 
         Keyword arguments
@@ -51,11 +49,6 @@ class Beam(object):
             Total throughput of beam, i.e. integral of beam over the sphere. 
             ( \int d\omega B(\omega) Y_00(\omega) \equiv amplitude ). This
             means that b00 = amplitude / sqrt(4 pi) (default : 1.)
-        bdict : dict
-            Dictionary with kwargs. Will overwrite all other provided kwargs
-            (default : None)
-        load_map : bool
-            Not yet implemented
         '''
 
         self.az = az
@@ -202,7 +195,7 @@ class Beam(object):
     def load_blm(self, filename, cross_pol_file=None, **kwargs):
         '''
         Load a .npy file containing a blm array, 
-        and array to populate `blm` attribute.
+        and use array to populate `blm` attribute.
 
         Arguments
         ---------
@@ -223,6 +216,8 @@ class Beam(object):
         attribute.
         '''
         
+        # this should try attributes blm_files etc to get files
+
         if cross_pol_file is None:
             # assume co-polarized beam
             blm = np.load(filename)

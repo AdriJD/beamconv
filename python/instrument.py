@@ -854,11 +854,6 @@ class ScanStrategy(Instrument, qp.QMap):
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
         self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
-    def update_ctime(self, start=None, end=None):
-
-        pass
-
-
     def scan_fixed_point(self, ra0=-10, dec0=-57.5, verbose=True):
         '''
         Gets the az and el pointing timelines required to observe a fixed point

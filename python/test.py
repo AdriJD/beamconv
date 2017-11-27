@@ -79,7 +79,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
-    chunks = b2.partition_mission(0.5*b2.nsamp) 
+    b2.partition_mission(0.5*b2.nsamp) 
 
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps(nside=256)
@@ -208,7 +208,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
-    chunks = ac.partition_mission(0.5*ac.mlen*ac.fsamp) 
+    ac.partition_mission(0.5*ac.mlen*ac.fsamp) 
 
     # Allocate and assign parameters for mapmaking
     ac.allocate_maps(nside=256)
@@ -344,7 +344,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                    angles=[34, 12, 67])
 
     # calculate tod in one go (beam is symmetric so mmax=2 suffices)
-    chunks = ss.partition_mission()
+    ss.partition_mission()
     ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
                            max_spin=2)
 
@@ -506,7 +506,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
                    angles=[34, 12, 67])
 
     # calculate tod in one go (beam is symmetric so mmax=2 suffices)
-    chunks = ss.partition_mission()
+    ss.partition_mission()
     ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
                            max_spin=2, verbose=2)
 
@@ -662,7 +662,7 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                                fwhm=100, ghost_tag='ghost_2', dead=False)
 
     # calculate tods in two chunks
-    chunks = b2.partition_mission(0.5*b2.nsamp) 
+    b2.partition_mission(0.5*b2.nsamp) 
 
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps(nside=256)
