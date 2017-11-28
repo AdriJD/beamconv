@@ -360,6 +360,8 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     ss.beams[0][0].polang = 0
 
     # Convert beam spin modes to E and B modes and rotate them
+    # create blm again, scan_instrument_mpi detetes blms when done
+    ss.beams[0][0].gen_gaussian_blm() 
     blm = ss.beams[0][0].blm
     blmI = blm[0].copy()
     blmE, blmB = tools.spin2eb(blm[1], blm[2])
@@ -775,8 +777,8 @@ def single_detector(nsamp=1000):
     #### FINISH THIS ####
 
 if __name__ == '__main__':
-    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+#    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
 #    scan_atacama(mmax=2, rot_period=60*60) 
 #    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
-#    offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
+    offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
 #    test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
