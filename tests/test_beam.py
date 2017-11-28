@@ -6,19 +6,18 @@ import os
 import pickle
 
 opj = os.path.join
-test_fpu_dir = os.path.abspath(opj(os.path.dirname(__file__),
-                                    'test_data', 'test_fpu'))
+test_data_dir = os.path.abspath(opj(os.path.dirname(__file__),
+                                    'test_data'))
 
 class TestTools(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         '''
-        Create .pkl file with beam options and .npy blm 
-        array
+        Create a .npy blm array
         '''
         
-        blm_name = opj(test_fpu_dir, 'blm_test.npy')
+        blm_name = opj(test_data_dir, 'blm_test.npy')
         cls.blm_name = blm_name
 
         beam_opts = dict(az=10,
@@ -29,9 +28,6 @@ class TestTools(unittest.TestCase):
                          blm_file=blm_name)
 
         cls.beam_opts = beam_opts
-#        # Store options as pickle file
-#        with open(opj(test_fpu_dir, 'beam_opts'), 'wb') as handle:
-#            pickle.dump(beam_opts, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         # Store blm array
         cls.lmax = 3
@@ -54,7 +50,7 @@ class TestTools(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         '''
-        Remove the files again
+        Remove the file again
         '''
 
         os.remove(cls.blm_name)

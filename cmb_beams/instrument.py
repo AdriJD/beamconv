@@ -316,6 +316,9 @@ class Instrument(MPIBase):
         -----
         "B"-detector's polarization angle is A's angle + 90.
 
+        If a `beams` attribute already exists, this method
+        will append the beams to that list.
+
         Any keywords accepted by the `Beam` class will be
         assumed to hold for all beams created, with the
         exception of (`az`, `el`, `pol`, `name`, `ghost`),
@@ -334,9 +337,10 @@ class Instrument(MPIBase):
         polang = kwargs.pop('polang', 0.)
         dead = kwargs.pop('dead', False)
 
-        self.nrow = nrow
-        self.ncol = ncol
-        self.ndet = 2 * nrow * ncol # A and B detectors
+        if not hasattr(self, 'ndet'):
+            self.ndet = 2 * nrow * ncol # A and B detectors
+        else:
+            self.ndet += 2 * nrow * ncol # A and B detectors
 
         azs = np.linspace(-fov/2., fov/2., ncol)
         els = np.linspace(-fov/2., fov/2., nrow)
@@ -359,10 +363,14 @@ class Instrument(MPIBase):
 
                 beams.append([beam_a, beam_b])
 
-        assert (len(beams) == self.ndet/2.), 'Wrong number of detectors!'
-
         # If MPI, distribute beams over ranks
-        self.beams = self.distribute_array(beams)
+        beams = self.distribute_array(beams)
+
+        # check for existing beams
+        if not hasattr(self, 'beams'):
+            self.beams = beams
+        else:
+            self.beams += beams
 
     def load_focal_plane(self, bdir, tag=None, **kwargs):
         '''
@@ -394,7 +402,7 @@ class Instrument(MPIBase):
         the B-detectors are generated using the A-detectors'
         properties.
 
-        Appends "_A" or "_B" to beam names if provided,
+        Appends "A" or "B" to beam names if provided,
         depending on polarization of detector.
 
         If a `beams` attribute already exists, this method
@@ -443,8 +451,8 @@ class Instrument(MPIBase):
                 name_b = name_a
 
                 if name_a:
-                    name_a += '_A'
-                    name_b += '_B'
+                    name_a += 'A'
+                    name_b += 'B'
 
                 # overrule options with given kwargs
                 beam_opts.update(kwargs)
@@ -878,8 +886,6 @@ class ScanStrategy(Instrument, qp.QMap):
             az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
                 self.lon, self.lat, ctime[::check_len])
 
-
-
     def scan_instrument(self, verbose=True, mapmaking=True,
                         **kwargs):
         '''
@@ -899,8 +905,8 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         if verbose:
-            print('  Scanning with {:d} x {:d} grid of detectors'.format(
-                self.nrow, self.ncol))
+            print('  Scanning with {:d} detectors'.format(
+                self.ndet))
 
         for cidx, chunk in enumerate(self.chunks):
 
@@ -976,8 +982,8 @@ class ScanStrategy(Instrument, qp.QMap):
         nside_spin = kwargs.pop('nside_spin', 256)
 
         if verbose and self.mpi_rank == 0:
-            print('Scanning with {:d} x {:d} grid of detectors'.format(
-                self.nrow, self.ncol))
+            print('Scanning with {:d} detectors'.format(
+                self.ndet))
             sys.stdout.flush()
         self.barrier() # just to have summary print statement on top
 
@@ -1233,7 +1239,6 @@ class ScanStrategy(Instrument, qp.QMap):
 #            el = el0 + el_step * np.ones_like(az)
 #        else:
 #            el = el0 * np.ones_like(az)
-
 
         # Transform from instrument frame to celestial, i.e. az, el -> ra, dec
         if self.mpi:
