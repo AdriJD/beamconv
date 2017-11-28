@@ -49,6 +49,14 @@ class Beam(object):
             Total throughput of beam, i.e. integral of beam over the sphere. 
             ( \int d\omega B(\omega) Y_00(\omega) \equiv amplitude ). This
             means that b00 = amplitude / sqrt(4 pi) (default : 1.)
+        blm_file : str, None
+            Absolute or relative path to .npy file with blm array for the
+            unpolarized bean (default : None)
+        cross_pol_file : str, None
+            Absolute or relative path to .npy file
+            containing the cross polarization blm
+            (default : None)
+
         '''
 
         self.az = az
@@ -349,14 +357,7 @@ class Beam(object):
 
     def get_offsets(self):
         '''
-        Return (unrotated) detector offsets. Detector offsets are defined
-        as the sequence Rz(polang), Ry(el), Rx(az). Rz is defined 
-        as the rotation around the boresight by angle `polang`
-        which is measured relative to the southern side of 
-        the local meridian in a clockwise manner when looking 
-        towards the sky (Rh rot.), (i.e. the `Healpix convention`). 
-        Followed by Ry and Rx, which are rotations in elevation 
-        and azimuth with respect to the local horizon and meridian.
+        Return (unrotated) detector offsets. 
         
         Returns
         -------
@@ -366,6 +367,17 @@ class Beam(object):
             Elevation of offset in degrees
         polang : float 
             Polarization angle in degrees
+
+        Notes
+        -----
+        Detector offsets are defined
+        as the sequence Rz(polang), Ry(el), Rx(az). Rz is defined 
+        as the rotation around the boresight by angle `polang`
+        which is measured relative to the southern side of 
+        the local meridian in a clockwise manner when looking 
+        towards the sky (Rh rot.), (i.e. the `Healpix convention`). 
+        Followed by Ry and Rx, which are rotations in elevation 
+        and azimuth with respect to the local horizon and meridian.
         '''
         
         return self.az, self.el, self.polang
