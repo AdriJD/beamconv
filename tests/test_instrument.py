@@ -164,3 +164,6 @@ class TestTools(unittest.TestCase):
                 self.assertEqual(pair[1].dead, False)
 
         self.assertEqual(dead_count, instr_2.ndet / 2.)
+
+if __name__ == '__main__':
+    unittest.main()

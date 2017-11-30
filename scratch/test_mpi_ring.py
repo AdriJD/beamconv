@@ -24,3 +24,13 @@ comm.Sendrecv_replace(data, dest=np.mod(rank+1, size), source=np.mod(rank-1, siz
 
 expected = np.ones((10, 12*nside**2), np.complex128) * np.mod(rank - 1, size)
 np.testing.assert_array_almost_equal(data, expected)
+
+print 'done'
+
+# now try to sendrecv some python objects
+data_obj = dict(rank=rank)
+#recv_obj = None
+
+#recv_obj = comm.sendrecv(sendobj=data_obj, dest=np.mod(rank+1, size), recvobj=recv_obj, source=np.mod(rank-1, size))
+recv_obj = comm.sendrecv(sendobj=data_obj, dest=np.mod(rank+1, size), source=np.mod(rank-1, size))
+assert recv_obj['rank'] == np.mod(rank-1, size)

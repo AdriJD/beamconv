@@ -75,7 +75,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                       location='spole') # Instrument at south pole 
 
     # Create a 3 x 3 square grid of Gaussian beams
-    b2.create_focal_plane(nrow=3, ncol=3, fov=5, 
+    b2.create_focal_plane(nrow=3, ncol=3, fov=10, 
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
@@ -87,11 +87,15 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     # set instrument rotation
     b2.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
 
+    # Set elevation stepping
+    b2.set_el_steps(rot_period, steps=[0, 2, 4, 6, 8, 10])
+
     # Set HWP rotation
     if hwp_mode == 'continuous':
         b2.set_hwp_mod(mode='continuous', freq=1.)
     elif hwp_mode == 'stepped':
         b2.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
+
 
     # Generate timestreams, bin them and store as attributes
     b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
@@ -223,7 +227,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         ac.set_hwp_mod(mode='stepped', freq=1/(3*60*60.))
 
     # Generate timestreams, bin them and store as attributes
-    ac.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
+    ac.scan_instrument_mpi(alm, verbose=2, ra0=ra0,
                            dec0=dec0, az_throw=az_throw, 
                            nside_spin=256,
                            el_min=45, create_memmap=True)
