@@ -798,11 +798,10 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
 
     plt.close()
 
-
 if __name__ == '__main__':
-#    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-#    scan_atacama(mmax=2, rot_period=60*60) 
-#    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
-#    offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
-#    test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    # scan_atacama(mmax=2, rot_period=60*60) 
+    # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
+    # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
+    # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     single_detector()

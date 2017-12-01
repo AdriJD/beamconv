@@ -209,7 +209,6 @@ class MPIBase(object):
 
         return arr_loc
 
-
 class Instrument(MPIBase):
     '''
     Initialize a (ground-based) telescope and specify its properties.
@@ -341,7 +340,7 @@ class Instrument(MPIBase):
         polang = kwargs.pop('polang', 0.)
         dead = kwargs.pop('dead', False)
 
-        if not hasattr(self, 'ndet'):
+        if not hasattr(self, 'ndet') or not combine:
             self.ndet = 2 * nrow * ncol # A and B detectors
         else:
             self.ndet += 2 * nrow * ncol # A and B detectors
@@ -898,7 +897,6 @@ class ScanStrategy(Instrument, qp.QMap):
             subchunks.append(dict(start=start, end=chunk['end']))
             self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - start)
             return subchunks
-
 
     def allocate_maps(self, nside=256):
         '''
@@ -1460,7 +1458,6 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
             self.hwp_ang = hwp_ang
 
-
     def scan(self, beam_obj, add_to_tod=False, **kwargs):
 
         '''
@@ -1835,7 +1832,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # add local maps to global maps
             self.vec += self.depo['vec']
             self.proj += self.depo['proj']
-
 
     def solve_for_map(self, fill=hp.UNSEEN, return_proj=False):
         '''
