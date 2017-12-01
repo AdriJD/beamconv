@@ -105,6 +105,28 @@ class MPIBase(object):
 
         return arrs.tolist()
 
+    def broadcast(self, obj):
+        '''
+        Broadcast a python object that is non-None on root
+        to all other ranks. Can be None on other ranks, but
+        should exist in scope.
+
+        Arguments
+        ---------
+        obj : object
+            
+        Returns
+        -------
+        bcast_obj : object
+            Input obj, but now on all ranks
+        '''
+
+        if not self.mpi:
+            return obj
+        
+        obj = self._comm.bcast(obj, root=0)
+        return obj
+
     def broadcast_array(self, arr):
         '''
         Broadcast array from root process to all other ranks.
@@ -375,7 +397,8 @@ class Instrument(MPIBase):
         else:
             self.beams += beams
 
-    def load_focal_plane(self, bdir, tag=None, **kwargs):
+    def load_focal_plane(self, bdir, tag=None, no_pairs=False, 
+                         combine=True, **kwargs):
         '''
         Create focal plane by loading up a collection
         of beam properties.
@@ -392,6 +415,14 @@ class Instrument(MPIBase):
         tag : str, None
             If set to string, only load files that contain <tag>
             (default : None)
+        no_pairs : bool
+            Do not create detector pairs, i.e. only create
+            A detector and let B detector be dead
+            (default : False)
+        combine : bool
+            If some beams already exist, combine these new 
+            beams with them
+            (default : True)
         kwargs : {beam_opts}
 
         Notes
@@ -407,9 +438,6 @@ class Instrument(MPIBase):
 
         Appends "A" or "B" to beam names if provided,
         depending on polarization of detector.
-
-        If a `beams` attribute already exists, this method
-        will append the beams to that list.
 
         Any keywords accepted by the `Beam` class will be
         assumed to hold for all beams created. with the
@@ -432,6 +460,9 @@ class Instrument(MPIBase):
                 if arg:
                     warn('{}={} option to `Beam.__init__()` is ignored'
                          .format(key, arg))
+
+            # handled seperately in case of no_pairs
+            dead = kwargs.pop('dead', False)
 
             opj = os.path.join
             tag = '' if tag is None else tag
@@ -464,23 +495,31 @@ class Instrument(MPIBase):
                 polang = beam_opts.pop('polang', 0)
 
                 beam_a = Beam(name=name_a, polang=polang,
-                              pol='A', **beam_opts)
+                              pol='A', dead=dead, **beam_opts)
                 beam_b = Beam(name=name_b, polang=polang+90.,
+                              dead=dead or no_pairs, 
                               pol='B', **beam_opts)
 
                 beams.append([beam_a, beam_b])
 
+            ndet = len(beams) * 2
         else:
             beams = None
+            ndet = None
 
         # if MPI scatter to ranks
         beams = self.scatter_list(beams, root=0)
 
+        # all ranks need to know total number of detectors
+        ndet = self.broadcast(ndet)
+
         # check for existing beams
-        if not hasattr(self, 'beams'):
+        if not hasattr(self, 'beams') or not combine:
             self.beams = beams
+            self.ndet = ndet
         else:
             self.beams += beams
+            self.ndet += ndet
 
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 **kwargs):
@@ -1077,9 +1116,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # Create Gaussian blms if beams don't have any
             if beam_a:
 
-                if not hasattr(beam_a, 'blm'):
-                    beam_a.gen_gaussian_blm()
-
                 # We give the ghosts identical Gaussian beams
                 if beam_a.ghosts:
 
@@ -1115,6 +1151,10 @@ class ScanStrategy(Instrument, qp.QMap):
                 # free blm attributes
                 beam_a.delete_blm(del_ghosts_blm=True)
                 beam_b.delete_blm(del_ghosts_blm=True)
+
+            if not hasattr(self, 'chunks'):
+                # assume no chunking is needed and use full mission
+                self.partition_mission()
 
             for cidx, chunk in enumerate(self.chunks):
 
@@ -1525,8 +1565,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
-
-        # whats happening here again??
         # normal chunk len (a full computation chunk)
         nrml_len = self.chunks[0]['end'] - self.chunks[0]['start'] + 1
         if len(self.chunks) > 1:

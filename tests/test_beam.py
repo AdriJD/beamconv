@@ -25,7 +25,7 @@ class TestTools(unittest.TestCase):
                          polang=90.,
                          btype='PO',
                          amplitude=0.5,
-                         blm_file=blm_name)
+                         po_file=blm_name)
 
         cls.beam_opts = beam_opts
 
@@ -61,7 +61,6 @@ class TestTools(unittest.TestCase):
         '''
         
         beam = detector.Beam(**self.beam_opts)
-        beam.load_blm()
         
         # test if unpolarized beam is loaded and scaled
         np.testing.assert_array_almost_equal(beam.blm[0],

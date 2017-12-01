@@ -746,7 +746,7 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.close()
     
 def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
-    az_throw=50, scan_speed=2.8, rot_period=4.5*60*60, mmax=4):
+    az_throw=50, scan_speed=2.8, rot_period=4.5*60*60, mmax=5, nside_spin=512):
     '''
     Generates a timeline for a set of individual detectors scanning the sky. The
     spatial response of these detectors is described by a 1) Gaussian, 2) an
@@ -760,41 +760,86 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
 
     '''
 
-    # Load up alm and blm
+    # Load up alm
     ell, cls = get_cls()
-
+    np.random.seed(39)
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
-    blm = tools.gauss_blm(fwhm, lmax, pol=False)
-    blm = tools.get_copol_blm(blm.copy())
+    # create Beam properties and pickle (this is just to test load_focal_plane)
+    import tempfile
+    import shutil
+    import pickle
+    opj = os.path.join
+
+    blm_dir = os.path.abspath(opj(os.path.dirname(__file__),
+                                       '../tests/test_data/example_blms'))
+    po_file = opj(blm_dir, 'blm_hp_X1T1R1C8A_800_800.npy')
+    eg_file = opj(blm_dir, 'blm_hp_eg_X1T1R1C8A_800_800.npy')
+
+    tmp_dir = tempfile.mkdtemp()
+    
+    beam_file = opj(tmp_dir, 'beam_opts.pkl')
+    beam_opts = dict(az=0,
+                     el=0,
+                     polang=0.,
+                     btype='Gaussian',
+                     name='X1T1R1C8', 
+                     fwhm=32.2, 
+                     lmax=800,
+                     mmax=800, 
+                     amplitude=1.,
+                     po_file=po_file,
+                     eg_file=eg_file)
+
+
+    with open(beam_file, 'wb') as handle:
+        pickle.dump(beam_opts, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # init scan strategy and instrument
     ss = ScanStrategy(nsamp/10., # mission duration in sec.
                       sample_rate=10, # 10 Hz sample rate
                       location='spole') # South pole instrument
 
-    ss.partition_mission(nsamp) 
+    ss.load_focal_plane(tmp_dir, no_pairs=True)
 
-    ss.create_focal_plane(nrow=1, ncol=1, fov=5, lmax=lmax, fwhm=fwhm,
-        no_pairs=True)
+    # remove tmp dir and contents
+    shutil.rmtree(tmp_dir)
 
-    # Allocate and assign parameters for mapmaking
-    ss.allocate_maps(nside=256)
+    # init plot
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 
-    # Generate timestreams, bin them and store as attributes
+    # Generate timestreams with Gaussian beams and plot them
     ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
-                           nside_spin=256, max_spin=mmax)
-    plt.plot(ss.tod)
+                           nside_spin=nside_spin, max_spin=mmax, binning=False)
+    ax1.plot(ss.tod, label='sym. Gaussian', linewidth=0.7)
 
-    ss.create_focal_plane(nrow=1, ncol=1, fov=5, lmax=lmax, fwhm=fwhm+3,
-        combine=False, no_pairs=True)
+    gauss_tod = ss.tod.copy()
+
+    # Generate timestreams with elliptical Gaussian beams and plot them
+    ss.beams[0][0].btype = 'EG'
     ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
-                           nside_spin=256, max_spin=mmax)
-    plt.plot(ss.tod)
-    
-    plt.ylabel('Signal [uK]')
-    plt.xlabel('Sample number')
-    plt.savefig('../scratch/img/sdet_tod.png')
+                           nside_spin=nside_spin, max_spin=mmax, binning=False)
+    ax1.plot(ss.tod, label='ell. Gaussian', linewidth=0.7)
+
+    eg_tod = ss.tod.copy()
+
+    # Generate timestreams with Physical Optics beams and plot them
+    ss.beams[0][0].btype = 'PO'
+    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+                           nside_spin=nside_spin, max_spin=mmax, binning=False)
+    ax1.plot(ss.tod, label='PO', linewidth=0.7)
+
+    po_tod = ss.tod.copy()
+
+    ax2.plot(eg_tod - gauss_tod, label='EG - G', linewidth=0.7)
+    ax2.plot(po_tod - gauss_tod, label='PO - G', linewidth=0.7)
+
+    ax1.legend()
+    ax2.legend()
+    ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
+    ax2.set_ylabel(r'Difference [$\mu K_{\mathrm{CMB}}$]')
+    ax2.set_xlabel('Sample number')
+    fig.savefig('../scratch/img/sdet_tod.png')
 
     plt.close()
 

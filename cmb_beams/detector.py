@@ -12,8 +12,8 @@ class Beam(object):
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
          pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
-         dead=False, ghost=False, amplitude=1., blm_file=None,
-         cross_pol_file=None):
+         dead=False, ghost=False, amplitude=1., po_file=None, 
+         eg_file=None, cross_pol_file=None):
         '''
         Keyword arguments
         ---------
@@ -49,14 +49,16 @@ class Beam(object):
             Total throughput of beam, i.e. integral of beam over the sphere. 
             ( \int d\omega B(\omega) Y_00(\omega) \equiv amplitude ). This
             means that b00 = amplitude / sqrt(4 pi) (default : 1.)
-        blm_file : str, None
+        po_file : str, None
             Absolute or relative path to .npy file with blm array for the
-            unpolarized bean (default : None)
+            (unpolarized) Physical Optics beam (default : None)
+        eg_file : str, None
+            Absolute or relative path to .npy file with blm array for the
+            (unpolarized) Elliptical Gaussian beam (default : None)
         cross_pol_file : str, None
             Absolute or relative path to .npy file
             containing the cross polarization blm
             (default : None)
-
         '''
 
         self.az = az
@@ -67,7 +69,8 @@ class Beam(object):
         self.btype = btype
         self.dead = dead
         self.amplitude = amplitude
-        self.blm_file = blm_file
+        self.po_file = po_file
+        self.eg_file = eg_file
         self.cross_pol_file = cross_pol_file
 
         self.lmax = lmax           
@@ -173,7 +176,50 @@ class Beam(object):
         '''
         self.__mmax = min(i for i in [mmax, self.lmax] \
                               if i is not None)
-       
+
+    @property
+    def blm(self):
+        '''
+        Get blm arrays by either creating them or 
+        loading them (depending on `btype` attr.
+
+        Notes
+        -----
+        If blm attribute is already initialized and 
+        btype is changes, blm will not be updated,
+        first delete blm attribute in that case.
+        '''
+        try:
+            return self.__blm
+        except AttributeError:
+
+            if self.btype == 'Gaussian':
+                self.gen_gaussian_blm()
+                return self.__blm
+
+            else:
+                # NOTE, you do not propagate c2, deconv_q, normalize
+                # options, you can make them attributes in __init??
+
+                if self.btype == 'PO':
+                    self.load_blm(self.po_file, deconv_q=True, normalize=True)
+                    return self.__blm
+
+                elif self.btype == 'EG':
+                    self.load_blm(self.eg_file, deconv_q=True, normalize=True)
+                    return self.__blm
+
+                else:
+                    raise ValueError("btype = {} not recognized".format(self.btype))
+
+    @blm.setter
+    def blm(self, val):
+        self.__blm = val
+
+    @blm.deleter
+    def blm(self):
+        del self.__blm
+
     def __str__(self):
 
         return "name   : {} \nbtype  : {} \nalive  : {} \nFWHM"\
@@ -202,18 +248,18 @@ class Beam(object):
         self.btype = 'Gaussian'
         self.blm = blm
 
-    def load_blm(self, filename=None, cross_pol_file=None, **kwargs):
+    def load_blm(self, filename, cross_pol_file=None, **kwargs):
         '''
         Load a .npy file containing a blm array, 
         and use array to populate `blm` attribute.
 
         Arguments
         ---------
+        filename : str
+            Absolute or relative path to file
+
         Keyword arguments
         -----------------
-        filename : str
-            Absolute or relative path to file. If None,
-            default to the `blm_file` attribute. 
         cross_pol_file : str, None
             Absolute or relative path to .npy file
             containing the cross polarization blm
@@ -229,14 +275,14 @@ class Beam(object):
         if cross_pol_file is None:
             # assume co-polarized beam
 
-            if filename is None:
+#            if filename is None:
 
                 # Default to the blm_file attribute
-                if isinstance(self.blm_file, basestring):
-                    filename = self.blm_file
-                else:
-                    raise ValueError(
-                        "Neither `filename` nor `blm_file` attribute given")
+#                if btype == 'PO' and isinstance(self.po_file, basestring):
+#                    filename = self.self.po_file
+#                else:
+#                    raise ValueError(
+#                        "Neither `filename` nor `blm_file` attribute given")
                         
             blm = np.load(filename)
 

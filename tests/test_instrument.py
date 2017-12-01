@@ -29,7 +29,7 @@ class TestTools(unittest.TestCase):
                          polang=90.,
                          btype='PO',
                          amplitude=0.5,
-                         blm_file=blm_name,
+                         po_file=blm_name,
                          name='aap',
                          pol='B', # ign
                          ghost=False)
@@ -81,7 +81,7 @@ class TestTools(unittest.TestCase):
             self.assertEqual(pair[0].polang, self.beam_opts['polang'])
             self.assertEqual(pair[0].btype, self.beam_opts['btype'])
             self.assertEqual(pair[0].amplitude, self.beam_opts['amplitude'])
-            self.assertEqual(pair[0].blm_file, self.beam_opts['blm_file'])
+            self.assertEqual(pair[0].po_file, self.beam_opts['po_file'])
             self.assertEqual(pair[0].name, self.beam_opts['name']+'A')
             self.assertEqual(pair[0].pol, 'A')
             self.assertEqual(pair[0].ghost, False)
@@ -91,7 +91,7 @@ class TestTools(unittest.TestCase):
             self.assertEqual(pair[1].polang, self.beam_opts['polang']+90)
             self.assertEqual(pair[1].btype, self.beam_opts['btype'])
             self.assertEqual(pair[1].amplitude, self.beam_opts['amplitude'])
-            self.assertEqual(pair[1].blm_file, self.beam_opts['blm_file'])
+            self.assertEqual(pair[1].po_file, self.beam_opts['po_file'])
             self.assertEqual(pair[1].name, self.beam_opts['name']+'B')
             self.assertEqual(pair[1].pol, 'B')
             self.assertEqual(pair[1].ghost, False)
