@@ -1405,7 +1405,8 @@ class ScanStrategy(Instrument, qp.QMap):
             if self.mpi_rank == 0:
                 self.mmap[start:end+1] = self.q_bore
             # wait for I/O
-            self._comm.barrier()
+            if self.mpi:
+                self._comm.barrier()
 
     def rotate_hwp(self, **kwargs):
         '''
