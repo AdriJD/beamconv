@@ -291,7 +291,7 @@ class Instrument(MPIBase):
         self.els = yy.flatten()
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           no_pairs=False, **kwargs):
+                           no_pairs=False, combine=True, **kwargs):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
@@ -310,6 +310,10 @@ class Instrument(MPIBase):
             Do not create detector pairs, i.e. only create
             A detector and let B detector be dead
             (default : False)
+        combine : bool
+            If some beams already exist, combine these new 
+            beams with them
+            (default : True)
         kwargs : {beam_opts}
 
         Notes
@@ -367,7 +371,7 @@ class Instrument(MPIBase):
         beams = self.distribute_array(beams)
 
         # check for existing beams
-        if not hasattr(self, 'beams'):
+        if not hasattr(self, 'beams') or not combine:
             self.beams = beams
         else:
             self.beams += beams
@@ -1030,8 +1034,9 @@ class ScanStrategy(Instrument, qp.QMap):
         nside_spin = kwargs.pop('nside_spin', 256)
 
         if verbose and self.mpi_rank == 0:
-            print('Scanning with {:d} detectors'.format(
-                self.ndet))
+            print('Scanning with {:d} detectors and {:d} beam(s)'.format(
+                self.ndet, len(self.beams)))
+            
             sys.stdout.flush()
         self.barrier() # just to have summary print statement on top
 

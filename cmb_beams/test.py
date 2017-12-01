@@ -745,7 +745,8 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.savefig('../scratch/img/cls_ghost.png')
         plt.close()
     
-def single_detector(nsamp=1000):
+def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
+    az_throw=50, scan_speed=2.8, rot_period=4.5*60*60, mmax=4):
     '''
     Generates a timeline for a set of individual detectors scanning the sky. The
     spatial response of these detectors is described by a 1) Gaussian, 2) an
@@ -760,8 +761,8 @@ def single_detector(nsamp=1000):
     '''
 
     # Load up alm and blm
-    cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt', unpack=True) # Cl in uK^2
-    ell, cls = cls[0], cls[1:]
+    ell, cls = get_cls()
+
     alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
 
     blm = tools.gauss_blm(fwhm, lmax, pol=False)
@@ -772,17 +773,36 @@ def single_detector(nsamp=1000):
                       sample_rate=10, # 10 Hz sample rate
                       location='spole') # South pole instrument
 
+    ss.partition_mission(nsamp) 
+
+    ss.create_focal_plane(nrow=1, ncol=1, fov=5, lmax=lmax, fwhm=fwhm,
+        no_pairs=True)
+
+    # Allocate and assign parameters for mapmaking
+    ss.allocate_maps(nside=256)
+
+    # Generate timestreams, bin them and store as attributes
+    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+                           nside_spin=256, max_spin=mmax)
+    plt.plot(ss.tod)
+
+    ss.create_focal_plane(nrow=1, ncol=1, fov=5, lmax=lmax, fwhm=fwhm+3,
+        combine=False, no_pairs=True)
+    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+                           nside_spin=256, max_spin=mmax)
+    plt.plot(ss.tod)
     
+    plt.ylabel('Signal [uK]')
+    plt.xlabel('Sample number')
+    plt.savefig('../scratch/img/sdet_tod.png')
 
-    # Calculate spinmaps, stored internally
+    plt.close()
 
-
-
-    #### FINISH THIS ####
 
 if __name__ == '__main__':
 #    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
 #    scan_atacama(mmax=2, rot_period=60*60) 
 #    offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
-    offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
+#    offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
 #    test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    single_detector()
