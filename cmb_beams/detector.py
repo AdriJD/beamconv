@@ -13,7 +13,8 @@ class Beam(object):
     def __init__(self, az=0., el=0., polang=0., name=None,
          pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
          dead=False, ghost=False, amplitude=1., po_file=None, 
-         eg_file=None, cross_pol_file=None):
+         eg_file=None, cross_pol_file=None, deconv_q=True,
+         normalize=True):
         '''
         Keyword arguments
         ---------
@@ -59,6 +60,13 @@ class Beam(object):
             Absolute or relative path to .npy file
             containing the cross polarization blm
             (default : None)
+        deconv_q : bool
+            Multiply loaded blm's by sqrt(4 pi / (2 ell + 1)) before 
+            computing spin harmonic coefficients. Needed when using 
+            blm that are true SH coeff. (default : True)
+        normalize : bool 
+            Normalize loaded up blm's such that 00 component is 1.
+            Done after deconv_q operation if that option is set.
         '''
 
         self.az = az
@@ -76,6 +84,8 @@ class Beam(object):
         self.lmax = lmax           
         self.mmax = mmax
         self.fwhm = fwhm
+        self.deconv_q = deconv_q
+        self.normalize = normalize
 
         self.__ghost = ghost
         # ghosts are not allowed to have ghosts
@@ -198,15 +208,16 @@ class Beam(object):
                 return self.__blm
 
             else:
-                # NOTE, you do not propagate c2, deconv_q, normalize
-                # options, you can make them attributes in __init??
+                # NOTE, if blm's are direct map2alm resuls, use deconv_q
 
                 if self.btype == 'PO':
-                    self.load_blm(self.po_file, deconv_q=True, normalize=True)
+                    self.load_blm(self.po_file, deconv_q=self.deconv_q,
+                                  normalize=self.normalize)
                     return self.__blm
 
                 elif self.btype == 'EG':
-                    self.load_blm(self.eg_file, deconv_q=True, normalize=True)
+                    self.load_blm(self.eg_file, deconv_q=self.deconv_q, 
+                                  normalize=self.normalize)
                     return self.__blm
 
                 else:
@@ -274,15 +285,6 @@ class Beam(object):
         
         if cross_pol_file is None:
             # assume co-polarized beam
-
-#            if filename is None:
-
-                # Default to the blm_file attribute
-#                if btype == 'PO' and isinstance(self.po_file, basestring):
-#                    filename = self.self.po_file
-#                else:
-#                    raise ValueError(
-#                        "Neither `filename` nor `blm_file` attribute given")
                         
             blm = np.load(filename)
 

@@ -125,7 +125,7 @@ def get_copol_blm(blm, normalize=False, deconv_q=False,
     normalize : bool
         Normalize unpolarized beam to monopole
     deconv_q : bool
-        Divide blm by sqrt(4 pi / (2 ell + 1)) before
+        Multiply blm by sqrt(4 pi / (2 ell + 1)) before
         computing spin harmonic coefficients
     c2 : float, optional
         fwhm in arcmin. Used to multiply \pm 2 

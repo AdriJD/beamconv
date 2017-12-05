@@ -789,7 +789,9 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
                      mmax=800, 
                      amplitude=1.,
                      po_file=po_file,
-                     eg_file=eg_file)
+                     eg_file=eg_file,
+                     deconv_q=True,  # blm are SH coeff from hp.alm2map
+                     normalize=True)
 
 
     with open(beam_file, 'wb') as handle:
