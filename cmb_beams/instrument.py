@@ -1552,12 +1552,11 @@ class ScanStrategy(Instrument, qp.QMap):
         # We apply polang at the beam level later.
         q_off = self.det_offset(az_off, el_off, 0)
 
-        # Rotate offset given rot_dict['angle']
-        ang = np.radians(self.rot_dict['angle'])
-
+        # Rotate offset given rot_dict
         # works, but shouldnt it be switched around? No, that would
         # rotate the polang of the centroid, but not the centroid
         # around the boresight. It's q_bore * q_rot * q_off
+        ang = np.radians(self.rot_dict['angle'])
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
         q_off = tools.quat_left_mult(q_rot, q_off)
 
@@ -1631,7 +1630,6 @@ class ScanStrategy(Instrument, qp.QMap):
         tod = np.real(tod_c) # shares memory with tod_c
 
         # add unpolarized tod
-        # extract N from shape func!!!!
         for nidx, n in enumerate(xrange(-N+1, N)):
 
             if n == 0: #avoid expais since its one anyway
@@ -1742,7 +1740,7 @@ class ScanStrategy(Instrument, qp.QMap):
                              dtype=np.complex128) # s <=0 spheres
 
         start = 0
-        for n in xrange(N): # note, n is spin
+        for n in xrange(N): # NOTE, n is spin
             end = lmax + 1 - n
             if n == 0: # scalar transform
 

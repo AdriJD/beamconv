@@ -82,9 +82,6 @@ class Beam(object):
         if not self.ghost:
             self.__ghosts = []
             self.ghost_count = 0
-        if self.ghost:
-            # if two ghosts share ghost_idx, they share blm
-            self.ghost_idx = 0
 
     @property
     def ghost(self):
@@ -107,6 +104,9 @@ class Beam(object):
 
     @property
     def ghost_idx(self):
+        '''
+        If two ghosts share ghost_idx, they share blm
+        '''
         return self.__ghost_idx
 
     @ghost_idx.setter

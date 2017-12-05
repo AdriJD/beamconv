@@ -843,6 +843,137 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
 
     plt.close()
 
+def idea_jon():
+
+    nside_spin = 512
+    ra0 = 0
+    dec0 = -90
+    az_throw = 10
+    max_spin = 5
+    fwhm = 32.2
+    scan_opts = dict(verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+                     nside_spin=nside_spin, max_spin=max_spin, binning=True)
+
+    lmax = 800
+
+    alm = tools.gauss_blm(1e-5, lmax, pol=False)
+    ell = np.arange(lmax+1)
+    fl = np.sqrt((2 * ell + 1) / 4. / np.pi)
+    hp.almxfl(alm, fl, mmax=None, inplace=True)
+    fm = (-1)**(hp.Alm.getlm(lmax)[1])
+    alm *= fm
+    alm = tools.get_copol_blm(alm)
+
+    # create Beam properties and pickle (this is just to test load_focal_plane)
+    import tempfile
+    import shutil
+    import pickle
+    opj = os.path.join
+
+    blm_dir = os.path.abspath(opj(os.path.dirname(__file__),
+                                       '../tests/test_data/example_blms'))
+    po_file = opj(blm_dir, 'blm_hp_X1T1R1C8A_800_800.npy')
+    eg_file = opj(blm_dir, 'blm_hp_eg_X1T1R1C8A_800_800.npy')
+
+    tmp_dir = tempfile.mkdtemp()
+    
+    beam_file = opj(tmp_dir, 'beam_opts.pkl')
+    beam_opts = dict(az=0,
+                     el=0,
+                     polang=0.,
+                     btype='Gaussian',
+                     name='X1T1R1C8', 
+                     fwhm=fwhm, 
+                     lmax=800,
+                     mmax=800, 
+                     amplitude=1.,
+                     po_file=po_file,
+                     eg_file=eg_file)
+
+
+    with open(beam_file, 'wb') as handle:
+        pickle.dump(beam_opts, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # init scan strategy and instrument
+    ss = ScanStrategy(1., # mission duration in sec.
+                      sample_rate=10000, 
+                      location='spole') 
+
+    ss.allocate_maps(nside=1024)
+    ss.load_focal_plane(tmp_dir, no_pairs=True)
+
+    # remove tmp dir and contents
+    shutil.rmtree(tmp_dir)
+
+    ss.set_el_steps(0.01, steps=np.linspace(-10, 10, 100))
+
+    # Generate maps with Gaussian beams 
+    ss.scan_instrument_mpi(alm, **scan_opts)
+    ss.reset_el_steps()
+
+    # Solve for the maps
+    maps_g, cond_g = ss.solve_for_map(fill=np.nan)
+
+    # Generate maps with elliptical Gaussian beams 
+    ss.allocate_maps(nside=1024)
+    ss.beams[0][0].btype = 'EG'
+    ss.scan_instrument_mpi(alm, **scan_opts)
+    ss.reset_el_steps()
+
+    # Solve for the maps
+    maps_eg, cond_eg = ss.solve_for_map(fill=np.nan)
+
+    # Generate map with Physical Optics beams and plot them
+    ss.allocate_maps(nside=1024)
+    ss.beams[0][0].btype = 'PO'
+    ss.scan_instrument_mpi(alm, **scan_opts)
+    ss.reset_el_steps()
+
+    # Solve for the maps
+    maps_po, cond_po = ss.solve_for_map(fill=np.nan)
+    
+    # Plotting
+    print 'plotting results'        
+
+    cart_opts = dict(#rot=[ra0, dec0, 0],
+            lonra=[-min(0.5*az_throw, 10), min(0.5*az_throw, 10)],
+            latra=[-min(0.375*az_throw, 10), min(0.375*az_throw, 10)],
+             unit=r'[$\mu K_{\mathrm{CMB}}$]')
+
+    # plot smoothed input maps
+    nside = hp.get_nside(maps_g[0])
+    hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
+    maps_raw = hp.alm2map(alm, nside, verbose=False)
+
+    plot_iqu(maps_raw, '../scratch/img/', 'raw_delta', 
+             sym_limits=[1, 1, 1], 
+             plot_func=hp.cartview, **cart_opts)
+
+    # plot rescanned maps
+#    plot_iqu(maps, '../scratch/img/', 'rescan_bicep', 
+#             sym_limits=[250, 5, 5], 
+#             plot_func=hp.cartview, **cart_opts)
+
+    # plot difference maps
+#    for arr in maps_raw:
+        # replace stupid UNSEEN crap
+#        arr[arr==hp.UNSEEN] = np.nan
+
+#    diff = maps_raw - maps
+
+#    plot_iqu(diff, '../scratch/img/', 'diff_bicep', 
+#             sym_limits=[1e-6, 1e-6, 1e-6], 
+#             plot_func=hp.cartview, **cart_opts)
+
+    # plot condition number map
+#    cart_opts.pop('unit', None)
+
+#    plot_map(cond, '../scratch/img/', 'cond_bicep',
+#             min=2, max=5, unit='condition number',
+#             plot_func=hp.cartview, **cart_opts)
+
+
+
 if __name__ == '__main__':
     # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60) 
@@ -850,3 +981,4 @@ if __name__ == '__main__':
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
     # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     single_detector()
+    # idea_jon()
