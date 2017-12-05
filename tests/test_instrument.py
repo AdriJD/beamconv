@@ -97,11 +97,15 @@ class TestTools(unittest.TestCase):
             self.assertEqual(pair[1].ghost, False)
 
         # load up third pair
-        instr.load_focal_plane(test_fpu_dir, ghost=True, az=1, el=1, polang=1000)
+        instr.load_focal_plane(test_fpu_dir, az=1, el=1, polang=1000)
         self.assertEqual(instr.beams[2][0].az, 1)
         self.assertEqual(instr.beams[2][0].el, 1)
         self.assertEqual(instr.beams[2][0].polang, 1000)
         self.assertEqual(instr.beams[2][1].polang, 1090)
+
+        # test wheter you can change btype when loading up beam
+        instr.load_focal_plane(test_fpu_dir, btype='EG')
+        self.assertEqual(instr.beams[3][0].btype, 'EG')
 
     def test_create_focal_plane(self):
         '''

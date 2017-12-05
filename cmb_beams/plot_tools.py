@@ -53,7 +53,7 @@ def plot_iqu(maps, write_dir, tag,
     write_dir : str
         Path to directory where map is saved
     tag : str
-        Filename = <tag>.png
+        Filename = <tag>_I/Q/U.png
 
     Keyword arguments
     -----------------

@@ -2,6 +2,7 @@ import sys
 import time
 import warnings
 import glob
+import os
 import inspect
 import numpy as np
 import tools
@@ -285,8 +286,12 @@ class Beam(object):
         
         if cross_pol_file is None:
             # assume co-polarized beam
-                        
-            blm = np.load(filename)
+            
+            pname, ext = os.path.splitext(filename)
+            if not ext:
+                # assume .npy extension
+                ext = '.npy'
+            blm = np.load(os.path.join(pname+ext))
 
             if self.amplitude != 1:
                 # scale beam if needed

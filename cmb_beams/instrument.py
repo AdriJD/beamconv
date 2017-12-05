@@ -98,10 +98,11 @@ class MPIBase(object):
         if self.mpi_rank == root:
             arr = np.asarray(list_tot)
             arrs = np.array_split(arr, self.mpi_size)
+
         else:
             arrs = None
 
-        self._comm.scatter(arrs, root=root)
+        arrs = self._comm.scatter(arrs, root=root)
 
         return arrs.tolist()
 
@@ -600,6 +601,25 @@ class Instrument(MPIBase):
                 quot, rem = divmod(kidx, 2)
                 self.beams[quot][rem].dead = True
 
+    def set_btypes(self, btype='Gaussian'):
+        '''
+        Set btype for all main beams
+
+        Keyword arguments
+        -----------------
+        btype : str
+            Type of detector spatial response model. Can be one of three
+            "Gaussian", "EG", "PO". (default : "Gaussian")
+        '''
+
+        beams = np.atleast_2d(beams) #2D: we have pairs
+        for pair in beams:
+            for beam in pair:
+                if not beam:
+                    continue
+
+                beam.btype = btype
+
 class ScanStrategy(Instrument, qp.QMap):
     '''
     Given an instrument, create a scan strategy in terms of
@@ -750,13 +770,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         ---------
-        mode : str
-            Either "stepped" or "continuous"
-        freq : float, optional
+        mode : str, None
+            Either "stepped" or "continuous". If None,
+            or False, do not rotate hwp (default : None)
+        freq : float, None
             Rotation or step frequency in Hz
-        start_ang : float, optional
+        start_ang : float
             Starting angle for the HWP in deg
-        angles : array-like, optional
+        angles : array-like, None
             Rotation angles for stepped HWP. If not set,
             use 22.5 degree steps. If set, ignores
             start_ang.
@@ -1470,7 +1491,7 @@ class ScanStrategy(Instrument, qp.QMap):
         chunk_size = int(end - start + 1) # size in samples
 
         # If HWP does not move, just return current angle
-        if not self.hwp_dict['freq']:
+        if not self.hwp_dict['freq'] or not self.hwp_dict['mode']:
 
             self.hwp_ang = self.hwp_dict['angle']
             return

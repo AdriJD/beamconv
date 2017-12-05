@@ -25,7 +25,9 @@ class TestTools(unittest.TestCase):
                          polang=90.,
                          btype='PO',
                          amplitude=0.5,
-                         po_file=blm_name)
+                         po_file=blm_name,
+                         deconv_q=False,
+                         normalize=False)
 
         cls.beam_opts = beam_opts
 
