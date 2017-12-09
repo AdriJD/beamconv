@@ -15,13 +15,13 @@ from plot_tools import plot_map, plot_iqu
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
     Load a set of LCDM power spectra.
-    
+
     Keyword arguments
     -----------------
     fname : str
         Absolute path to file
     '''
-    
+
     cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
                      unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
@@ -39,26 +39,26 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     Keyword arguments
     ---------
 
-    lmax : int, 
+    lmax : int,
         bandlimit (default : 700)
-    mmax : int, 
+    mmax : int,
         assumed azimuthal bandlimit beams (symmetric in this example
         so 2 would suffice) (default : 5)
-    fwhm : float, 
+    fwhm : float,
         The beam FWHM in arcmin (default : 40)
-    ra0 : float, 
+    ra0 : float,
         Ra coord of centre region (default : -10)
     dec0 : float,  (default : -57.5)
         Ra coord of centre region
-    az_throw : float, 
+    az_throw : float,
         Scan width in azimuth (in degrees) (default : 50)
-    scan_speed : float, 
+    scan_speed : float,
         Scan speed in deg/s (default : 1)
-    rot_period : float, 
+    rot_period : float,
         The instrument rotation period in sec
         (default : 600)
     hwp_mode : str, None
-        HWP modulation mode, either "continuous", 
+        HWP modulation mode, either "continuous",
         "stepped" or None. Use freq of 1 or 1/10800 Hz
         respectively (default : None)
     '''
@@ -72,14 +72,14 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     b2 = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=12.01, # sample rate in Hz
-                      location='spole') # Instrument at south pole 
+                      location='spole') # Instrument at south pole
 
     # Create a 3 x 3 square grid of Gaussian beams
-    b2.create_focal_plane(nrow=3, ncol=3, fov=10, 
+    b2.create_focal_plane(nrow=3, ncol=3, fov=10,
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
-    b2.partition_mission(0.5*b2.nsamp) 
+    b2.partition_mission(0.5*b2.nsamp)
 
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps(nside=256)
@@ -99,16 +99,16 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     # Generate timestreams, bin them and store as attributes
     b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
-                           dec0=dec0, az_throw=az_throw, 
+                           dec0=dec0, az_throw=az_throw,
                            nside_spin=256,
                            max_spin=mmax)
-    
+
     # Solve for the maps
     maps, cond = b2.solve_for_map(fill=np.nan)
 
     # Plotting
     if b2.mpi_rank == 0:
-        print 'plotting results'        
+        print 'plotting results'
 
         cart_opts = dict(rot=[ra0, dec0, 0],
                 lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
@@ -116,8 +116,8 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                  unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
         # plot rescanned maps
-        plot_iqu(maps, '../scratch/img/', 'rescan_bicep', 
-                 sym_limits=[250, 5, 5], 
+        plot_iqu(maps, '../scratch/img/', 'rescan_bicep',
+                 sym_limits=[250, 5, 5],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot smoothed input maps
@@ -125,8 +125,8 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
         maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-        plot_iqu(maps_raw, '../scratch/img/', 'raw_bicep', 
-                 sym_limits=[250, 5, 5], 
+        plot_iqu(maps_raw, '../scratch/img/', 'raw_bicep',
+                 sym_limits=[250, 5, 5],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot difference maps
@@ -136,8 +136,8 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
         diff = maps_raw - maps
 
-        plot_iqu(diff, '../scratch/img/', 'diff_bicep', 
-                 sym_limits=[1e-6, 1e-6, 1e-6], 
+        plot_iqu(diff, '../scratch/img/', 'diff_bicep',
+                 sym_limits=[1e-6, 1e-6, 1e-6],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot condition number map
@@ -161,12 +161,13 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.close()
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
-                 ra0=[-10, 170], dec0=[-57.5, 0],
+                 mlen = 48 * 60 * 60, nrow=3, ncol=3, fov=5.0,
+                 ra0=[-10, 170], dec0=[-57.5, 0], el_min=45.,
                  az_throw=50, scan_speed=1, rot_period=0,
                  hwp_mode='continuous'):
     '''
     Simulates 48h of an atacama-based telescope with a 3 x 3 grid
-    of Gaussian beams pairs. Prefers to scan the bicep patch but 
+    of Gaussian beams pairs. Prefers to scan the bicep patch but
     will try to scan the ABS_B patch if the first is not visible.
 
     Keyword arguments
@@ -179,10 +180,20 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         so 2 would suffice) (default : 5)
     fwhm : float
         The beam FWHM in arcmin (default : 40)
+    mlen : int
+        The mission length [seconds] (default : 48 * 60 * 60)
+    nrow : int
+        Number of detectors along row direction (default : 3)
+    ncol : int
+        Number of detectors along column direction (default : 3)
+    fov : float
+        The field of view in degrees (default : 5.0)
     ra0 : float, array-like
         Ra coord of centre region (default : [-10., 85.])
     dec0 : float, array-like
         Ra coord of centre region (default : [-57.5, 0.])
+    el__min : float
+        Minimum elevation range [deg] (default : 45)
     az_throw : float
         Scan width in azimuth (in degrees) (default : 10)
     scan_speed : float
@@ -191,12 +202,12 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         The instrument rotation period in sec
         (default : 600)
     hwp_mode : str, None
-        HWP modulation mode, either "continuous", 
+        HWP modulation mode, either "continuous",
         "stepped" or None. Use freq of 1 or 1/10800 Hz
         respectively (default : continuous)
     '''
 
-    mlen = 48 * 60 * 60 # hardcoded mission length
+     # hardcoded mission length
 
     # Create LCDM realization
     ell, cls = get_cls()
@@ -205,14 +216,14 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
     ac = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=12.01, # sample rate in Hz
-                      location='atacama') # Instrument at south pole 
+                      location='atacama') # Instrument at south pole
 
     # Create a 3 x 3 square grid of Gaussian beams
-    ac.create_focal_plane(nrow=3, ncol=3, fov=5, 
+    ac.create_focal_plane(nrow=nrow, ncol=ncol, fov=fov,
                           lmax=lmax, fwhm=fwhm)
 
     # calculate tods in two chunks
-    ac.partition_mission(0.5*ac.mlen*ac.fsamp) 
+    ac.partition_mission(0.5*ac.mlen*ac.fsamp)
 
     # Allocate and assign parameters for mapmaking
     ac.allocate_maps(nside=256)
@@ -228,22 +239,22 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
     # Generate timestreams, bin them and store as attributes
     ac.scan_instrument_mpi(alm, verbose=2, ra0=ra0,
-                           dec0=dec0, az_throw=az_throw, 
+                           dec0=dec0, az_throw=az_throw,
                            nside_spin=256,
-                           el_min=45, create_memmap=True)
-    
+                           el_min=el_min, create_memmap=True)
+
     # Solve for the maps
     maps, cond = ac.solve_for_map(fill=np.nan)
 
     # Plotting
     if ac.mpi_rank == 0:
-        print 'plotting results'        
+        print 'plotting results'
 
         moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
         # plot rescanned maps
-        plot_iqu(maps, '../scratch/img/', 'rescan_atacama', 
-                 sym_limits=[250, 5, 5], 
+        plot_iqu(maps, '../scratch/img/', 'rescan_atacama',
+                 sym_limits=[250, 5, 5],
                  plot_func=hp.mollview, **moll_opts)
 
         # plot smoothed input maps
@@ -251,8 +262,8 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
         maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-        plot_iqu(maps_raw, '../scratch/img/', 'raw_atacama', 
-                 sym_limits=[250, 5, 5], 
+        plot_iqu(maps_raw, '../scratch/img/', 'raw_atacama',
+                 sym_limits=[250, 5, 5],
                  plot_func=hp.mollview, **moll_opts)
 
         # plot difference maps
@@ -262,8 +273,8 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
         diff = maps_raw - maps
 
-        plot_iqu(diff, '../scratch/img/', 'diff_atacama', 
-                 sym_limits=[1e-6, 1e-6, 1e-6], 
+        plot_iqu(diff, '../scratch/img/', 'diff_atacama',
+                 sym_limits=[1e-6, 1e-6, 1e-6],
                  plot_func=hp.mollview, **moll_opts)
 
         # plot condition number map
@@ -286,34 +297,34 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         plt.savefig('../scratch/img/cls_atacama.png')
         plt.close()
 
-def offset_beam(az_off=0, el_off=0, polang=0, lmax=100, 
+def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                 fwhm=200, hwp_freq=25., pol_only=True):
     '''
     Script that scans LCDM realization of sky with a symmetric
-    Gaussian beam that has been rotated away from the boresight. 
+    Gaussian beam that has been rotated away from the boresight.
     This means that the beam is highly asymmetric.
 
     Keyword arguments
     ---------
 
-    az_off : float, 
+    az_off : float,
         Azimuthal location of detector relative to boresight
         (default : 0.)
-    el_off : float, 
+    el_off : float,
         Elevation location of detector relative to boresight
         (default : 0.)
-    polang : float, 
+    polang : float,
         Detector polarization angle in degrees (defined for
-        unrotated detector as offset from meridian) 
+        unrotated detector as offset from meridian)
         (default : 0)
-    lmax : int, 
+    lmax : int,
         Maximum multipole number, (default : 200)
-    fwhm : float, 
+    fwhm : float,
         The beam FWHM used in this analysis [arcmin]
         (default : 100)
-    hwp_freq : float, 
+    hwp_freq : float,
         HWP spin frequency (continuous mode) (default : 25.)
-    pol_only : bool, 
+    pol_only : bool,
         Set unpolarized sky signal to zero (default : True)
     '''
 
@@ -331,8 +342,8 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                       sample_rate=1, # sample rate in Hz
                       location='spole') # South pole instrument
 
-    # create single detector 
-    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True, 
+    # create single detector
+    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
                           polang=polang, lmax=lmax, fwhm=fwhm)
 
     # move detector away from boresight
@@ -344,7 +355,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     ss.set_instr_rot(period=rot_period, start_ang=45)
 
     # Set HWP rotation
-    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45, 
+    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
                    angles=[34, 12, 67])
 
     # calculate tod in one go (beam is symmetric so mmax=2 suffices)
@@ -365,7 +376,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
 
     # Convert beam spin modes to E and B modes and rotate them
     # create blm again, scan_instrument_mpi detetes blms when done
-    ss.beams[0][0].gen_gaussian_blm() 
+    ss.beams[0][0].gen_gaussian_blm()
     blm = ss.beams[0][0].blm
     blmI = blm[0].copy()
     blmE, blmB = tools.spin2eb(blm[1], blm[2])
@@ -416,7 +427,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
         sigdiff = ss.tod - tod_sym
         ax2.plot(samples, sigdiff,ls='None', marker='.', markersize=2.)
         ax2.tick_params(labelbottom='off')
-        ax3.plot(samples, (pix_sym - ss.pix).astype(bool).astype(int), 
+        ax3.plot(samples, (pix_sym - ss.pix).astype(bool).astype(int),
                  ls='None', marker='.', markersize=2.)
         ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
         ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
@@ -432,37 +443,37 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
         plt.savefig('../scratch/img/tods.png')
         plt.close()
 
-def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100, 
+def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
                       fwhm=200, hwp_freq=25., pol_only=True):
     '''
     Script that scans LCDM realization of sky with a detector
     on the boresight that has no main beam but a full-amplitude
     ghost at the specified offset eam. The signal is then binned
     using the boresight pointing and compared to a map made by
-    a symmetric Gaussian beam that has been rotated away from 
+    a symmetric Gaussian beam that has been rotated away from
     the boresight. Results should agree.
 
     Keyword arguments
     ---------
 
-    az_off : float, 
+    az_off : float,
         Azimuthal location of detector relative to boresight
         (default : 0.)
-    el_off : float, 
+    el_off : float,
         Elevation location of detector relative to boresight
         (default : 0.)
-    polang : float, 
+    polang : float,
         Detector polarization angle in degrees (defined for
-        unrotated detector as offset from meridian) 
+        unrotated detector as offset from meridian)
         (default : 0)
-    lmax : int, 
+    lmax : int,
         Maximum multipole number, (default : 200)
-    fwhm : float, 
+    fwhm : float,
         The beam FWHM used in this analysis in arcmin
         (default : 100)
-    hwp_freq : float, 
+    hwp_freq : float,
         HWP spin frequency (continuous mode) (default : 25.)
-    pol_only : bool, 
+    pol_only : bool,
         Set unpolarized sky signal to zero (default : True)
     '''
 
@@ -481,7 +492,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
                       location='spole') # South pole instrument
 
     # create single detector on boresight
-    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True, 
+    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
                           polang=polang, lmax=lmax, fwhm=fwhm)
 
     beam = ss.beams[0][0]
@@ -498,7 +509,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
     beam.polang = 0.
 
     # create full-amplitude ghost
-    beam.create_ghost(az=az_off, el=el_off, polang=polang, 
+    beam.create_ghost(az=az_off, el=el_off, polang=polang,
                       amplitude=1.)
     ghost = beam.ghosts[0]
     ghost.gen_gaussian_blm()
@@ -508,7 +519,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
     ss.set_instr_rot(period=rot_period, start_ang=45)
 
     # Set HWP rotation
-    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45, 
+    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
                    angles=[34, 12, 67])
 
     # calculate tod in one go (beam is symmetric so mmax=2 suffices)
@@ -554,7 +565,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
     ss.reset_instr_rot()
     ss.reset_hwp_mod()
 
-    # kill ghost 
+    # kill ghost
     ghost.dead = True
     # spinmaps will still be created, so make as painless as possible
     ghost.lmax = 1
@@ -585,7 +596,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
         sigdiff = ss.tod - tod_ghost
         ax2.plot(samples, sigdiff, ls='None', marker='.', markersize=2.)
         ax2.tick_params(labelbottom='off')
-        ax3.plot(samples, (pix_ghost - ss.pix).astype(bool).astype(int), 
+        ax3.plot(samples, (pix_ghost - ss.pix).astype(bool).astype(int),
                  ls='None', marker='.', markersize=2.)
         ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
         ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
@@ -616,26 +627,26 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     Keyword arguments
     ---------
 
-    lmax : int, 
+    lmax : int,
         bandlimit (default : 700)
-    mmax : int, 
+    mmax : int,
         assumed azimuthal bandlimit beams (symmetric in this example
         so 2 would suffice) (default : 5)
-    fwhm : float, 
+    fwhm : float,
         The beam FWHM in arcmin (default : 40)
-    ra0 : float, 
+    ra0 : float,
         Ra coord of centre region (default : -10)
     dec0 : float,  (default : -57.5)
         Ra coord of centre region
-    az_throw : float, 
+    az_throw : float,
         Scan width in azimuth (in degrees) (default : 50)
-    scan_speed : float, 
+    scan_speed : float,
         Scan speed in deg/s (default : 1)
-    rot_period : float, 
+    rot_period : float,
         The instrument rotation period in sec
         (default : 600)
     hwp_mode : str, None
-        HWP modulation mode, either "continuous", 
+        HWP modulation mode, either "continuous",
         "stepped" or None. Use freq of 1 or 1/10800 Hz
         respectively (default : None)
     '''
@@ -649,10 +660,10 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     b2 = ScanStrategy(mlen, # mission duration in sec.
                       sample_rate=12.01, # sample rate in Hz
-                      location='spole') # Instrument at south pole 
+                      location='spole') # Instrument at south pole
 
     # Create a 3 x 3 square grid of Gaussian beams
-    b2.create_focal_plane(nrow=3, ncol=3, fov=5, 
+    b2.create_focal_plane(nrow=3, ncol=3, fov=5,
                           lmax=lmax, fwhm=fwhm)
 
     # Create reflected ghosts for every detector
@@ -660,15 +671,15 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     # but have different fwhm. First ghost is just a
     # scaled down version of the main beam, the second
     # has a much wider Gaussian shape.
-    # After this initialization, the code takes 
+    # After this initialization, the code takes
     # the ghosts into account without modifications
-    b2.create_reflected_ghosts(b2.beams, amplitude=0.01, 
+    b2.create_reflected_ghosts(b2.beams, amplitude=0.01,
                                ghost_tag='ghost_1', dead=False)
-    b2.create_reflected_ghosts(b2.beams, amplitude=0.01, 
+    b2.create_reflected_ghosts(b2.beams, amplitude=0.01,
                                fwhm=100, ghost_tag='ghost_2', dead=False)
 
     # calculate tods in two chunks
-    b2.partition_mission(0.5*b2.nsamp) 
+    b2.partition_mission(0.5*b2.nsamp)
 
     # Allocate and assign parameters for mapmaking
     b2.allocate_maps(nside=256)
@@ -684,16 +695,16 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     # Generate timestreams, bin them and store as attributes
     b2.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
-                           dec0=dec0, az_throw=az_throw, 
+                           dec0=dec0, az_throw=az_throw,
                            nside_spin=256,
                            max_spin=mmax)
-    
+
     # Solve for the maps
     maps, cond = b2.solve_for_map(fill=np.nan)
 
     # Plotting
     if b2.mpi_rank == 0:
-        print 'plotting results'        
+        print 'plotting results'
 
         cart_opts = dict(rot=[ra0, dec0, 0],
                 lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
@@ -701,8 +712,8 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                  unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
         # plot rescanned maps
-        plot_iqu(maps, '../scratch/img/', 'rescan_ghost', 
-                 sym_limits=[250, 5, 5], 
+        plot_iqu(maps, '../scratch/img/', 'rescan_ghost',
+                 sym_limits=[250, 5, 5],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot smoothed input maps
@@ -710,8 +721,8 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
         maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-        plot_iqu(maps_raw, '../scratch/img/', 'raw_ghost', 
-                 sym_limits=[250, 5, 5], 
+        plot_iqu(maps_raw, '../scratch/img/', 'raw_ghost',
+                 sym_limits=[250, 5, 5],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot difference maps
@@ -721,8 +732,8 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
         diff = maps_raw - maps
 
-        plot_iqu(diff, '../scratch/img/', 'diff_ghost', 
-                 sym_limits=[1e+1, 1e-1, 1e-1], 
+        plot_iqu(diff, '../scratch/img/', 'diff_ghost',
+                 sym_limits=[1e+1, 1e-1, 1e-1],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot condition number map
@@ -744,7 +755,7 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.xlabel(r'Multipole [$\ell$]')
         plt.savefig('../scratch/img/cls_ghost.png')
         plt.close()
-    
+
 def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
     az_throw=50, scan_speed=2.8, rot_period=4.5*60*60, mmax=5, nside_spin=512):
     '''
@@ -777,16 +788,16 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
     eg_file = opj(blm_dir, 'blm_hp_eg_X1T1R1C8A_800_800.npy')
 
     tmp_dir = tempfile.mkdtemp()
-    
+
     beam_file = opj(tmp_dir, 'beam_opts.pkl')
     beam_opts = dict(az=0,
                      el=0,
                      polang=0.,
                      btype='Gaussian',
-                     name='X1T1R1C8', 
-                     fwhm=32.2, 
+                     name='X1T1R1C8',
+                     fwhm=32.2,
                      lmax=800,
-                     mmax=800, 
+                     mmax=800,
                      amplitude=1.,
                      po_file=po_file,
                      eg_file=eg_file,
@@ -811,7 +822,7 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 
     # Generate timestreams with Gaussian beams and plot them
-    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw,
                            nside_spin=nside_spin, max_spin=mmax, binning=False)
     ax1.plot(ss.tod, label='sym. Gaussian', linewidth=0.7)
 
@@ -819,7 +830,7 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
 
     # Generate timestreams with elliptical Gaussian beams and plot them
     ss.beams[0][0].btype = 'EG'
-    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw,
                            nside_spin=nside_spin, max_spin=mmax, binning=False)
     ax1.plot(ss.tod, label='ell. Gaussian', linewidth=0.7)
 
@@ -827,7 +838,7 @@ def single_detector(nsamp=1000, lmax=700, fwhm=30., ra0=-10, dec0=-57.5,
 
     # Generate timestreams with Physical Optics beams and plot them
     ss.beams[0][0].btype = 'PO'
-    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+    ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw,
                            nside_spin=nside_spin, max_spin=mmax, binning=False)
     ax1.plot(ss.tod, label='PO', linewidth=0.7)
 
@@ -853,7 +864,7 @@ def idea_jon():
     az_throw = 10
     max_spin = 5
     fwhm = 32.2
-    scan_opts = dict(verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw, 
+    scan_opts = dict(verbose=1, ra0=ra0, dec0=dec0, az_throw=az_throw,
                      nside_spin=nside_spin, max_spin=max_spin, binning=True)
 
     lmax = 800
@@ -878,16 +889,16 @@ def idea_jon():
     eg_file = opj(blm_dir, 'blm_hp_eg_X1T1R1C8A_800_800.npy')
 
     tmp_dir = tempfile.mkdtemp()
-    
+
     beam_file = opj(tmp_dir, 'beam_opts.pkl')
     beam_opts = dict(az=0,
                      el=0,
                      polang=0.,
                      btype='Gaussian',
-                     name='X1T1R1C8', 
-                     fwhm=fwhm, 
+                     name='X1T1R1C8',
+                     fwhm=fwhm,
                      lmax=800,
-                     mmax=800, 
+                     mmax=800,
                      amplitude=1.,
                      po_file=po_file,
                      eg_file=eg_file)
@@ -898,8 +909,8 @@ def idea_jon():
 
     # init scan strategy and instrument
     ss = ScanStrategy(1., # mission duration in sec.
-                      sample_rate=10000, 
-                      location='spole') 
+                      sample_rate=10000,
+                      location='spole')
 
     ss.allocate_maps(nside=1024)
     ss.load_focal_plane(tmp_dir, no_pairs=True)
@@ -909,14 +920,14 @@ def idea_jon():
 
     ss.set_el_steps(0.01, steps=np.linspace(-10, 10, 100))
 
-    # Generate maps with Gaussian beams 
+    # Generate maps with Gaussian beams
     ss.scan_instrument_mpi(alm, **scan_opts)
     ss.reset_el_steps()
 
     # Solve for the maps
     maps_g, cond_g = ss.solve_for_map(fill=np.nan)
 
-    # Generate maps with elliptical Gaussian beams 
+    # Generate maps with elliptical Gaussian beams
     ss.allocate_maps(nside=1024)
     ss.beams[0][0].btype = 'EG'
     ss.scan_instrument_mpi(alm, **scan_opts)
@@ -933,9 +944,9 @@ def idea_jon():
 
     # Solve for the maps
     maps_po, cond_po = ss.solve_for_map(fill=np.nan)
-    
+
     # Plotting
-    print 'plotting results'        
+    print 'plotting results'
 
     cart_opts = dict(#rot=[ra0, dec0, 0],
             lonra=[-min(0.5*az_throw, 10), min(0.5*az_throw, 10)],
@@ -947,13 +958,13 @@ def idea_jon():
     hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
     maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-    plot_iqu(maps_raw, '../scratch/img/', 'raw_delta', 
-             sym_limits=[1, 1, 1], 
+    plot_iqu(maps_raw, '../scratch/img/', 'raw_delta',
+             sym_limits=[1, 1, 1],
              plot_func=hp.cartview, **cart_opts)
 
     # plot rescanned maps
-#    plot_iqu(maps, '../scratch/img/', 'rescan_bicep', 
-#             sym_limits=[250, 5, 5], 
+#    plot_iqu(maps, '../scratch/img/', 'rescan_bicep',
+#             sym_limits=[250, 5, 5],
 #             plot_func=hp.cartview, **cart_opts)
 
     # plot difference maps
@@ -963,8 +974,8 @@ def idea_jon():
 
 #    diff = maps_raw - maps
 
-#    plot_iqu(diff, '../scratch/img/', 'diff_bicep', 
-#             sym_limits=[1e-6, 1e-6, 1e-6], 
+#    plot_iqu(diff, '../scratch/img/', 'diff_bicep',
+#             sym_limits=[1e-6, 1e-6, 1e-6],
 #             plot_func=hp.cartview, **cart_opts)
 
     # plot condition number map
@@ -978,9 +989,9 @@ def idea_jon():
 
 if __name__ == '__main__':
     # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-    # scan_atacama(mmax=2, rot_period=60*60) 
+    scan_atacama(mmax=2, rot_period=60*60, mlen=2*60*60, nrow=1, ncol=1)
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
     # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-    single_detector()
+    # single_detector()
     # idea_jon()
