@@ -115,7 +115,7 @@ class MPIBase(object):
         Arguments
         ---------
         obj : object
-            
+
         Returns
         -------
         bcast_obj : object
@@ -124,7 +124,7 @@ class MPIBase(object):
 
         if not self.mpi:
             return obj
-        
+
         obj = self._comm.bcast(obj, root=0)
         return obj
 
@@ -333,7 +333,7 @@ class Instrument(MPIBase):
             A detector and let B detector be dead
             (default : False)
         combine : bool
-            If some beams already exist, combine these new 
+            If some beams already exist, combine these new
             beams with them
             (default : True)
         kwargs : {beam_opts}
@@ -398,7 +398,7 @@ class Instrument(MPIBase):
         else:
             self.beams += beams
 
-    def load_focal_plane(self, bdir, tag=None, no_pairs=False, 
+    def load_focal_plane(self, bdir, tag=None, no_pairs=False,
                          combine=True, **kwargs):
         '''
         Create focal plane by loading up a collection
@@ -421,7 +421,7 @@ class Instrument(MPIBase):
             A detector and let B detector be dead
             (default : False)
         combine : bool
-            If some beams already exist, combine these new 
+            If some beams already exist, combine these new
             beams with them
             (default : True)
         kwargs : {beam_opts}
@@ -498,7 +498,7 @@ class Instrument(MPIBase):
                 beam_a = Beam(name=name_a, polang=polang,
                               pol='A', dead=dead, **beam_opts)
                 beam_b = Beam(name=name_b, polang=polang+90.,
-                              dead=dead or no_pairs, 
+                              dead=dead or no_pairs,
                               pol='B', **beam_opts)
 
                 beams.append([beam_a, beam_b])
@@ -901,7 +901,7 @@ class ScanStrategy(Instrument, qp.QMap):
             return [chunk]
 
         rot_chunk_size = self.rot_dict['rot_chunk_size']
-        chunk_size = chunk['end'] - chunk['start'] 
+        chunk_size = chunk['end'] - chunk['start']
 
         subchunks = []
         start = chunk['start']
@@ -923,7 +923,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 end = self.rot_dict['remainder'] + start
 
                 if self.rot_dict['remainder']:
-                    
+
                     # in this rotation chunk, no rotation should be made
                     subchunks.append(dict(start=start, end=end, norot=True))
                     end += 1
@@ -952,8 +952,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 end = start + rot_chunk_size - 1
                 subchunks.append(dict(start=start, end=end))
                 start = end + 1
-                                   
-            # fill last part and determine remainder  
+
+            # fill last part and determine remainder
             subchunks.append(dict(start=start, end=chunk['end']))
             self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - start)
             return subchunks
@@ -1094,7 +1094,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if verbose and self.mpi_rank == 0:
             print('Scanning with {:d} detectors and {:d} beam(s)'.format(
                 self.ndet, len(self.beams)))
-            
+
             sys.stdout.flush()
         self.barrier() # just to have summary print statement on top
 
@@ -1195,13 +1195,13 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.constant_el_scan(**ces_opts)
 
                 # if required, loop over boresight rotations
-                subchunks = self.subpart_chunk(chunk)                
+                subchunks = self.subpart_chunk(chunk)
                 for subchunk in subchunks:
 
                     if verbose == 2:
                         print(('[rank {:03d}]:\t\t...'
                                ' samples {:d}-{:d}, norot={}').format(self.mpi_rank,
-                                                 subchunk['start'], subchunk['end'], 
+                                                 subchunk['start'], subchunk['end'],
                                                        subchunk.get('norot', False)))
 
                     # rotate instrument and hwp if needed
@@ -1611,13 +1611,13 @@ class ScanStrategy(Instrument, qp.QMap):
         ra = np.empty(tod_size, dtype=np.float64)
         dec = np.empty(tod_size, dtype=np.float64)
         pa = np.empty(tod_size, dtype=np.float64)
-        
+
         self.bore2radec(q_off,
                        self.ctime[self.qidx_start:self.qidx_end],
                        self.q_bore[qidx_start:qidx_end],
                        q_hwp=None, sindec=False, return_pa=True,
                        ra=ra, dec=dec, pa=pa)
- 
+
         np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, nside_spin)
 

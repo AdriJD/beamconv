@@ -963,35 +963,87 @@ def idea_jon():
              plot_func=hp.cartview, **cart_opts)
 
     # plot rescanned maps
-#    plot_iqu(maps, '../scratch/img/', 'rescan_bicep',
-#             sym_limits=[250, 5, 5],
-#             plot_func=hp.cartview, **cart_opts)
+    # plot_iqu(maps, '../scratch/img/', 'rescan_bicep',
+    #         sym_limits=[250, 5, 5],
+    #         plot_func=hp.cartview, **cart_opts)
 
     # plot difference maps
-#    for arr in maps_raw:
-        # replace stupid UNSEEN crap
-#        arr[arr==hp.UNSEEN] = np.nan
+    # for arr in maps_raw:
+    #     replace stupid UNSEEN crap
+    #     arr[arr==hp.UNSEEN] = np.nan
 
-#    diff = maps_raw - maps
+    # diff = maps_raw - maps
 
-#    plot_iqu(diff, '../scratch/img/', 'diff_bicep',
-#             sym_limits=[1e-6, 1e-6, 1e-6],
-#             plot_func=hp.cartview, **cart_opts)
+    # plot_iqu(diff, '../scratch/img/', 'diff_bicep',
+    #         sym_limits=[1e-6, 1e-6, 1e-6],
+    #         plot_func=hp.cartview, **cart_opts)
 
     # plot condition number map
-#    cart_opts.pop('unit', None)
+    # cart_opts.pop('unit', None)
 
-#    plot_map(cond, '../scratch/img/', 'cond_bicep',
-#             min=2, max=5, unit='condition number',
-#             plot_func=hp.cartview, **cart_opts)
+    # plot_map(cond, '../scratch/img/', 'cond_bicep',
+    #         min=2, max=5, unit='condition number',
+    #         plot_func=hp.cartview, **cart_opts)
 
+def azel4point(ra0=-10, dec0=-57.5, mlen=365, nsamp=1e4,
+    lat=-22.96, lon=-67.79):
+    '''
+    Simple function to see what fraction of the day you can observe the
+    Bicep patch (default value).
 
+    Keyword arguments
+    ---------
+
+    ra0 : float
+        Ra coord of point on the sky [deg] (default : -10)
+    dec0 : float
+        Ra coord of point on the sky [deg] (default : -57.5)
+    mlen : int
+        The mission length [days] (default : 365)
+    nsamp : in
+        The number of samples used in estimate
+    lat : float
+        Latitude for observation [deg] (default : -22.96, Atacama)
+    lon : flaot
+        Longitude for observation [deg] (default : -67.79, Atacama)
+
+    '''
+
+    import time
+    import qpoint as qp
+    Q = qp.QMap()
+    nsec = mlen * 24 * 60 * 60
+    dt = nsec / float(nsamp)
+    ctime = time.time() + np.arange(0, nsec, dt, dtype=float)
+    az, el, _ = Q.radec2azel(ra0, dec0, 0, lon, lat, ctime)
+
+    print('Total observation time is {:4.1f} days'.\
+        format((ctime[-1]-ctime[0])/24./3600.))
+
+    observable_ratio = np.sum(el > 45)/float(len(ctime))
+    print('This patch is observable {:4.1f}% of the time'.\
+        format(100*observable_ratio))
+
+    plt.plot(ctime, az)
+    plt.ylabel('Azimuth [deg]')
+    plt.savefig('../scratch/img/az.png')
+    plt.close()
+
+    plt.plot(ctime, el)
+    plt.ylabel('Elevation [deg]')
+    plt.savefig('../scratch/img/el.png')
+    plt.close()
+
+    plt.plot(az, el)
+    plt.savefig('../scratch/img/azel.png')
+    plt.close()
 
 if __name__ == '__main__':
     # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-    scan_atacama(mmax=2, rot_period=60*60, mlen=2*60*60, nrow=1, ncol=1)
+    # scan_atacama(mmax=2, rot_period=60*60, mlen=2*60*60, nrow=1, ncol=1)
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
     # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # single_detector()
     # idea_jon()
+    azel4point()
