@@ -1304,6 +1304,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return arr
 
+    def spider_scan(self, **kwargs):
+        '''
+        Reads in spider pointing timelines insread of generating
+        '''
+        pass
+
+
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, vel_prf='triangle',
             check_interval=600, el_min=45, use_precomputed=False,
