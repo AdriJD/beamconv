@@ -14,7 +14,7 @@ class Beam(object):
     def __init__(self, az=0., el=0., polang=0., name=None,
          pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
          dead=False, ghost=False, amplitude=1., po_file=None, 
-         eg_file=None, cross_pol_file=None, deconv_q=True,
+         eg_file=None, cross_pol=True, deconv_q=True,
          normalize=True):
         '''
         Keyword arguments
@@ -57,10 +57,10 @@ class Beam(object):
         eg_file : str, None
             Absolute or relative path to .npy file with blm array for the
             (unpolarized) Elliptical Gaussian beam (default : None)
-        cross_pol_file : str, None
-            Absolute or relative path to .npy file
-            containing the cross polarization blm
-            (default : None)
+        cross_pol : bool
+            Whether to use the cross-polar response of the beam (requires
+            blm .npy file to be of shape (3,), containing blm, blmm2 and blmp2
+            (default : True)
         deconv_q : bool
             Multiply loaded blm's by sqrt(4 pi / (2 ell + 1)) before 
             computing spin harmonic coefficients. Needed when using 
@@ -80,7 +80,7 @@ class Beam(object):
         self.amplitude = amplitude
         self.po_file = po_file
         self.eg_file = eg_file
-        self.cross_pol_file = cross_pol_file
+        self.cross_pol = cross_pol
 
         self.lmax = lmax           
         self.mmax = mmax
@@ -260,10 +260,10 @@ class Beam(object):
         self.btype = 'Gaussian'
         self.blm = blm
 
-    def load_blm(self, filename, cross_pol_file=None, **kwargs):
+    def load_blm(self, filename, **kwargs):
         '''
-        Load a .npy file containing a blm array, 
-        and use array to populate `blm` attribute.
+        Load a .npy file containing with blm array(s), 
+        and use array(s) to populate `blm` attribute.
 
         Arguments
         ---------
@@ -272,26 +272,45 @@ class Beam(object):
 
         Keyword arguments
         -----------------
-        cross_pol_file : str, None
-            Absolute or relative path to .npy file
-            containing the cross polarization blm
-            (default : None)
         kwargs : {tools.get_copol_blm_opts}
 
         Notes
         -----
         Loaded blm are automatically scaled by given the `amplitude` 
         attribute.
+
+        blm file can be rank 1 or 2. If rank is 1: array is blm and 
+        blmm2 and blmp2 are created assuming only the co-polar response
+        If rank is 2, shape has to be (3,), with blm, blmm2 and blmp2
         '''
         
-        if cross_pol_file is None:
-            # assume co-polarized beam
+        pname, ext = os.path.splitext(filename)
+        if not ext:
+            # assume .npy extension
+            ext = '.npy'
+        blm = np.load(os.path.join(pname+ext))
+        blm = np.atleast_2d(blm)
+
+        if blm.shape[0] == 3 and self.cross_pol:
+            cross_pol = True
+        else:
+            cross_pol = False
+            blm = blm[0]
+
+        if cross_pol:
+            # assume co- and cross-polar beams are provided
+            # c2_fwhm has no meaning if cross-pol is known
+            kwargs.pop('c2_fwhm', None)
+            blm = tools.scale_blm(blm, **kwargs)
             
-            pname, ext = os.path.splitext(filename)
-            if not ext:
-                # assume .npy extension
-                ext = '.npy'
-            blm = np.load(os.path.join(pname+ext))
+            if self.amplitude != 1:
+                # scale beam if needed
+                blm *= self.amplitude
+
+            self.blm = blm[0], blm[1], blm[2]
+
+        else:
+            # assume co-polarized beam
 
             if self.amplitude != 1:
                 # scale beam if needed
@@ -299,9 +318,6 @@ class Beam(object):
 
             # create spin \pm 2 components
             self.blm = tools.get_copol_blm(blm, **kwargs)
-
-        else:
-            raise NotImplementedError("be patient")
 
     def create_ghost(self, tag='ghost', **kwargs):
         '''

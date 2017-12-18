@@ -110,8 +110,48 @@ def gauss_blm(fwhm, lmax, pol=False):
     else:
         return blm
 
-def get_copol_blm(blm, normalize=False, deconv_q=False, 
-                  c2_fwhm=None):
+def scale_blm(blm, normalize=False, deconv_q=False):
+    '''
+    Scale or normalize blm(s)
+
+    Arguments
+    ---------
+    blm : array-like
+        blm or blm(s) ([blm, blmm2, blmp2])
+
+    Keyword arguments
+    ---------
+    normalize : bool
+        Normalize beams(s) to monopole unpolarized beam
+        (default : False)
+    deconv_q : bool
+        Multiply blm(s) by sqrt(4 pi / (2 ell + 1)) before
+        computing spin harmonic coefficients (default : False)
+
+    Returns
+    -------
+    blm : array-like
+    '''
+
+    if not normalize and not deconv_q:
+        return blm
+
+    blm = np.atleast_2d(blm)
+
+    lmax = hp.Alm.getlmax(blm[0].size)
+    ell = np.arange(lmax+1)
+
+    if deconv_q:
+        blm *= 2 * np.sqrt(np.pi / (2 * ell + 1))
+    if normalize:
+        blm /= blm[0,0]
+
+    if blm.shape[0] == 1:
+        return blm[0]
+    else:
+        return blm
+
+def get_copol_blm(blm, c2_fwhm=None, **kwargs):
     '''
     Create the spin \pm 2 coefficients of a unpolarized
     beam, assuming a co-polarized beam. See Hivon, Ponthieu
@@ -122,16 +162,15 @@ def get_copol_blm(blm, normalize=False, deconv_q=False,
     blm : array-like
         Healpix-ordered blm array for unpolarized beam.
         Requires lmax=mmax
-    normalize : bool
-        Normalize unpolarized beam to monopole
-    deconv_q : bool
-        Multiply blm by sqrt(4 pi / (2 ell + 1)) before
-        computing spin harmonic coefficients
-    c2 : float, optional
+
+    Keyword arguments
+    ---------
+    c2 : float, None
         fwhm in arcmin. Used to multiply \pm 2 
         coefficients with exp 2 sigma**2. Needed 
         to match healpy Gaussian smoothing. 
         Default=None.
+    kwargs : {scale_blm_opts}
 
     Returns
     -------
@@ -144,10 +183,7 @@ def get_copol_blm(blm, normalize=False, deconv_q=False,
     lm = hp.Alm.getlm(lmax)
     getidx = hp.Alm.getidx
 
-    if deconv_q:
-        blm *= 2 * np.sqrt(np.pi / (2 * lm[0] + 1))
-    if normalize:
-        blm /= blm[0]
+    blm = scale_blm(blm, **kwargs)
 
     blmm2 = np.zeros(blm.size, dtype=np.complex128)
     blmp2 = np.zeros(blm.size, dtype=np.complex128)
