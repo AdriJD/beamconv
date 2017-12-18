@@ -20,6 +20,9 @@ class TestTools(unittest.TestCase):
         blm_name = opj(test_data_dir, 'blm_test.npy')
         cls.blm_name = blm_name
 
+        blm_cross_name = opj(test_data_dir, 'blm_cross_test.npy')
+        cls.blm_cross_name = blm_cross_name
+
         beam_opts = dict(az=10,
                          el=5,
                          polang=90.,
@@ -49,6 +52,11 @@ class TestTools(unittest.TestCase):
 
         np.save(blm_name, cls.blm)
 
+        # also save explicit co- and cross-polar beams
+        # but just use blm three times
+        np.save(blm_cross_name, np.asarray([cls.blm, cls.blm,
+                                           cls.blm]))
+
     @classmethod
     def tearDownClass(cls):
         '''
@@ -74,6 +82,15 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(blmm2_expd, beam.blm[1])
         np.testing.assert_array_almost_equal(blmp2_expd, beam.blm[2])
                    
+        # test if you can also load up the full beam
+        beam.delete_blm()
+        beam.po_file = self.blm_cross_name
+        np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
+                                             beam.blm[0])
+        np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
+                                             beam.blm[2])
+        np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
+                                             beam.blm[2])
 
 if __name__ == '__main__':
     unittest.main()

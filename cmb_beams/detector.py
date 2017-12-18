@@ -400,7 +400,7 @@ class Beam(object):
         self.mmax = partner.mmax
         self.amplitude = partner.amplitude
 
-    def delete_blm(self, del_ghosts_blm=False):
+    def delete_blm(self, del_ghosts_blm=True):
         '''
         Remove the `blm` attribute of the object. Does the same
         for ghosts, if specified.
@@ -409,6 +409,7 @@ class Beam(object):
         -----------------
         del_ghost_blm : bool
             If True, also remove blm attributes of all ghosts
+            (default : True)
         '''
 
         try:
