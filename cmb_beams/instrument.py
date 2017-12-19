@@ -858,7 +858,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def partition_mission(self, chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
-        of nsample = chunksize. (final chunk can be
+        of nsample / chunksize (final chunk can be
         smaller).
 
         Keyword arguments
@@ -997,7 +997,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.lon, self.lat, ctime[::check_len])
 
     def scan_instrument(self, verbose=True, mapmaking=True,
-                        **kwargs):
+        **kwargs):
         '''
         Cycles through chunks, scans and calculates
         detector tods for all detectors serially.
@@ -1054,8 +1054,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.proj += self.depo['proj']
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
-                            create_memmap=False,
-                            **kwargs):
+        create_memmap=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1086,7 +1085,6 @@ class ScanStrategy(Instrument, qp.QMap):
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`
         '''
-
         # pop init_spinmaps kwargs
         max_spin = kwargs.pop('max_spin', 5)
         nside_spin = kwargs.pop('nside_spin', 256)
@@ -1306,10 +1304,100 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def spider_scan(self, **kwargs):
         '''
-        Reads in spider pointing timelines insread of generating
-        '''
-        pass
+        Reads in spider pointing timelines instead of generating
+        Populates scanning quaternions.
 
+        Keyword Arguments
+        ---------
+        check_interval : float
+            Check whether elevation is not below `el_min`
+            at this rate in seconds (default : 600)
+        el_min : float
+            Lower elevation limit in degrees (default : 45)
+        use_precomputed : bool
+            Load up precomputed boresight quaternion if
+            memory-map is present (default : False)
+        start : int
+            Start on this sample
+        end : int
+            End on this sample
+        '''
+
+        # Need spider_analysis to read in pointing information
+        try:
+            import spider_analysis as sa
+
+        except ImportError:
+            print("Failed to import spider_analysis")
+            raise
+
+        start = kwargs.get('start')
+        end = kwargs.get('end')
+
+        ctime = np.arange(start, end+1, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
+        self.ctime = ctime
+
+        # read q_bore from disk if needed (and skip rest)
+        if use_precomputed and hasattr(self, 'mmap'):
+            if self.mpi_rank == 0:
+                self.q_bore = self.mmap[start:end+1]
+            else:
+                self.q_bore = None
+
+            self.q_bore = self.broadcast_array(self.q_bore)
+
+            return
+
+        chunk_size = end - start + 1 # Note, you end on "end"
+
+        # Transform from instrument frame to celestial, i.e. az, el -> ra, dec
+        if self.mpi:
+
+            # Calculate boresight quaternion in parallel
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = np.divmod(chunk_size,
+                                        self.mpi_size)
+            sub_size += quot
+
+            if remainder:
+                # give first ranks one extra quaternion
+                sub_size[:int(remainder)] += 1
+
+            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            sub_end = sub_start + sub_size[self.mpi_rank]
+
+            q_bore = np.empty(chunk_size * 4, dtype=float)
+
+            # calculate section of q_bore
+            q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                    el[sub_start:sub_end],
+                                    None, None, self.lon, self.lat,
+                                    ctime[sub_start:sub_end])
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # for the flattened quat array
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+
+            # combine all sections on all ranks
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            self.q_bore = q_bore.reshape(chunk_size, 4)
+
+        else:
+            self.q_bore = self.azel2bore(az, el, None, None, self.lon,
+                                         self.lat, ctime)
+
+        # store boresight quat in memmap if needed
+        if hasattr(self, 'mmap'):
+            if self.mpi_rank == 0:
+                self.mmap[start:end+1] = self.q_bore
+            # wait for I/O
+            if self.mpi:
+                self._comm.barrier()
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, vel_prf='triangle',
@@ -1317,9 +1405,9 @@ class ScanStrategy(Instrument, qp.QMap):
             **kwargs):
 
         '''
+        Populates scanning quaternions.
         Let boresight scan back and forth in azimuth, starting
-        centered at ra0, dec0, while keeping elevation constant. Populates
-        scanning quaternions.
+        centered at ra0, dec0, while keeping elevation constant.
 
         Keyword Arguments
         ---------
