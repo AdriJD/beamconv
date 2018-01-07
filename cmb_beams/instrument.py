@@ -1304,7 +1304,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, vel_prf='triangle',
-            check_interval=600, el_min=45, use_precomputed=False,
+            check_interval=600, el_min=45, cut_el_min=False,
+            use_precomputed=False,
             **kwargs):
 
         '''
@@ -1334,6 +1335,8 @@ class ScanStrategy(Instrument, qp.QMap):
             at this rate in seconds (default : 600)
         el_min : float
             Lower elevation limit in degrees (default : 45)
+        cut_el_min: bool
+            If True, excludes timelines where el would be less than el_min
         use_precomputed : bool
             Load up precomputed boresight quaternion if
             memory-map is present (default : False)
@@ -1375,21 +1378,35 @@ class ScanStrategy(Instrument, qp.QMap):
         az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
             self.lon, self.lat, ctime[::check_len])
 
+        flag0 = np.zeros_like(el0).astype(bool)
+
         # check and fix cases where boresight el < el_min
         n = 1
         while np.any(el0 < el_min):
+
             if n < npatches:
                 # run check again with other ra0, dec0 options
                 azn, eln, _ = self.radec2azel(ra0[n], dec0[n], 0,
                                       self.lon, self.lat, ctime[::check_len])
-                el0[el0<el_min] = eln[el0<el_min]
-                az0[el0<el_min] = azn[el0<el_min]
+
+                elidx = (el0<el_min)
+                el0[elidx] = eln[elidx]
+                az0[elidx] = azn[elidx]
 
             else:
-                # give up and keep boresight fixed at el_min
-                el0[el0<el_min] = el_min
-                warn('Keeping el0 at {:.1f} for part of scan'.format(el_min),
-                    RuntimeWarning)
+
+                elidx = (el0<el_min)
+                el0[elidx] = el_min
+
+                if cut_el_min:
+                    # not scanning this elevation check chunk
+                    flag0[elidx] = True
+                    warn('Cutting el min', RuntimeWarning)
+
+                else:
+                    # scanning at fixed elevation
+                    warn('Keeping el0 at {:.1f} for part of scan'.format(el_min),
+                        RuntimeWarning)
             n += 1
 
         # Scan boresight, note that it will slowly drift away from az0, el0
@@ -1404,17 +1421,24 @@ class ScanStrategy(Instrument, qp.QMap):
                 np.arcsin(az, out=az)
                 az *= (az_throw / np.pi)
 
-            # slightly complicated way to multiply az with az0
-            # while avoiding expanding az0 to p_len
-            az = az.reshape(nchecks, check_len)
-            az += az0[:, np.newaxis]
-            az = az.ravel()
-            az = az[:chunk_size] # discard extra entries
+        # slightly complicated way to multiply az with az0
+        # while avoiding expanding az0 to p_len
+        az = az.reshape(nchecks, check_len)
+        az += az0[:, np.newaxis]
+        az = az.ravel()
+        az = az[:chunk_size] # discard extra entries
 
         el = np.zeros((nchecks, check_len), dtype=float)
         el += el0[:, np.newaxis]
         el = el.ravel()
         el = el[:chunk_size]
+
+        flag = np.zeros((nchecks, check_len), dtype=bool)
+        flag += flag0[:, np.newaxis]
+        flag = flag.ravel().astype(bool)
+        flag = flag[:chunk_size]
+
+        self.flag = flag
 
         # do elevation stepping if necessary
         if self.step_dict.get('period', None):
@@ -1882,7 +1906,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
         q_off = q_off[np.newaxis]
         tod = self.tod[np.newaxis]
-        self.from_tod(q_off, tod=tod)
+        flag = self.flag[self.qidx_start:self.qidx_end]
+        flag = flag[np.newaxis]
+
+        self.from_tod(q_off, tod=tod, flag=flag)
 
         if add_to_global:
             # add local maps to global maps

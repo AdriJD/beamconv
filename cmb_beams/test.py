@@ -163,7 +163,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
                  mlen = 48 * 60 * 60, nrow=3, ncol=3, fov=5.0,
                  ra0=[-10, 170], dec0=[-57.5, 0], el_min=45.,
-                 az_throw=50, scan_speed=1, rot_period=0,
+                 cut_el_min=False, az_throw=50, scan_speed=1, rot_period=0,
                  hwp_mode='continuous'):
     '''
     Simulates 48h of an atacama-based telescope with a 3 x 3 grid
@@ -192,8 +192,10 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         Ra coord of centre region (default : [-10., 85.])
     dec0 : float, array-like
         Ra coord of centre region (default : [-57.5, 0.])
-    el__min : float
+    el_min : float
         Minimum elevation range [deg] (default : 45)
+    cut_el_min: bool
+            If True, excludes timelines where el would be less than el_min
     az_throw : float
         Scan width in azimuth (in degrees) (default : 10)
     scan_speed : float
@@ -241,7 +243,8 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     ac.scan_instrument_mpi(alm, verbose=2, ra0=ra0,
                            dec0=dec0, az_throw=az_throw,
                            nside_spin=256,
-                           el_min=el_min, create_memmap=True)
+                           el_min=el_min, cut_el_min=cut_el_min,
+                           create_memmap=True)
 
     # Solve for the maps
     maps, cond = ac.solve_for_map(fill=np.nan)
@@ -1040,10 +1043,12 @@ def azel4point(ra0=-10, dec0=-57.5, mlen=365, nsamp=1e4,
 
 if __name__ == '__main__':
     # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-    # scan_atacama(mmax=2, rot_period=60*60, mlen=2*60*60, nrow=1, ncol=1)
+    scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=8, ncol=8,
+        fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
+
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
     # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # single_detector()
     # idea_jon()
-    azel4point()
+    # azel4point()
