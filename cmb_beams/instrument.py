@@ -523,7 +523,7 @@ class Instrument(MPIBase):
             self.ndet += ndet
 
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
-                                **kwargs):
+                                rand_stdev=0., **kwargs):
         '''
         Create reflected ghosts based on detector
         offset (azimuth and elevation are multiplied by -1).
@@ -539,6 +539,9 @@ class Instrument(MPIBase):
         ghost_tag : str
             Tag to append to parents beam name, see
             `Beam.create_ghost()` (default : refl_ghost)
+        rand_stdev : float
+            Standard deviation of Gaussian random variable
+            added to each ghost (default : 0.)
         kwargs : {create_ghost_opts, beam_opts}
 
         Notes
@@ -568,6 +571,13 @@ class Instrument(MPIBase):
                 refl_ghost_opts = dict(az=-beam.az,
                                        el=-beam.el)
                 kwargs.update(refl_ghost_opts)
+                
+                if rand_stdev:
+                    # add perturbation to ghost amplitude
+                    amplitude = kwargs.get('amplitude', 1.)
+                    amplitude += np.random.normal(scale=rand_stdev)
+                    kwargs.update(dict(amplitude=amplitude))                    
+                    
                 beam.create_ghost(**kwargs)
 
     def kill_channels(self, killfrac=0.2, pairs=False):
@@ -1675,7 +1685,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # add unpolarized tod
         for nidx, n in enumerate(xrange(-N+1, N)):
 
-            if n == 0: #avoid expais since its one anyway
+            if n == 0: 
                 tod += np.real(func[n,pix])
 
             if n > 0:
