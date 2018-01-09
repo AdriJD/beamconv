@@ -151,39 +151,31 @@ def scale_blm(blm, normalize=False, deconv_q=False):
     else:
         return blm
 
-def get_copol_blm(blm, c2_fwhm=None, **kwargs):
+def unpol2pol(blm):
     '''
-    Create the spin \pm 2 coefficients of a unpolarized
-    beam, assuming a co-polarized beam. See Hivon, Ponthieu
-    2016.
+    Compute spin \pm 2 blm coefficients by transforming input 
+    blm (HEALPix) array corresponing to a real spin-0 field. 
 
     Arguments
     ---------
     blm : array-like
-        Healpix-ordered blm array for unpolarized beam.
-        Requires lmax=mmax
-
-    Keyword arguments
-    ---------
-    c2 : float, None
-        fwhm in arcmin. Used to multiply \pm 2 
-        coefficients with exp 2 sigma**2. Needed 
-        to match healpy Gaussian smoothing. 
-        Default=None.
-    kwargs : {scale_blm_opts}
+        Spin-0 harmonic coefficients of real field in HEALPix format.
 
     Returns
     -------
-    blm, blmm2, blmp2 : tuple of array-like
-        The spin \pm 2 harmonic coefficients of the
-        co-polarized beam.
+    blmm2, blmp2 : tuple of array-like
+        The spin \pm 2 harmonic coefficients computed from blm.
+
+    Notes
+    -----
+    Uses the approximation introduced in Hivon, Mottet, Ponthieu 2016 
+    (eq. G.8). Should be accurate for input blm that are roughly 
+    constant on \Delta ell = 5 for ell < ~20.
     '''
-    # normalize beams and extract spin-m2 beams
+
     lmax = hp.Alm.getlmax(blm.size)
     lm = hp.Alm.getlm(lmax)
     getidx = hp.Alm.getidx
-
-    blm = scale_blm(blm, **kwargs)
 
     blmm2 = np.zeros(blm.size, dtype=np.complex128)
     blmp2 = np.zeros(blm.size, dtype=np.complex128)
@@ -223,6 +215,40 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
 
             blmp2[start+2:end] = blm[start_p0:end_p0]
 
+    return blmm2, blmp2
+
+def get_copol_blm(blm, c2_fwhm=None, **kwargs):
+    '''
+    Create the spin \pm 2 coefficients of a unpolarized
+    beam, assuming purely co-polarized beam. See Hivon, Ponthieu
+    2016.
+
+    Arguments
+    ---------
+    blm : array-like
+        Healpix-ordered blm array for unpolarized beam.
+        Requires lmax=mmax
+
+    Keyword arguments
+    ---------
+    c2 : float, None
+        fwhm in arcmin. Used to multiply \pm 2 
+        coefficients with exp 2 sigma**2. Needed 
+        to match healpy Gaussian smoothing for pol.
+        (default : None)
+    kwargs : {scale_blm_opts}
+
+    Returns
+    -------
+    blm, blmm2, blmp2 : tuple of array-like
+        The spin 0 and \pm 2 harmonic coefficients of the
+        co-polarized beam.
+    '''
+    # normalize beams 
+    blm = scale_blm(blm, **kwargs)
+
+    blmm2, blmp2 = unpol2pol(blm)
+
     if c2_fwhm:
         s2fwhm = 2 * np.sqrt(2 * np.log(2))
         expsig2 = np.exp(2 * (np.radians(c2_fwhm / 60.) / s2fwhm)**2)
@@ -230,6 +256,42 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
         blmp2 *= expsig2
 
     return blm, blmm2, blmp2
+
+def get_pol_beam(blm_q, blm_u, **kwargs):
+    '''
+    Create spin \pm 2 blm coefficients using spin-0 
+    SH coefficients of the Q and U beams on a cartesian
+    (Ludwig's third convention) basis.
+
+    Arguments
+    ---------
+    blm_q : array-like
+        Healpy blm array 
+    blm_q : array-like
+        Healpy blm array 
+
+    Keyword arguments
+    -----------------
+    kwargs : {scale_blm_opts}
+
+    Returns
+    -------
+    blmm2, blmp2 : tuple of array-like
+        The spin \pm 2 harmonic coefficients of the
+        polarized beam.    
+    '''
+    
+    blm_q = scale_blm(blm_q, **kwargs)
+    blm_u = scale_blm(blm_u, **kwargs)
+
+    blmm2_q, blmp2_q = unpol2pol(blm_q)
+    blmm2_u, blmp2_u = unpol2pol(blm_u)
+
+    # note the signs here, phi -> -phi+pi w/ respect to Challinor
+    blmm2 = blmm2_q + 1j * blmm2_u
+    blmp2 = blmp2_q - 1j * blmp2_u
+
+    return blmm2, blmp2
 
 def spin2eb(almm2, almp2):
     '''
