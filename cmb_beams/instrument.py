@@ -632,36 +632,43 @@ class Instrument(MPIBase):
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
-    Given an instrument, create a scan strategy in terms of
-    azimuth, elevation, position and polarization angle.
+    Given an instrument, create a scanning pattern and 
+    scan the sky.
     '''
 
     _qp_version = (1, 10, 0)
 
-    def __init__(self, duration, ctime0=None, sample_rate=30,
-                 **kwargs):
+    def __init__(self, duration=0, external_pointing=False,
+                 ctime0=None, sample_rate=30, **kwargs):
         '''
         Initialize scan parameters
 
-        Arguments
-        ---------
-        duration : float
-            Mission duration in seconds.
-
         Keyword arguments
         -----------------
+        duration : float
+            Mission duration in seconds (default : 0)
+        external_pointing : bool
+            If set, `constant_el_scan` loads up boresight pointing
+            and time timestreams instead of calculating them.
+            (default : False)
         ctime0 : float
             Start time in unix time. If None, use
-            current time. (default : None)
+            current time. Ignored if `external_pointing` is set
+            (default : None)
         sample_rate : float
-             Sample rate in Hz (default : 30)
+             Sample rate in Hz. If `external_pointing` is set,
+             make sure this matches the sample rate of the 
+             external pointing. (default : 30)
         kwargs : {mpi_opts, instr_opts, qmap_opts}
         '''
 
         self.__fsamp = float(sample_rate)
+
         self.ctime0 = ctime0
         self.__mlen = duration
         self.__nsamp = int(self.mlen * self.fsamp)
+
+        self.ext_point = external_pointing            
 
         self.rot_dict = {}
         self.hwp_dict = {}
@@ -675,7 +682,7 @@ class ScanStrategy(Instrument, qp.QMap):
                  'qpoint version {} required, found version {}'.format(
                      self._qp_version, qp.version()))
 
-        # Set some useful qpoint/qmap options
+        # Set some useful qpoint/qmap options as default
         qmap_opts = dict(pol=True,
                          fast_math=False,
                          mean_aber=True,
@@ -880,11 +887,12 @@ class ScanStrategy(Instrument, qp.QMap):
         Returns
         -------
         chunks : list of dicts
-            Dictionary with start and end of each
-            chunk
+            Dictionary with start, end and index of each
+            chunk.
         '''
-        nsamp = self.nsamp
 
+        nsamp = self.nsamp
+        
         if not chunksize or chunksize >= nsamp:
             chunksize = int(nsamp)
 
@@ -893,16 +901,32 @@ class ScanStrategy(Instrument, qp.QMap):
         chunks = []
         start = 0
 
-        for chunk in xrange(nchunks):
+        for cidx, chunk in enumerate(xrange(nchunks)):
             end = start + chunksize - 1
             end = nsamp - 1 if end >= (nsamp - 1) else end
-            chunks.append(dict(start=start, end=end))
+            chunks.append(dict(start=start, end=end, cidx=cidx))
             start += chunksize
 
         self.chunks = chunks
         return chunks
 
     def subpart_chunk(self, chunk):
+        '''
+        Split a chunk up into smaller chunks based on the 
+        options set for boresight rotation.
+
+        Arguments
+        ---------
+        chunk : dict
+            Dictionary containing start, end (and optionally 
+            cidx) keys
+
+        Returns
+        -------
+        subchunks : list of dicts
+            Subchunks for each rotation of the boresight. If input 
+            chunk had a `cidx` key, every subchunk inherits this value.
+        '''
 
         period = self.rot_dict['period']
 
@@ -926,8 +950,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 subchunks.append(dict(start=start, end=chunk['end']))
                 self.rot_dict['remainder'] -= chunk_size
 
-                return subchunks
-
             else:
                 # one subchunk that is just the remainder if there is one
                 end = self.rot_dict['remainder'] + start
@@ -942,7 +964,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 subchunks.append(dict(start=end, end=chunk['end']))
 
                 self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - (end + 1))
-                return subchunks
 
         elif nchunks > 1:
             # you can fit at most nstep - 1 full steps in chunk
@@ -966,7 +987,14 @@ class ScanStrategy(Instrument, qp.QMap):
             # fill last part and determine remainder
             subchunks.append(dict(start=start, end=chunk['end']))
             self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - start)
-            return subchunks
+
+        # subchunks get same cidx as parent chunk
+        if 'cidx' in chunk:
+            cidx = chunk['cidx']
+            for subchunk in subchunks:
+                subchunk['cidx'] = cidx
+
+        return subchunks
 
     def allocate_maps(self, nside=256):
         '''
@@ -1107,7 +1135,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.barrier() # just to have summary print statement on top
 
         # init memmap on root
-        if create_memmap:
+        if create_memmap and not self.ext_point:
             if self.mpi_rank == 0:
                 self.mmap = np.memmap('q_bore.npy', dtype=float,
                                       mode='w+', shape=(self.nsamp, 4),
@@ -1315,8 +1343,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, vel_prf='triangle',
             check_interval=600, el_min=45, cut_el_min=False,
-            use_precomputed=False,
-            **kwargs):
+            use_precomputed=False, q_bore_func=None, 
+            ctime_func=None, **kwargs):
 
         '''
         Populates scanning quaternions.
@@ -1350,14 +1378,37 @@ class ScanStrategy(Instrument, qp.QMap):
         use_precomputed : bool
             Load up precomputed boresight quaternion if
             memory-map is present (default : False)
+        q_bore_func : callable, None
+            A user-defined function that takes `start` and `end` (kw)args and 
+            outputs a (unit) quaternion array of shape=(nsamp, 4), where nsamp is 
+            end-start+1. Used when `external_pointing` is set in 
+            `ScanStrategy.__init__`. (default : None)
+        ctime_func : callable, None
+            A user-defined function that takes `start` and `end` (kw)args and 
+            outputs ctime array of shape=(nsamp), where nsamp is 
+            end-start+1. Used when `external_pointing` is set in 
+            `ScanStrategy.__init__`. (default : None)            
         start : int
             Start on this sample
         end : int
             End on this sample
+
+        Notes
+        -----
+        When using `external_pointing` is set, this method just loads
+        the external pointing using the provided functions and ignores
+        every other kwarg except `start` and `end`.
         '''
 
         start = kwargs.get('start')
         end = kwargs.get('end')
+
+        if self.ext_point:
+            # use external pointing, so skip rest of function
+            self.q_bore = q_bore_func(start=start, end=end)
+            self.ctime = ctime_func(start=start, end=end)
+
+            return
 
         ctime = np.arange(start, end+1, dtype=float)
         ctime /= float(self.fsamp)
@@ -1552,7 +1603,8 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
             self.hwp_ang = hwp_ang
 
-    def scan(self, beam_obj, add_to_tod=False, **kwargs):
+    def scan(self, beam_obj, add_to_tod=False,
+             **kwargs):
 
         '''
         Update boresight pointing with detector offset, and
@@ -1568,6 +1620,9 @@ class ScanStrategy(Instrument, qp.QMap):
             Add resulting TOD to existing tod attribute and do not
             internally store the detector offset pointing.
             (default: False)
+        cidx : int, None
+            Index to `chunks` attribute. Only needed when 
+            scanning a subset of a chunk (default : None)
         start : int
             Start on this sample
         end : int
@@ -1617,22 +1672,17 @@ class ScanStrategy(Instrument, qp.QMap):
 
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
-        # normal chunk len (a full computation chunk)
-        nrml_len = self.chunks[0]['end'] - self.chunks[0]['start'] + 1
-        if len(self.chunks) > 1:
-            # here I assume that the short comp. chunk is the last one
-            shrt_len = self.chunks[-1]['end'] - self.chunks[-1]['start'] + 1
+        # Find the indices to the pointing and ctime arrays
+        if 'cidx' in kwargs:
+            cidx = kwargs['cidx']
+            qidx_start = start - self.chunks[cidx]['start']
+            # qidx_end = qidx_start + end - start + 1
+            # qidx_end = start - chunks['start'] + end - start + 1
+            qidx_end = end - self.chunks[cidx]['start'] + 1
         else:
-            shrt_len = nrml_len
-
-        if self.q_bore.shape[0] == nrml_len:
-            qidx_start = np.mod(start, nrml_len)
-            qidx_end = qidx_start + end - start + 1 # indices are one beyond end
-
-        else: # we know we're in the last big chunk
-            qidx_start = start - (len(self.chunks)-1) * nrml_len
-            qidx_end = end - (len(self.chunks)-1) * nrml_len + 1
-
+            qidx_start = 0
+            qidx_end = end - start + 1
+            
         self.qidx_start = qidx_start
         self.qidx_end = qidx_end
 
