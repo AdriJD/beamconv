@@ -1562,6 +1562,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         ---------
+        hwpang : float, None
+            Default HWP angle used when no HWP rotation is specified 
+            (see `set_hwp_mod()`). If not given, use current angle.
         start : int
             Start on this sample
         end : int
@@ -1576,7 +1579,12 @@ class ScanStrategy(Instrument, qp.QMap):
         # If HWP does not move, just return current angle
         if not self.hwp_dict['freq'] or not self.hwp_dict['mode']:
 
-            self.hwp_ang = self.hwp_dict['angle']
+            hwpang = kwargs.get('hwpang')
+            if hwpang:
+                self.hwp_ang = hwpang
+            else:
+                self.hwp_ang = self.hwp_dict['angle']
+
             return
 
         # if needed, compute hwp angle array.
