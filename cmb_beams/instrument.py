@@ -887,7 +887,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Returns
         -------
         chunks : list of dicts
-            Dictionary with start, end and index of each
+            Dictionary with start, end indices and index of each
             chunk.
         '''
 
@@ -902,8 +902,8 @@ class ScanStrategy(Instrument, qp.QMap):
         start = 0
 
         for cidx, chunk in enumerate(xrange(nchunks)):
-            end = start + chunksize - 1
-            end = nsamp - 1 if end >= (nsamp - 1) else end
+            end = start + chunksize
+            end = nsamp if end >= (nsamp) else end
             chunks.append(dict(start=start, end=end, cidx=cidx))
             start += chunksize
 
@@ -918,7 +918,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Arguments
         ---------
         chunk : dict
-            Dictionary containing start, end (and optionally 
+            Dictionary containing start, end indices (and optionally 
             cidx) keys
 
         Returns
@@ -958,31 +958,32 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # in this rotation chunk, no rotation should be made
                     subchunks.append(dict(start=start, end=end, norot=True))
-                    end += 1
+#                    end += 1
 
                 # another subchunk that is the rest of the chunk
                 subchunks.append(dict(start=end, end=chunk['end']))
 
-                self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - (end + 1))
+#                self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - (end + 1))
+                self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - end)
 
         elif nchunks > 1:
             # you can fit at most nstep - 1 full steps in chunk
             # remainder is at most stepsize
             if self.rot_dict['remainder']:
 
-                end = self.rot_dict['remainder'] + start - 1
+                end = self.rot_dict['remainder'] + start
 
                 # again, no rotation should be done
                 subchunks.append(dict(start=start, end=end, norot=True))
 
-                start = end + 1
+                start = end
 
             # loop over full-sized rotation chunks
             for step in xrange(nchunks-1):
 
-                end = start + rot_chunk_size - 1
+                end = start + rot_chunk_size 
                 subchunks.append(dict(start=start, end=end))
-                start = end + 1
+                start = end 
 
             # fill last part and determine remainder
             subchunks.append(dict(start=start, end=chunk['end']))
@@ -1022,7 +1023,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
                     chunk['start'], chunk['end']))
 
-            ctime = np.arange(start, end+1, dtype=float)
+            ctime = np.arange(start, end, dtype=float)
             ctime /= float(self.fsamp)
             ctime += self.ctime0
             self.ctime = ctime
@@ -1381,17 +1382,17 @@ class ScanStrategy(Instrument, qp.QMap):
         q_bore_func : callable, None
             A user-defined function that takes `start` and `end` (kw)args and 
             outputs a (unit) quaternion array of shape=(nsamp, 4), where nsamp is 
-            end-start+1. Used when `external_pointing` is set in 
+            end-start. Used when `external_pointing` is set in 
             `ScanStrategy.__init__`. (default : None)
         ctime_func : callable, None
             A user-defined function that takes `start` and `end` (kw)args and 
             outputs ctime array of shape=(nsamp), where nsamp is 
-            end-start+1. Used when `external_pointing` is set in 
+            end-start. Used when `external_pointing` is set in 
             `ScanStrategy.__init__`. (default : None)            
         start : int
-            Start on this sample
+            Start index
         end : int
-            End on this sample
+            End index
 
         Notes
         -----
@@ -1410,7 +1411,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
 
-        ctime = np.arange(start, end+1, dtype=float)
+        ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
         self.ctime = ctime
@@ -1418,7 +1419,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # read q_bore from disk if needed (and skip rest)
         if use_precomputed and hasattr(self, 'mmap'):
             if self.mpi_rank == 0:
-                self.q_bore = self.mmap[start:end+1]
+                self.q_bore = self.mmap[start:end]
             else:
                 self.q_bore = None
 
@@ -1426,7 +1427,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
 
-        chunk_size = end - start + 1 # Note, you end on "end"
+        chunk_size = end - start
         check_len = int(check_interval * self.fsamp) # min_el checks
 
         nchecks = int(np.ceil(chunk_size / float(check_len)))
@@ -1547,7 +1548,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # store boresight quat in memmap if needed
         if hasattr(self, 'mmap'):
             if self.mpi_rank == 0:
-                self.mmap[start:end+1] = self.q_bore
+                self.mmap[start:end] = self.q_bore
             # wait for I/O
             if self.mpi:
                 self._comm.barrier()
@@ -1566,15 +1567,15 @@ class ScanStrategy(Instrument, qp.QMap):
             Default HWP angle used when no HWP rotation is specified 
             (see `set_hwp_mod()`). If not given, use current angle.
         start : int
-            Start on this sample
+            Start index
         end : int
-            End on this sample
+            End index
         '''
 
         start = kwargs.get('start')
         end = kwargs.get('end')
 
-        chunk_size = int(end - start + 1) # size in samples
+        chunk_size = int(end - start) # size in samples
 
         # If HWP does not move, just return current angle
         if not self.hwp_dict['freq'] or not self.hwp_dict['mode']:
@@ -1632,9 +1633,9 @@ class ScanStrategy(Instrument, qp.QMap):
             Index to `chunks` attribute. Only needed when 
             scanning a subset of a chunk (default : None)
         start : int
-            Start on this sample
+            Start index
         end : int
-            End on this sample
+            End index
         '''
 
         if beam_obj.dead:
@@ -1676,7 +1677,7 @@ class ScanStrategy(Instrument, qp.QMap):
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
         q_off = tools.quat_left_mult(q_rot, q_off)
 
-        tod_size = end - start + 1 # size in samples
+        tod_size = end - start  # size in samples
 
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
@@ -1686,10 +1687,10 @@ class ScanStrategy(Instrument, qp.QMap):
             qidx_start = start - self.chunks[cidx]['start']
             # qidx_end = qidx_start + end - start + 1
             # qidx_end = start - chunks['start'] + end - start + 1
-            qidx_end = end - self.chunks[cidx]['start'] + 1
+            qidx_end = end - self.chunks[cidx]['start']
         else:
             qidx_start = 0
-            qidx_end = end - start + 1
+            qidx_end = end - start
             
         self.qidx_start = qidx_start
         self.qidx_end = qidx_end
