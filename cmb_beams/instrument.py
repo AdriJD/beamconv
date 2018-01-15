@@ -298,7 +298,6 @@ class Instrument(MPIBase):
         fov : float
             Angular size of side of square focal plane on
             sky in degrees
-
         '''
 
         warn('you should use `create_focal_plane()`',
@@ -964,12 +963,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # in this rotation chunk, no rotation should be made
                     subchunks.append(dict(start=start, end=end, norot=True))
-#                    end += 1
 
                 # another subchunk that is the rest of the chunk
                 subchunks.append(dict(start=end, end=chunk['end']))
 
-#                self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - (end + 1))
                 self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - end)
 
         elif nchunks > 1:
@@ -1319,6 +1316,7 @@ class ScanStrategy(Instrument, qp.QMap):
         in-place calculations and modifications of `step_dict`
 
         Arguments
+        ---------        
         arr : array-like
             Array with coordinates to be stepped
         step_dict : dict
@@ -1371,7 +1369,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 arr[startidx:endidx] += step_dict['angle']
 
                 startidx = endidx
-
 
             # fill last part and determine remainder
             step_dict['angle'] = step_gen.next()
@@ -1659,7 +1656,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def scan(self, beam_obj, add_to_tod=False,
              **kwargs):
-
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.

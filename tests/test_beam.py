@@ -88,7 +88,7 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
                                              beam.blm[0])
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
-                                             beam.blm[2])
+                                             beam.blm[1])
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
                                              beam.blm[2])
 

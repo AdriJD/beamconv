@@ -17,10 +17,6 @@ in I, Q, and U to generate a signal timeline that can then be binned into a map.
  * [Healpy](https://github.com/healpy/healpy)
  * [Matplotlib](https://github.com/matplotlib/matplotlib)
 
-### Example Usage
-
-See examples in `cmb_beams/test.py`
-
 ### Installation
 
 ```
@@ -34,3 +30,4 @@ python setup.py test
 
 ### Usage
 
+See example scripts in `cmb_beams/test.py` and Jupyter notebooks in `notebooks`
