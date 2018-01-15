@@ -13,7 +13,7 @@ class MPIBase(object):
     Parent class for MPI related stuff
     '''
 
-    def __init__(self, mpi=True, **kwargs):
+    def __init__(self, mpi=True, comm=None, **kwargs):
         '''
         Check if MPI is working by checking common
         MPI environment variables and set MPI atrributes.
@@ -24,6 +24,9 @@ class MPIBase(object):
             If False, do not use MPI regardless of MPI env.
             otherwise, let code decide based on env. vars
             (default : True)
+        comm : MPI.comm object, None
+            External communicator. If left None, create
+            communicator. (default : None)
         '''
 
         super(MPIBase, self).__init__(**kwargs)
@@ -45,7 +48,10 @@ class MPIBase(object):
                 self.mpi = True
                 self._mpi_double = MPI.DOUBLE
                 self._mpi_sum = MPI.SUM
-                self._comm = MPI.COMM_WORLD
+                if comm:
+                    self._comm = comm
+                else:
+                    self._comm = MPI.COMM_WORLD
 
             except ImportError:
                 warn("Failed to import mpi4py, continuing without MPI",
@@ -622,7 +628,7 @@ class Instrument(MPIBase):
             "Gaussian", "EG", "PO". (default : "Gaussian")
         '''
 
-        beams = np.atleast_2d(beams) #2D: we have pairs
+        beams = np.atleast_2d(self.beams) #2D: we have pairs
         for pair in beams:
             for beam in pair:
                 if not beam:
@@ -1092,6 +1098,72 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
 
+    def init_detpair(self, alm, beam_a, beam_b, **kwargs):
+        '''
+        Initialize the internal structure (the spinmaps)
+        for a detector pair and all its ghosts.
+
+        Arguments
+        ---------
+        alm : tuple
+            Tuple containing (almI, almE, almB) as
+            Healpix-formatted complex numpy arrays
+        beam_a : <detector.Beam> object
+            The A detector. 
+        beam_b : <detector.Beam> object
+            The B detector
+        
+        Keyword arguments
+        -----------------
+        kwargs : {spinmaps_opts}
+            Extra kwargs are assumed input to 
+            `init_spinmaps()`
+
+        Notes
+        -----
+        Both detectors are assumed to share the same beam 
+        (up to a rotation). Therefore, only the A main beam
+        needs to specified.        
+        '''
+
+        # Silently return if no input is given
+        if not beam_a or not beam_b:
+            return
+
+        # We give the ghosts identical Gaussian beams
+        if beam_a.ghosts:
+
+            for gidx in xrange(beam_a.ghost_count):
+                ghost_a = beam_a.ghosts[gidx]
+
+                if gidx == 0:
+                    if not hasattr(ghost_a, 'blm'):
+                        ghost_a.gen_gaussian_blm()
+
+                else:
+                    if not hasattr(ghost_a, 'blm'):
+                        ghost_a.reuse_blm(beam_a.ghosts[0])
+
+        if beam_b.ghosts:
+
+            for gidx in xrange(beam_b.ghost_count):
+                ghost_b = beam_b.ghosts[gidx]
+
+                if gidx == 0:
+                    if not hasattr(ghost_b, 'blm'):
+                        ghost_b.reuse_blm(beam_a.ghosts[0])
+                else:
+                    if not hasattr(ghost_b, 'blm'):
+
+                        beam_b.ghosts[gidx].reuse_blm(beam_a.ghosts[0])
+
+
+        self.init_spinmaps(alm, beam_obj=beam_a, **kwargs)
+
+        # free blm attributes
+        beam_a.delete_blm(del_ghosts_blm=True)
+        beam_b.delete_blm(del_ghosts_blm=True)
+
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
         create_memmap=False, **kwargs):
         '''
@@ -1124,13 +1196,10 @@ class ScanStrategy(Instrument, qp.QMap):
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`
         '''
-        # pop init_spinmaps kwargs
-        max_spin = kwargs.pop('max_spin', 5)
-        nside_spin = kwargs.pop('nside_spin', 256)
 
         if verbose and self.mpi_rank == 0:
-            print('Scanning with {:d} detectors and {:d} beam(s)'.format(
-                self.ndet, len(self.beams)))
+            print('Scanning with {:d} detectors'.format(
+                self.ndet))
 
             sys.stdout.flush()
         self.barrier() # just to have summary print statement on top
@@ -1171,45 +1240,15 @@ class ScanStrategy(Instrument, qp.QMap):
                 print('[rank {:03d}]: working on: {}, {}'.format(
                         self.mpi_rank, beam_a.name, beam_b.name))
 
-            # Create Gaussian blms if beams don't have any
-            if beam_a:
+            # pop init_spinmaps kwargs
+            max_spin = kwargs.pop('max_spin', 5)
+            nside_spin = kwargs.pop('nside_spin', 256)
+            spinmaps_opts = dict(max_spin=max_spin,
+                                 nside_spin=nside_spin,
+                                 verbose=(verbose==2))
 
-                # We give the ghosts identical Gaussian beams
-                if beam_a.ghosts:
-
-                    for gidx in xrange(beam_a.ghost_count):
-                        ghost_a = beam_a.ghosts[gidx]
-
-                        if gidx == 0:
-                            if not hasattr(ghost_a, 'blm'):
-                                ghost_a.gen_gaussian_blm()
-
-                        else:
-                            if not hasattr(ghost_a, 'blm'):
-                                ghost_a.reuse_blm(beam_a.ghosts[0])
-
-                # This is a bit ugly at the moment
-                if beam_b.ghosts:
-
-                    for gidx in xrange(beam_b.ghost_count):
-                        ghost_b = beam_b.ghosts[gidx]
-
-                        if gidx == 0:
-                            if not hasattr(ghost_b, 'blm'):
-                                ghost_b.reuse_blm(beam_a.ghosts[0])
-                        else:
-                            if not hasattr(ghost_b, 'blm'):
-
-                                beam_b.ghosts[gidx].reuse_blm(beam_a.ghosts[0])
-
-
-                self.init_spinmaps(alm, beam_obj=beam_a, max_spin=max_spin,
-                                  nside_spin=nside_spin, verbose=(verbose==2))
-
-                # free blm attributes
-                beam_a.delete_blm(del_ghosts_blm=True)
-                beam_b.delete_blm(del_ghosts_blm=True)
-
+            self.init_detpair(alm, beam_a, beam_b, **spinmaps_opts)
+                
             if not hasattr(self, 'chunks'):
                 # assume no chunking is needed and use full mission
                 self.partition_mission()
@@ -1345,7 +1384,8 @@ class ScanStrategy(Instrument, qp.QMap):
             scan_speed=1, vel_prf='triangle',
             check_interval=600, el_min=45, cut_el_min=False,
             use_precomputed=False, q_bore_func=None, 
-            ctime_func=None, **kwargs):
+            q_bore_kwargs=None, ctime_func=None, 
+            ctime_kwargs=None, **kwargs):
 
         '''
         Populates scanning quaternions.
@@ -1381,14 +1421,18 @@ class ScanStrategy(Instrument, qp.QMap):
             memory-map is present (default : False)
         q_bore_func : callable, None
             A user-defined function that takes `start` and `end` (kw)args and 
-            outputs a (unit) quaternion array of shape=(nsamp, 4), where nsamp is 
-            end-start. Used when `external_pointing` is set in 
+            outputs a (unit) quaternion array of shape=(nsamp, 4) on all ranks.
+            Here, nsamp = end-start. Used when `external_pointing` is set in 
             `ScanStrategy.__init__`. (default : None)
+        q_bore_kwargs : dict, None
+            Keyword arguments to q_bore_func (default: None)
         ctime_func : callable, None
             A user-defined function that takes `start` and `end` (kw)args and 
-            outputs ctime array of shape=(nsamp), where nsamp is 
-            end-start. Used when `external_pointing` is set in 
+            outputs a ctime array of shape=(nsamp) on all ranks.
+            Here, nsamp = end-start. Used when `external_pointing` is set in 
             `ScanStrategy.__init__`. (default : None)            
+        ctime_kwargs : dict, None
+            Keyword arguments to ctime_func (default: None)
         start : int
             Start index
         end : int
@@ -1401,13 +1445,13 @@ class ScanStrategy(Instrument, qp.QMap):
         every other kwarg except `start` and `end`.
         '''
 
-        start = kwargs.get('start')
-        end = kwargs.get('end')
+        start = kwargs.pop('start')
+        end = kwargs.pop('end')
 
         if self.ext_point:
             # use external pointing, so skip rest of function
-            self.q_bore = q_bore_func(start=start, end=end)
-            self.ctime = ctime_func(start=start, end=end)
+            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
+            self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
 
             return
 
@@ -1560,12 +1604,14 @@ class ScanStrategy(Instrument, qp.QMap):
         parameters). See `set_hwp_mod()`. Stores array
         with HWP angle per sample if HWP frequency is
         set. Otherwise stores current HWP angle.
+        Stored HWP angle should be in radians.
 
         Keyword arguments
         ---------
         hwpang : float, None
             Default HWP angle used when no HWP rotation is specified 
             (see `set_hwp_mod()`). If not given, use current angle.
+            (in degrees)
         start : int
             Start index
         end : int
@@ -1580,11 +1626,10 @@ class ScanStrategy(Instrument, qp.QMap):
         # If HWP does not move, just return current angle
         if not self.hwp_dict['freq'] or not self.hwp_dict['mode']:
 
-            hwpang = kwargs.get('hwpang')
-            if hwpang:
-                self.hwp_ang = hwpang
+            if kwargs.get('hwpang'):
+                self.hwp_ang = np.radians(kwargs.get('hwpang'))
             else:
-                self.hwp_ang = self.hwp_dict['angle']
+                self.hwp_ang = np.radians(self.hwp_dict['angle'])
 
             return
 
@@ -1606,7 +1651,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             hwp_ang = np.zeros(chunk_size, dtype=float)
             hwp_ang = self.step_array(hwp_ang, self.hwp_dict, self.hwp_angle_gen)
-            np.radians(hwp_ang, hwp_ang)
+            np.radians(hwp_ang, out=hwp_ang)
 
             # update mod 2pi start angle for next chunk
             self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
