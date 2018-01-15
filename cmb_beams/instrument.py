@@ -279,44 +279,6 @@ class Instrument(MPIBase):
 
         super(Instrument, self).__init__(**kwargs)
 
-    def set_focal_plane(self, nrow=1, ncol=1, fov=10):
-        '''
-        Create detector pointing offsets on the sky, i.e. in azimuth and
-        elevation, for a square grid of detectors. Every point on the grid
-        houses two detectors with orthogonal polarization angles.
-
-        This function bypasses the creation of a Beam list
-        Should be removed at some point
-
-        Arguments
-        ---------
-
-        nrow : int (default: 1)
-            Number of detectors per row
-        ncol : int (default: 1)
-            Number of detectors per column
-        fov : float
-            Angular size of side of square focal plane on
-            sky in degrees
-        '''
-
-        warn('you should use `create_focal_plane()`',
-             DeprecationWarning)
-
-        self.nrow = nrow
-        self.ncol = ncol
-        self.ndet = nrow * ncol # note, no pairs
-        self.azs = np.zeros((nrow, ncol), dtype=float)
-        self.els = np.zeros((nrow, ncol), dtype=float)
-        self.polangs = np.zeros(nrow*ncol, dtype=float)
-
-        x = np.linspace(-fov/2., fov/2., ncol)
-        y = np.linspace(-fov/2., fov/2., nrow)
-        xx, yy = np.meshgrid(x, y)
-
-        self.azs = xx.flatten()
-        self.els = yy.flatten()
-
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True, **kwargs):
         '''
