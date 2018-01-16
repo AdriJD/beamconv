@@ -4,10 +4,13 @@
 
 **contact**: adri.j.duivenvoorden@gmail.com
 
-Code to simulate the scanning of the CMB sky while incorporating realistic beams and
-scan strategies. This code uses a spherical harmonic representation of the beam response
-in I, Q, and U to generate a signal timeline that can then be binned into a map.
+Simulate the scanning of the CMB sky while incorporating realistic beams and
+scan strategies.
 
+This code uses (spin-)spherical harmonic representations of the (polarized) beam response
+and sky to generate simulated CMB detector signal timelines. Beams can be arbitrarely shaped.
+Pointing timelines can be read in or calculated on the fly. Optionally, the results can be
+binned on the sphere.
 
 ### Dependencies
 
