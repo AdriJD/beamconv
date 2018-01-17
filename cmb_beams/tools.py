@@ -536,28 +536,3 @@ def quat_conj_by(q, q2):
     return q3
 
 
-#import quaternion as qt
-#a = np.array([3., 2., 5., 6.])
-#a = quat_norm(a, inplace=True)
-#b = np.array([1., 6., 5., 2.])
-#b = quat_norm(b, inplace=True)
-#c = quat_left_mult(a, b)
-#print c
-#aq = qt.as_quat_array(a)
-#bq = qt.as_quat_array(b)
-#print aq * bq
-#print quat_left_mult(a, b)
-#print quat_left_mult(b, a)
-#print a
-#print aq
-#print b
-#print bq
-
-#print quat_conj_by(a, b)
-#print bq * aq * np.conj(bq)
-
-#print quat_inv(a)
-#print np.conj(aq)
-
-#print quat_norm(c)
-
