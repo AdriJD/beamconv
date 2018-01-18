@@ -1,4 +1,4 @@
-# cmb_beams
+# beamconv
 
 **Authors**: Adri J. Duivenvoorden and Jon E. Gudmundsson
 
