@@ -8,9 +8,13 @@ Simulate the scanning of the CMB sky while incorporating realistic beams and
 scan strategies.
 
 This code uses (spin-)spherical harmonic representations of the (polarized) beam response
-and sky to generate simulated CMB detector signal timelines. Beams can be arbitrarely shaped.
+and sky to generate simulated CMB detector signal timelines. Beams can be arbitrarily shaped.
 Pointing timelines can be read in or calculated on the fly. Optionally, the results can be
 binned on the sphere.
+
+### Usage
+
+See example scripts [`beamconv/test.py`](../blob/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../blob/master/notebooks).
 
 ### Dependencies
 
@@ -31,6 +35,8 @@ run unittests:
 python setup.py test
 ```
 
-### Usage
 
-See example scripts in `cmb_beams/test.py` and Jupyter notebooks in `notebooks`
+
+
+
+
