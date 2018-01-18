@@ -14,7 +14,7 @@ binned on the sphere.
 
 ### Usage
 
-See example scripts [`beamconv/test.py`](../tree/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../tree/master/notebooks).
+See example scripts [`beamconv/test.py`](../../tree/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../../tree/master/notebooks).
 
 ### Dependencies
 
