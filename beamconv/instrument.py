@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import copy
 from warnings import warn, catch_warnings, simplefilter
 import numpy as np
 import qpoint as qp
@@ -369,14 +370,14 @@ class Instrument(MPIBase):
                          combine=True, **kwargs):
         '''
         Create focal plane by loading up a collection
-        of beam properties.
+        of beam properties stored in pickle files.
 
         Arguments
         ---------
         bdir : str
             The absolute or relative path to the directory
-            with .pkl files containing <detector.Beam> options
-            in a dictionary.
+            with .pkl files containing (a list of two) 
+            <detector.Beam> options in a dictionary.
 
         Keyword arguments
         -----------------
@@ -397,15 +398,16 @@ class Instrument(MPIBase):
         -----
         Raises a RuntimeError if no files are found.
 
-        Loaded beams are assumed to be the A-detectors of
-        A-B detector pairs. Since it is assumed that the
-        B-detectors share the A-detectors' beams (up to a
-        90 deg shift in polang: B-polang is A-polang + 90),
-        the B-detectors are generated using the A-detectors'
-        properties.
+        If loaded files contain a single dictionary, those
+        options are assumed to hold for the A detector. 
+        It is assumed that the B-detectors share the 
+        A-detectors' beams (up to a +90 deg shift in polang:
+        B-polang is A-polang + 90). Other properties of
+        B-detectors are shared with A.
 
         Appends "A" or "B" to beam names if provided,
-        depending on polarization of detector.
+        depending on polarization of detector (only in
+        single dictionary case).
 
         Any keywords accepted by the `Beam` class will be
         assumed to hold for all beams created. with the
@@ -429,9 +431,6 @@ class Instrument(MPIBase):
                     warn('{}={} option to `Beam.__init__()` is ignored'
                          .format(key, arg))
 
-            # handled seperately in case of no_pairs
-            dead = kwargs.pop('dead', False)
-
             opj = os.path.join
             tag = '' if tag is None else tag
 
@@ -449,24 +448,46 @@ class Instrument(MPIBase):
                 beam_opts = pickle.load(pkl_file)
                 pkl_file.close()
 
-                name_a = beam_opts.pop('name', None)
-                name_b = name_a
+                if isinstance(pkl_file, dict):
+                    # single dict of opts -> assume A, create A and B
 
-                if name_a:
-                    name_a += 'A'
-                    name_b += 'B'
+                    beam_opts_a = beam_opts
+                    beam_opts_b = copy.deepcopy(beam_opts)
 
+                    if beam_opts.get('name'):
+                        beam_opts_a['name'] += 'A'
+                        beam_opts_b['name'] += 'B'
+
+                    # set polang to 0/90 or polang/polang+90
+                    polang = beam_opts_a.setdefault('polang', 0)
+                    beam_opts_b['polang'] = polang + 90
+
+                elif isinstance(beam_opts, (list, tuple, np.ndarray)):
+                    # assume list of dicts for A and B
+
+                    if len(beam_opts) != 2:
+                        raise ValueError('Need two elements: A and B')
+                    
+                    beam_opts_a = beam_opts[0]
+                    beam_opts_b = beam_opts[1]
+                        
                 # overrule options with given kwargs
-                beam_opts.update(kwargs)
+                beam_opts_a.update(kwargs)
 
-                beam_opts.pop('pol', None)
-                polang = beam_opts.pop('polang', 0)
+                # if kwargs contain polang, update it for B
+                if kwargs.get('polang'):
+                    kwargs['polang'] += 90
 
-                beam_a = Beam(name=name_a, polang=polang,
-                              pol='A', dead=dead, **beam_opts)
-                beam_b = Beam(name=name_b, polang=polang+90.,
-                              dead=dead or no_pairs,
-                              pol='B', **beam_opts)
+                beam_opts_b.update(kwargs)
+                
+                if no_pairs:
+                    beam_opts_b['dead'] = True
+
+                beam_opts_a.pop('pol', None)
+                beam_opts_b.pop('pol', None)
+
+                beam_a = Beam(pol='A', **beam_opts_a)
+                beam_b = Beam(pol='B', **beam_opts_b)
 
                 beams.append([beam_a, beam_b])
 

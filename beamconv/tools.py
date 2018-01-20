@@ -142,7 +142,9 @@ def scale_blm(blm, normalize=False, deconv_q=False):
     ell = np.arange(lmax+1)
 
     if deconv_q:
-        blm *= 2 * np.sqrt(np.pi / (2 * ell + 1))
+        qell = 2 * np.sqrt(np.pi / (2 * ell + 1))
+        for i in xrange(blm.shape[0]):
+            hp.almxfl(blm[i], qell, inplace=True)
     if normalize:
         blm /= blm[0,0]
 
