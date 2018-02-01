@@ -448,7 +448,7 @@ class Instrument(MPIBase):
                 beam_opts = pickle.load(pkl_file)
                 pkl_file.close()
 
-                if isinstance(pkl_file, dict):
+                if isinstance(beam_opts, dict):
                     # single dict of opts -> assume A, create A and B
 
                     beam_opts_a = beam_opts
