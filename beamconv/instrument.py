@@ -770,7 +770,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     angles=None):
         '''
         Set options for modulating the polarized sky signal
-        using a (stepped or continuously) rotating half-wave
+        using a (stepped or continuously rotating) half-wave
         plate.
 
         Keyword arguments
@@ -996,30 +996,6 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
         self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
         self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
-
-    def scan_fixed_point(self, ra0=-10, dec0=-57.5, verbose=True):
-        '''
-        Gets the az and el pointing timelines required to observe a fixed point
-        on the sky.
-        '''
-
-        for cidx, chunk in enumerate(self.chunks):
-
-            if verbose:
-                print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
-                    chunk['start'], chunk['end']))
-
-            ctime = np.arange(start, end, dtype=float)
-            ctime /= float(self.fsamp)
-            ctime += self.ctime0
-            self.ctime = ctime
-
-            ra0 = np.atleast_1d(ra0)
-            dec0 = np.atleast_1d(dec0)
-            npatches = dec0.shape[0]
-
-            az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
-                self.lon, self.lat, ctime[::check_len])
 
     def scan_instrument(self, verbose=True, mapmaking=True,
         **kwargs):
@@ -1464,7 +1440,7 @@ class ScanStrategy(Instrument, qp.QMap):
         az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
             self.lon, self.lat, ctime[::check_len])
 
-        flag0 = np.zeros_like(el0).astype(bool)
+        flag0 = np.zeros(el0.size, dtype=bool)
 
         # check and fix cases where boresight el < el_min
         n = 1
@@ -1530,7 +1506,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.step_dict.get('period', None):
             el = self.step_array(el, self.step_dict, self.el_step_gen)
 
-        # Transform from instrument frame to celestial, i.e. az, el -> ra, dec
+        # Transform from horizontal frame to celestial, i.e. az, el -> ra, dec
         if self.mpi:
             # Calculate boresight quaternion in parallel
 
