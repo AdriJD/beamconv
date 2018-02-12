@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import healpy as hp
-from cmb_beams import tools
+from beamconv import tools
 
 class TestTools(unittest.TestCase):
     
