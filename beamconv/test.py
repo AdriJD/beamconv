@@ -27,8 +27,8 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     return cls[0], cls[1:]
 
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
-               az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
-               hwp_mode=None):
+    az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
+    hwp_mode=None):
     '''
     Simulates a 24h BICEP2-like scan strategy
     using a random LCDM realisation and a 3 x 3 grid
@@ -616,8 +616,8 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
         plt.close()
 
 def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
-               az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
-               hwp_mode=None):
+    az_throw=50, scan_speed=2.8, rot_period=4.5*60*60,
+    hwp_mode=None):
     '''
     Similar test to `scan_bicep`, but includes reflected ghosts
 
@@ -1041,10 +1041,127 @@ def azel4point(ra0=-10, dec0=-57.5, mlen=365, nsamp=1e4,
     plt.savefig('../scratch/img/azel.png')
     plt.close()
 
+def test_satellite_scan(lmax=700, mmax=2, fwhm=43, 
+    ra0=-10, dec0=-57.5,
+    az_throw=50, scan_speed=2.8, 
+    hwp_mode=None, alpha=45., beta=45.,
+    alpha_period=5400., beta_period=600., delta_az=0., delta_el=0.,
+    delta_psi=0., jitter_amp=1.0):
+
+    '''
+    Simulates a satellite scan strategy 
+    using a random LCDM realisation and a 3 x 3 grid
+    of Gaussian beams pairs. Bins tods into maps and
+    compares to smoothed input maps (no pair-
+    differencing). MPI-enabled.
+
+    Keyword arguments
+    ---------
+
+    lmax : int,
+        bandlimit (default : 700)
+    mmax : int, 
+        assumed azimuthal bandlimit beams (symmetric in this example
+        so 2 would suffice) (default : 2)
+    fwhm : float,
+        The beam FWHM in arcmin (default : 40)
+    ra0 : float,
+        Ra coord of centre region (default : -10)
+    dec0 : float,  (default : -57.5)
+        Ra coord of centre region
+    az_throw : float,
+        Scan width in azimuth (in degrees) (default : 50)
+    scan_speed : float,
+        Scan speed in deg/s (default : 1)
+    hwp_mode : str, None
+        HWP modulation mode, either "continuous",
+        "stepped" or None. Use freq of 1 or 1/10800 Hz
+        respectively (default : None)
+    '''
+
+    print('Simulating a satellite...')
+    mlen = 24 * 60 * 60 # hardcoded mission length
+
+    # Create LCDM realization
+    ell, cls = get_cls()
+    np.random.seed(25) # make sure all MPI ranks use the same seed
+    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+
+    sat = ScanStrategy(mlen, # mission duration in sec.
+        external_pointing=True, # Telling code to use non-standard scanning
+        sample_rate=12.01, # sample rate in Hz
+        location='space') # Instrument at south pole
+
+    # Create a 3 x 3 square grid of Gaussian beams
+    sat.create_focal_plane(nrow=7, ncol=7, fov=15,
+                          lmax=lmax, fwhm=fwhm)
+
+    # calculate tods in two chunks
+    sat.partition_mission(0.5*sat.nsamp)
+
+    # Allocate and assign parameters for mapmaking
+    sat.allocate_maps(nside=256)
+
+    scan_opts = dict(q_bore_func=sat.satellite_scan,        
+        ctime_func=sat.satellite_ctime,
+        q_bore_kwargs=dict(),
+        ctime_kwargs=dict())
+
+    # Generate timestreams, bin them and store as attributes
+    sat.scan_instrument_mpi(alm, verbose=1, ra0=ra0,
+        dec0=dec0, az_throw=az_throw, nside_spin=256, max_spin=mmax,
+        **scan_opts)
+
+    # Solve for the maps
+    maps, cond, proj = sat.solve_for_map(fill=np.nan, return_proj=True)
+
+    # Plotting
+    if sat.mpi_rank == 0:
+        print 'plotting results'
+
+        cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
+
+        # plot rescanned maps
+
+
+        plot_iqu(maps, '../scratch/img/', 'rescan_satellite',
+                 sym_limits=[250, 5, 5],
+                 plot_func=hp.mollview, **cart_opts)
+
+        # plot smoothed input maps
+        nside = hp.get_nside(maps[0])
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
+        maps_raw = hp.alm2map(alm, nside, verbose=False)
+
+        plot_iqu(maps_raw, '../scratch/img/', 'raw_satellite',
+                 sym_limits=[250, 5, 5],
+                 plot_func=hp.mollview, **cart_opts)
+
+        # plot difference maps
+        for arr in maps_raw:
+            # replace stupid UNSEEN crap
+            arr[arr==hp.UNSEEN] = np.nan
+
+        diff = maps_raw - maps
+
+        plot_iqu(diff, '../scratch/img/', 'diff_satellite',
+                 sym_limits=[1e-6, 1e-6, 1e-6],
+                 plot_func=hp.mollview, **cart_opts)
+
+        # plot condition number map
+        cart_opts.pop('unit', None)
+
+        plot_map(cond, '../scratch/img/', 'cond_satellite',
+                 min=2, max=5, unit='condition number',
+                 plot_func=hp.mollview, **cart_opts)
+
+        plot_map(proj[0], '../scratch/img/', 'hits_satellite',
+                 unit='Hits', plot_func=hp.mollview, **cart_opts)
+
 if __name__ == '__main__':
     # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-    scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=8, ncol=8,
-        fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
+    # scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=8, ncol=8,
+    #     fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
 
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
@@ -1052,3 +1169,5 @@ if __name__ == '__main__':
     # single_detector()
     # idea_jon()
     # azel4point()
+
+    test_satellite_scan()

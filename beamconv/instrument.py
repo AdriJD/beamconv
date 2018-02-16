@@ -255,6 +255,7 @@ class Instrument(MPIBase):
             Predefined locations. Current options:
                 spole    : (lat=-89.9, lon=169.15)
                 atacama  : (lat=-22.96, lon=-67.79)
+                space    : (Fixed lat, time-variable lon)
         lon : float, optional
             Longitude in degrees
         lat : float, optional
@@ -270,12 +271,16 @@ class Instrument(MPIBase):
             self.lat = -22.96
             self.lon = -67.79
 
+        elif location == 'space':
+            self.lat = None
+            self.lon = None
+
         if lat:
             self.lat = lat
         if lon:
             self.lon = lon
 
-        if not self.lat or not self.lon:
+        if (location != 'space') and (not self.lat or not self.lon):
             raise ValueError('Specify location of telescope')
 
         super(Instrument, self).__init__(**kwargs)
@@ -1337,12 +1342,11 @@ class ScanStrategy(Instrument, qp.QMap):
             return arr
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
-            scan_speed=1, vel_prf='triangle',
-            check_interval=600, el_min=45, cut_el_min=False,
-            use_precomputed=False, q_bore_func=None,
-            q_bore_kwargs=None, ctime_func=None,
-            ctime_kwargs=None, **kwargs):
-
+        scan_speed=1, vel_prf='triangle',
+        check_interval=600, el_min=45, cut_el_min=False,
+        use_precomputed=False, q_bore_func=None,
+        q_bore_kwargs=None, ctime_func=None,
+        ctime_kwargs=None, **kwargs):
         '''
         Populates scanning quaternions.
         Let boresight scan back and forth in azimuth, starting
@@ -1406,8 +1410,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if self.ext_point:
             # use external pointing, so skip rest of function
-            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
             self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
+            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
             return
 
@@ -1553,121 +1557,48 @@ class ScanStrategy(Instrument, qp.QMap):
             if self.mpi:
                 self._comm.barrier()
 
-    def satellite_scan(self, az_throw=90,
-            check_interval=600, el_min=45, cut_el_min=False,
-            use_precomputed=False, q_bore_func=None,
-            q_bore_kwargs=None, ctime_func=None,
-            ctime_kwargs=None, alpha=45., beta=45.,
-            alpha_period=5400., beta_period=600., delta_az=0., delta_el=0.,
-            delta_psi=0., jitter_amp=1.0 **kwargs):
+    
+    def satellite_ctime(self, **kwargs):
         '''
-        A function to simulate satellite scanning strategy
+        Insert text
         '''
 
         start = kwargs.pop('start')
         end = kwargs.pop('end')
 
-        if self.ext_point:
-            # use external pointing, so skip rest of function
-            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
-            self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
-
-            return
-
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
-        self.ctime = ctime
+
+        return ctime
+
+    def satellite_scan(self, alpha=45., beta=45.,
+        alpha_period=5400., beta_period=600., delta_az=0., delta_el=0.,
+        delta_psi=0., jitter_amp=1.0, **kwargs):
+        '''
+        A function to simulate satellite scanning strategy
+        '''
+
+        # if not self.ctime:
+        #     raise ValueError('Have to define initiate ctime before calling')
 
         dt = 1/self.fsamp
-
-        # read q_bore from disk if needed (and skip rest)
-        if use_precomputed and hasattr(self, 'mmap'):
-            if self.mpi_rank == 0:
-                self.q_bore = self.mmap[start:end]
-            else:
-                self.q_bore = None
-
-            self.q_bore = self.broadcast_array(self.q_bore)
-
-            return
-
-        chunk_size = end - start
-
-        ndays = chunk_size/self.fsamp/(24*3600)
-        check_len = int(check_interval * self.fsamp) # min_el checks
-
-        nchecks = int(np.ceil(chunk_size / float(check_len)))
-        p_len = check_len * nchecks # longer than chunk for nicer slicing
-
+        nsamp = len(self.ctime)
+        ndays = float(nsamp)/self.fsamp/(24*3600)
 
         jitter = jitter_amp * np.random.randn(int(nsamp))
-        az = np.mod(np.arange(chunk_size)*dt*360/beta_period, 360)
+        az = np.mod(np.arange(nsamp)*dt*360/beta_period, 360)
         el = beta*np.ones_like(az) + jitter
 
         # Anti sun at all times
-        lon = np.mod(np.linspace(0, ndays*360, chunk_size), 360.)
-        lat = alpha*np.sin(2*np.pi*np.arange(chunk_size)*dt/alpha_period)
+        lon = np.mod(np.linspace(0, ndays*360, nsamp), 360.)
+        lat = alpha*np.sin(2*np.pi*np.arange(nsamp)*dt/alpha_period)
 
-        az = az[:chunk_size]
-        el = el[:chunk_size]
-        lon = lon[:chunk_size]
-        lat = lat[:chunk_size]
-        ctime = ctime[:chunk_size]
+        q_bore = self.azel2bore(az, el, None, None, lon, lat, self.ctime)
 
-        q_bore = Q.azel2bore(az, el, pitch, roll, lon, lat, ctime)
+        self.flag = np.zeros_like(az, dtype=bool)
 
-        self.flag = flag
-
-        # Transform from horizontal frame to celestial, i.e. az, el -> ra, dec
-        if self.mpi:
-            # Calculate boresight quaternion in parallel
-
-            sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = np.divmod(chunk_size,
-                                        self.mpi_size)
-            sub_size += quot
-
-            if remainder:
-                # give first ranks one extra quaternion
-                sub_size[:int(remainder)] += 1
-
-            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
-            sub_end = sub_start + sub_size[self.mpi_rank]
-
-            q_bore = np.empty(chunk_size * 4, dtype=float)
-
-            # calculate section of q_bore
-            q_boresub = self.azel2bore(az[sub_start:sub_end],
-                                    el[sub_start:sub_end],
-                                    None, None, lon[sub_start:sub_end],
-                                    lat[sub_start:sub_end],
-                                    ctime[sub_start:sub_end])
-
-            q_boresub = q_boresub.ravel()
-
-            sub_size *= 4 # for the flattened quat array
-
-            offsets = np.zeros(self.mpi_size)
-            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
-
-            # combine all sections on all ranks
-            self._comm.Allgatherv(q_boresub,
-                            [q_bore, sub_size, offsets, self._mpi_double])
-            self.q_bore = q_bore.reshape(chunk_size, 4)
-
-        else:
-            self.q_bore = self.azel2bore(az, el, None, None, lon,
-                                         lat, ctime)
-
-        # store boresight quat in memmap if needed
-        if hasattr(self, 'mmap'):
-            if self.mpi_rank == 0:
-                self.mmap[start:end] = self.q_bore
-            # wait for I/O
-            if self.mpi:
-                self._comm.barrier()
-
+        return q_bore
 
     def rotate_hwp(self, **kwargs):
         '''
