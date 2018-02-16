@@ -376,7 +376,7 @@ class Instrument(MPIBase):
         ---------
         bdir : str
             The absolute or relative path to the directory
-            with .pkl files containing (a list of two) 
+            with .pkl files containing (a list of two)
             <detector.Beam> options in a dictionary.
 
         Keyword arguments
@@ -399,8 +399,8 @@ class Instrument(MPIBase):
         Raises a RuntimeError if no files are found.
 
         If loaded files contain a single dictionary, those
-        options are assumed to hold for the A detector. 
-        It is assumed that the B-detectors share the 
+        options are assumed to hold for the A detector.
+        It is assumed that the B-detectors share the
         A-detectors' beams (up to a +90 deg shift in polang:
         B-polang is A-polang + 90). Other properties of
         B-detectors are shared with A.
@@ -467,10 +467,10 @@ class Instrument(MPIBase):
 
                     if len(beam_opts) != 2:
                         raise ValueError('Need two elements: A and B')
-                    
+
                     beam_opts_a = beam_opts[0]
                     beam_opts_b = beam_opts[1]
-                        
+
                 # overrule options with given kwargs
                 beam_opts_a.update(kwargs)
 
@@ -479,7 +479,7 @@ class Instrument(MPIBase):
                     kwargs['polang'] += 90
 
                 beam_opts_b.update(kwargs)
-                
+
                 if no_pairs:
                     beam_opts_b['dead'] = True
 
@@ -559,13 +559,13 @@ class Instrument(MPIBase):
                 refl_ghost_opts = dict(az=-beam.az,
                                        el=-beam.el)
                 kwargs.update(refl_ghost_opts)
-                
+
                 if rand_stdev:
                     # add perturbation to ghost amplitude
                     amplitude = kwargs.get('amplitude', 1.)
                     amplitude += np.random.normal(scale=rand_stdev)
-                    kwargs.update(dict(amplitude=amplitude))                    
-                    
+                    kwargs.update(dict(amplitude=amplitude))
+
                 beam.create_ghost(**kwargs)
 
     def kill_channels(self, killfrac=0.2, pairs=False):
@@ -620,7 +620,7 @@ class Instrument(MPIBase):
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
-    Given an instrument, create a scanning pattern and 
+    Given an instrument, create a scanning pattern and
     scan the sky.
     '''
 
@@ -645,7 +645,7 @@ class ScanStrategy(Instrument, qp.QMap):
             (default : None)
         sample_rate : float
              Sample rate in Hz. If `external_pointing` is set,
-             make sure this matches the sample rate of the 
+             make sure this matches the sample rate of the
              external pointing. (default : 30)
         kwargs : {mpi_opts, instr_opts, qmap_opts}
         '''
@@ -656,7 +656,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.__mlen = duration
         self.__nsamp = int(self.mlen * self.fsamp)
 
-        self.ext_point = external_pointing            
+        self.ext_point = external_pointing
 
         self.rot_dict = {}
         self.hwp_dict = {}
@@ -880,7 +880,7 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         nsamp = self.nsamp
-        
+
         if not chunksize or chunksize >= nsamp:
             chunksize = int(nsamp)
 
@@ -900,19 +900,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def subpart_chunk(self, chunk):
         '''
-        Split a chunk up into smaller chunks based on the 
+        Split a chunk up into smaller chunks based on the
         options set for boresight rotation.
 
         Arguments
         ---------
         chunk : dict
-            Dictionary containing start, end indices (and optionally 
+            Dictionary containing start, end indices (and optionally
             cidx) keys
 
         Returns
         -------
         subchunks : list of dicts
-            Subchunks for each rotation of the boresight. If input 
+            Subchunks for each rotation of the boresight. If input
             chunk had a `cidx` key, every subchunk inherits this value.
         '''
 
@@ -967,9 +967,9 @@ class ScanStrategy(Instrument, qp.QMap):
             # loop over full-sized rotation chunks
             for step in xrange(nchunks-1):
 
-                end = start + rot_chunk_size 
+                end = start + rot_chunk_size
                 subchunks.append(dict(start=start, end=end))
-                start = end 
+                start = end
 
             # fill last part and determine remainder
             subchunks.append(dict(start=start, end=chunk['end']))
@@ -1065,21 +1065,21 @@ class ScanStrategy(Instrument, qp.QMap):
             Tuple containing (almI, almE, almB) as
             Healpix-formatted complex numpy arrays
         beam_a : <detector.Beam> object
-            The A detector. 
+            The A detector.
         beam_b : <detector.Beam> object
             The B detector
-        
+
         Keyword arguments
         -----------------
         kwargs : {spinmaps_opts}
-            Extra kwargs are assumed input to 
+            Extra kwargs are assumed input to
             `init_spinmaps()`
 
         Notes
         -----
-        Both detectors are assumed to share the same beam 
+        Both detectors are assumed to share the same beam
         (up to a rotation). Therefore, only the A main beam
-        needs to specified.        
+        needs to specified.
         '''
 
         # Silently return if no input is given
@@ -1204,7 +1204,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                  verbose=(verbose==2))
 
             self.init_detpair(alm, beam_a, beam_b, **spinmaps_opts)
-                
+
             if not hasattr(self, 'chunks'):
                 # assume no chunking is needed and use full mission
                 self.partition_mission()
@@ -1275,7 +1275,7 @@ class ScanStrategy(Instrument, qp.QMap):
         in-place calculations and modifications of `step_dict`
 
         Arguments
-        ---------        
+        ---------
         arr : array-like
             Array with coordinates to be stepped
         step_dict : dict
@@ -1339,8 +1339,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
             scan_speed=1, vel_prf='triangle',
             check_interval=600, el_min=45, cut_el_min=False,
-            use_precomputed=False, q_bore_func=None, 
-            q_bore_kwargs=None, ctime_func=None, 
+            use_precomputed=False, q_bore_func=None,
+            q_bore_kwargs=None, ctime_func=None,
             ctime_kwargs=None, **kwargs):
 
         '''
@@ -1376,17 +1376,17 @@ class ScanStrategy(Instrument, qp.QMap):
             Load up precomputed boresight quaternion if
             memory-map is present (default : False)
         q_bore_func : callable, None
-            A user-defined function that takes `start` and `end` (kw)args and 
+            A user-defined function that takes `start` and `end` (kw)args and
             outputs a (unit) quaternion array of shape=(nsamp, 4) on all ranks.
-            Here, nsamp = end-start. Used when `external_pointing` is set in 
+            Here, nsamp = end-start. Used when `external_pointing` is set in
             `ScanStrategy.__init__`. (default : None)
         q_bore_kwargs : dict, None
             Keyword arguments to q_bore_func (default: None)
         ctime_func : callable, None
-            A user-defined function that takes `start` and `end` (kw)args and 
+            A user-defined function that takes `start` and `end` (kw)args and
             outputs a ctime array of shape=(nsamp) on all ranks.
-            Here, nsamp = end-start. Used when `external_pointing` is set in 
-            `ScanStrategy.__init__`. (default : None)            
+            Here, nsamp = end-start. Used when `external_pointing` is set in
+            `ScanStrategy.__init__`. (default : None)
         ctime_kwargs : dict, None
             Keyword arguments to ctime_func (default: None)
         start : int
@@ -1553,6 +1553,122 @@ class ScanStrategy(Instrument, qp.QMap):
             if self.mpi:
                 self._comm.barrier()
 
+    def satellite_scan(self, az_throw=90,
+            check_interval=600, el_min=45, cut_el_min=False,
+            use_precomputed=False, q_bore_func=None,
+            q_bore_kwargs=None, ctime_func=None,
+            ctime_kwargs=None, alpha=45., beta=45.,
+            alpha_period=5400., beta_period=600., delta_az=0., delta_el=0.,
+            delta_psi=0., jitter_amp=1.0 **kwargs):
+        '''
+        A function to simulate satellite scanning strategy
+        '''
+
+        start = kwargs.pop('start')
+        end = kwargs.pop('end')
+
+        if self.ext_point:
+            # use external pointing, so skip rest of function
+            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
+            self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
+
+            return
+
+        ctime = np.arange(start, end, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
+        self.ctime = ctime
+
+        dt = 1/self.fsamp
+
+        # read q_bore from disk if needed (and skip rest)
+        if use_precomputed and hasattr(self, 'mmap'):
+            if self.mpi_rank == 0:
+                self.q_bore = self.mmap[start:end]
+            else:
+                self.q_bore = None
+
+            self.q_bore = self.broadcast_array(self.q_bore)
+
+            return
+
+        chunk_size = end - start
+
+        ndays = chunk_size/self.fsamp/(24*3600)
+        check_len = int(check_interval * self.fsamp) # min_el checks
+
+        nchecks = int(np.ceil(chunk_size / float(check_len)))
+        p_len = check_len * nchecks # longer than chunk for nicer slicing
+
+
+        jitter = jitter_amp * np.random.randn(int(nsamp))
+        az = np.mod(np.arange(chunk_size)*dt*360/beta_period, 360)
+        el = beta*np.ones_like(az) + jitter
+
+        # Anti sun at all times
+        lon = np.mod(np.linspace(0, ndays*360, chunk_size), 360.)
+        lat = alpha*np.sin(2*np.pi*np.arange(chunk_size)*dt/alpha_period)
+
+        az = az[:chunk_size]
+        el = el[:chunk_size]
+        lon = lon[:chunk_size]
+        lat = lat[:chunk_size]
+        ctime = ctime[:chunk_size]
+
+        q_bore = Q.azel2bore(az, el, pitch, roll, lon, lat, ctime)
+
+        self.flag = flag
+
+        # Transform from horizontal frame to celestial, i.e. az, el -> ra, dec
+        if self.mpi:
+            # Calculate boresight quaternion in parallel
+
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = np.divmod(chunk_size,
+                                        self.mpi_size)
+            sub_size += quot
+
+            if remainder:
+                # give first ranks one extra quaternion
+                sub_size[:int(remainder)] += 1
+
+            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            sub_end = sub_start + sub_size[self.mpi_rank]
+
+            q_bore = np.empty(chunk_size * 4, dtype=float)
+
+            # calculate section of q_bore
+            q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                    el[sub_start:sub_end],
+                                    None, None, lon[sub_start:sub_end],
+                                    lat[sub_start:sub_end],
+                                    ctime[sub_start:sub_end])
+
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # for the flattened quat array
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+
+            # combine all sections on all ranks
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            self.q_bore = q_bore.reshape(chunk_size, 4)
+
+        else:
+            self.q_bore = self.azel2bore(az, el, None, None, lon,
+                                         lat, ctime)
+
+        # store boresight quat in memmap if needed
+        if hasattr(self, 'mmap'):
+            if self.mpi_rank == 0:
+                self.mmap[start:end] = self.q_bore
+            # wait for I/O
+            if self.mpi:
+                self._comm.barrier()
+
+
     def rotate_hwp(self, **kwargs):
         '''
         Evolve the HWP forward by a number of samples
@@ -1565,7 +1681,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Keyword arguments
         ---------
         hwpang : float, None
-            Default HWP angle used when no HWP rotation is specified 
+            Default HWP angle used when no HWP rotation is specified
             (see `set_hwp_mod()`). If not given, use current angle.
             (in degrees)
         start : int
@@ -1630,7 +1746,7 @@ class ScanStrategy(Instrument, qp.QMap):
             internally store the detector offset pointing.
             (default: False)
         cidx : int, None
-            Index to `chunks` attribute. Only needed when 
+            Index to `chunks` attribute. Only needed when
             scanning a subset of a chunk (default : None)
         start : int
             Start index
@@ -1691,7 +1807,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             qidx_start = 0
             qidx_end = end - start
-            
+
         self.qidx_start = qidx_start
         self.qidx_end = qidx_end
 
@@ -1744,7 +1860,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # add unpolarized tod
         for nidx, n in enumerate(xrange(-N+1, N)):
 
-            if n == 0: 
+            if n == 0:
                 tod += np.real(func[n,pix])
 
             if n > 0:
