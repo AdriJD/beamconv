@@ -1557,7 +1557,6 @@ class ScanStrategy(Instrument, qp.QMap):
             if self.mpi:
                 self._comm.barrier()
 
-    
     def satellite_ctime(self, **kwargs):
         '''
         Insert text
@@ -1572,7 +1571,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return ctime
 
-    def satellite_scan(self, alpha=45., beta=45.,
+    def satellite_scan(self, alpha=50., beta=50.,
         alpha_period=5400., beta_period=600., delta_az=0., delta_el=0.,
         delta_psi=0., jitter_amp=1.0, **kwargs):
         '''
@@ -1591,7 +1590,7 @@ class ScanStrategy(Instrument, qp.QMap):
         el = beta*np.ones_like(az) + jitter
 
         # Anti sun at all times
-        lon = np.mod(np.linspace(0, ndays*360, nsamp), 360.)
+        lon = np.mod(np.linspace(0, ndays*360.9863, nsamp), 360.)
         lat = alpha*np.sin(2*np.pi*np.arange(nsamp)*dt/alpha_period)
 
         q_bore = self.azel2bore(az, el, None, None, lon, lat, self.ctime)
