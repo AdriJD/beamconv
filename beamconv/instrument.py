@@ -1590,7 +1590,7 @@ class ScanStrategy(Instrument, qp.QMap):
         el = beta*np.ones_like(az) + jitter
 
         # Anti sun at all times
-        lon = np.mod(np.linspace(0, ndays*360.9863, nsamp), 360.)
+        lon = np.mod(-np.linspace(0, ndays*360.9863, nsamp), 360.)
         lat = alpha*np.sin(2*np.pi*np.arange(nsamp)*dt/alpha_period)
 
         q_bore = self.azel2bore(az, el, None, None, lon, lat, self.ctime)

@@ -1080,7 +1080,7 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
     '''
 
     print('Simulating a satellite...')
-    mlen = 24 * 60 * 60 # hardcoded mission length
+    mlen = 3 * 24 * 60 * 60 # hardcoded mission length
 
     # Create LCDM realization
     ell, cls = get_cls()
