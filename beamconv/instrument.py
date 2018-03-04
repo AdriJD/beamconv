@@ -1572,8 +1572,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def satellite_scan(self, alpha=50., beta=50.,
-        alpha_period=5400., beta_period=600., delta_az=0., delta_el=0.,
-        delta_psi=0., jitter_amp=1.0, **kwargs):
+        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False):
         '''
         A function to simulate satellite scanning strategy
         '''
@@ -1597,7 +1596,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
         self.flag = np.zeros_like(az, dtype=bool)
 
-        return q_bore
+        if return_all:
+            return az, el, lon, lat, q_bore
+        else:
+            return q_bore
 
     def rotate_hwp(self, **kwargs):
         '''
