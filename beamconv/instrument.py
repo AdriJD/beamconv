@@ -1572,7 +1572,8 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def satellite_scan(self, alpha=50., beta=50.,
-        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False):
+        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
+        **kwargs):
         '''
         A function to simulate satellite scanning strategy
         '''
