@@ -1976,6 +1976,18 @@ class ScanStrategy(Instrument, qp.QMap):
                     self.spinmaps['ghosts'][u][:] = func, func_c
             return
 
+        # check for nans
+        crash_a = False
+        crash_b = False
+        i = 0
+        while i < 3 and not (crash_a or crash_b):
+            crash_a = ~np.isfinite(np.sum(alm[i][:]))
+            crash_b = ~np.isfinite(np.sum(blm[i][:]))
+            i += 1
+        if crash_a or crash_b:
+            name = 'alm' if crash_a else 'blm'
+            raise ValueError('{}[{}] contains nan/inf.'.format(name, i-1))
+        
         N = max_spin + 1
         lmax = hp.Alm.getlmax(alm[0].size)
 
