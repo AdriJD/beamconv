@@ -9,9 +9,9 @@ import healpy as hp
 def plot_map(map_arr, write_dir, tag,
              plot_func=hp.mollview, **kwargs):
     '''
-    Plot map using one of the healpy plotting 
+    Plot map using one of the healpy plotting
     functions and write to disk.
-    
+
     Arguments
     ---------
     map_arr : array-like
@@ -20,14 +20,14 @@ def plot_map(map_arr, write_dir, tag,
         Path to directory where map is saved
     tag : str
         Filename = <tag>.png
-    
+
     Keyword arguments
     -----------------
     plot_func : <function>
         healpy plotting function (default : mollview)
-    kwargs : <healpy_plot_opts>        
+    kwargs : <healpy_plot_opts>
     '''
-    
+
     filename = os.path.join(write_dir, tag)
 
     plt.figure()
@@ -36,14 +36,14 @@ def plot_map(map_arr, write_dir, tag,
         plot_func(map_arr, **kwargs)
         plt.savefig(filename+'.png')
     plt.close()
-    
+
 
 def plot_iqu(maps, write_dir, tag,
-             sym_limits=None, **kwargs):
+             sym_limits=None, mask=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each
     to disk.
-    
+
     Arguments
     ---------
     sym_limits : scalar, array-like
@@ -70,6 +70,10 @@ def plot_iqu(maps, write_dir, tag,
             minn = -maxx
         except TypeError:
             minn = maxx
-            
-        plot_map(maps[pidx], write_dir, tag+'_'+pol,
+
+        map2plot = maps[pidx]
+        if mask is not None:
+            map2plot[~mask] = np.nan
+
+        plot_map(map2plot, write_dir, tag+'_'+pol,
                 min=minn, max=maxx, **kwargs)

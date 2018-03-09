@@ -515,6 +515,98 @@ class Instrument(MPIBase):
             self.beams += beams
             self.ndet += ndet
 
+    def get_beams(self, bdir, tag=None, **kwargs):
+        '''
+        Unlike load_focal_plane, this function only extracts the blm's stored in
+        the directory so that they can be used for analysis
+
+        Arguments
+        ---------
+        bdir : str
+            The absolute or relative path to the directory
+            with .pkl files containing (a list of two)
+            <detector.Beam> options in a dictionary.
+
+        Keyword arguments
+        -----------------
+        tag : str, None
+            If set to string, only load files that contain <tag>
+            (default : None)
+
+        kwargs : {beam_opts}
+
+        Notes
+        -----
+        Raises a RuntimeError if no files are found.
+
+        '''
+
+        import glob
+        import pickle
+
+        # do all I/O on root
+        if self.mpi_rank == 0:
+
+            beams = []
+
+            opj = os.path.join
+            tag = '' if tag is None else tag
+
+            file_list = glob.glob(opj(bdir, '*'+tag+'*.pkl'))
+
+            if not file_list:
+                raise RuntimeError(
+                    'No files matching <*{}*.pkl> found in {}'.format(
+                                                             tag, bdir))
+            file_list.sort()
+
+            for bfile in file_list:
+
+                pkl_file = open(bfile, 'rb')
+                beam_opts = pickle.load(pkl_file)
+                pkl_file.close()
+
+                if isinstance(beam_opts, dict):
+                    # single dict of opts -> assume A, create A and B
+
+                    beam_opts_a = beam_opts
+                    if beam_opts.get('name'):
+                        beam_opts_a['name'] += 'A'
+
+                    # set polang to 0/90 or polang/polang+90
+                    polang = beam_opts_a.setdefault('polang', 0)
+
+                elif isinstance(beam_opts, (list, tuple, np.ndarray)):
+                    # assume list of dicts for A and B
+
+                    if len(beam_opts) != 2:
+                        raise ValueError('Need two elements: A and B')
+
+                    beam_opts_a = beam_opts[0]
+
+                # overrule options with given kwargs
+                beam_opts_a.update(kwargs)
+
+                beam_opts_a.pop('pol', None)
+
+                beam_a = Beam(pol='A', **beam_opts_a)
+                beams.append(beam_a)
+
+            ndet = len(beams)
+
+        else:
+            beams = None
+            ndet = None
+
+        lmax = hp.Alm.getlmax(len(beams[0].blm[0]))
+        bls = np.nan*np.ones((ndet, lmax+1))
+
+        for i, beam in enumerate(beams):
+            bls[i] = tools.blm2bl(beam.blm[0])
+
+        return bls
+
+
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 rand_stdev=0., **kwargs):
         '''

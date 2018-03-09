@@ -15,7 +15,7 @@ def trunc_alm(alm, lmax_new, mmax_old=None):
         share lmax and mmax.
     lmax_new : int
         The new bandlmit.
-        
+
     Keyword arguments
     -----------------
     mmax_old : int
@@ -25,7 +25,7 @@ def trunc_alm(alm, lmax_new, mmax_old=None):
     Returns
     -------
     alm_new: newly-allocated complex alm array that
-        only contains modes up to lmax_new. If alm 
+        only contains modes up to lmax_new. If alm
         is sequence of arrays, return tuple with
         truncated components.
     '''
@@ -155,8 +155,8 @@ def scale_blm(blm, normalize=False, deconv_q=False):
 
 def unpol2pol(blm):
     '''
-    Compute spin \pm 2 blm coefficients by transforming input 
-    blm (HEALPix) array corresponing to a real spin-0 field. 
+    Compute spin \pm 2 blm coefficients by transforming input
+    blm (HEALPix) array corresponing to a real spin-0 field.
 
     Arguments
     ---------
@@ -170,8 +170,8 @@ def unpol2pol(blm):
 
     Notes
     -----
-    Uses the approximation introduced in Hivon, Mottet, Ponthieu 2016 
-    (eq. G.8). Should be accurate for input blm that are roughly 
+    Uses the approximation introduced in Hivon, Mottet, Ponthieu 2016
+    (eq. G.8). Should be accurate for input blm that are roughly
     constant on \Delta ell = 5 for ell < ~20.
     '''
 
@@ -234,8 +234,8 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
     Keyword arguments
     ---------
     c2 : float, None
-        fwhm in arcmin. Used to multiply \pm 2 
-        coefficients with exp 2 sigma**2. Needed 
+        fwhm in arcmin. Used to multiply \pm 2
+        coefficients with exp 2 sigma**2. Needed
         to match healpy Gaussian smoothing for pol.
         (default : None)
     kwargs : {scale_blm_opts}
@@ -246,7 +246,7 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
         The spin 0 and \pm 2 harmonic coefficients of the
         co-polarized beam.
     '''
-    # normalize beams 
+    # normalize beams
     blm = scale_blm(blm, **kwargs)
 
     blmm2, blmp2 = unpol2pol(blm)
@@ -261,16 +261,16 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
 
 def get_pol_beam(blm_q, blm_u, **kwargs):
     '''
-    Create spin \pm 2 blm coefficients using spin-0 
+    Create spin \pm 2 blm coefficients using spin-0
     SH coefficients of the Q and U beams on a cartesian
     (Ludwig's third convention) basis.
 
     Arguments
     ---------
     blm_q : array-like
-        Healpy blm array 
+        Healpy blm array
     blm_q : array-like
-        Healpy blm array 
+        Healpy blm array
 
     Keyword arguments
     -----------------
@@ -280,9 +280,9 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
     -------
     blmm2, blmp2 : tuple of array-like
         The spin \pm 2 harmonic coefficients of the
-        polarized beam.    
+        polarized beam.
     '''
-    
+
     blm_q = scale_blm(blm_q, **kwargs)
     blm_u = scale_blm(blm_u, **kwargs)
 
@@ -303,10 +303,10 @@ def spin2eb(almm2, almp2):
     Arguments
     ---------
     almm2 : array-like
-       Healpix-ordered complex array with spin-(-2) 
+       Healpix-ordered complex array with spin-(-2)
        coefficients
     almp2 : array-like
-       Healpix-ordered complex array with spin-(+2) 
+       Healpix-ordered complex array with spin-(+2)
        coefficients
 
     Returns
@@ -316,8 +316,8 @@ def spin2eb(almm2, almp2):
     almB : array-like
         Healpix ordered array with B-modes
     '''
-    
-    almE = almp2 + almm2 
+
+    almE = almp2 + almm2
     almE /= -2.
 
     almB = almp2 - almm2
@@ -327,7 +327,7 @@ def spin2eb(almm2, almp2):
 
 def eb2spin(almE, almB):
     '''
-    Convert to E and B mode coefficients 
+    Convert to E and B mode coefficients
     to spin-harmonic coefficients.
 
     Arguments
@@ -340,10 +340,10 @@ def eb2spin(almE, almB):
     Returns
     -------
     almm2 : array-like
-       Healpix-ordered complex array with spin-(-2) 
+       Healpix-ordered complex array with spin-(-2)
        coefficients
     almp2 : array-like
-       Healpix-ordered complex array with spin-(+2) 
+       Healpix-ordered complex array with spin-(+2)
        coefficients
     '''
 
@@ -395,7 +395,7 @@ def angle_gen(angles):
     ---------
     angles : array-like
         Array to be cycled through
-        
+
     Yields
     ------
     angle : scalar
@@ -537,4 +537,36 @@ def quat_conj_by(q, q2):
 
     return q3
 
+def blm2bl(blm, m=0, inplace=False):
+    '''
+    A tool to return blm for a fixed m-mode
+
+    Arguments
+    ---------
+    blm : array-like
+       Complex numpy array corresponding to the spherical harmonics of the beam
+
+    m : int
+        The m-mode being requested
+    inplace : bool, optional
+        Perform normalization in place, default=False
+
+    Returns
+    -------
+    blm : array-like
+        Array of bl's for the m-mode requested
+
+    '''
+
+    if blm.ndim > 1:
+        raise ValueError('blm should have have ndim == 1')
+
+    lmax = hp.Alm.getlmax(len(blm))
+
+    start = m*lmax
+    end = (m+1)*lmax+1
+    if not inplace:
+        blm = blm.copy()
+
+    return blm[start:end]
 
