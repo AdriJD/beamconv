@@ -515,7 +515,7 @@ class Instrument(MPIBase):
             self.beams += beams
             self.ndet += ndet
 
-    def get_beams(self, bdir, tag=None, **kwargs):
+    def get_beams(self, bdir, tag=None, return_fwhm=False, **kwargs):
         '''
         Unlike load_focal_plane, this function only extracts the blm's stored in
         the directory so that they can be used for analysis
@@ -558,13 +558,22 @@ class Instrument(MPIBase):
                 raise RuntimeError(
                     'No files matching <*{}*.pkl> found in {}'.format(
                                                              tag, bdir))
-            file_list.sort()
 
-            for bfile in file_list:
+            file_list.sort()
+            fwhms = np.nan*np.ones(len(file_list))    
+
+            for i, bfile in enumerate(file_list):
 
                 pkl_file = open(bfile, 'rb')
                 beam_opts = pickle.load(pkl_file)
+
+                # print('beam_opts')
+                # print(beam_opts)
+                # print(beam_opts[0].keys())
+                
                 pkl_file.close()
+
+                fwhms[i] = beam_opts[0]['fwhm']
 
                 if isinstance(beam_opts, dict):
                     # single dict of opts -> assume A, create A and B
@@ -600,11 +609,17 @@ class Instrument(MPIBase):
 
         lmax = hp.Alm.getlmax(len(beams[0].blm[0]))
         bls = np.nan*np.ones((ndet, lmax+1))
+        
 
         for i, beam in enumerate(beams):
             bls[i] = tools.blm2bl(beam.blm[0])
 
-        return bls
+        if return_fwhm:
+
+            return bls, fwhms
+
+        else:
+            return bls
 
 
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
@@ -1987,7 +2002,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if crash_a or crash_b:
             name = 'alm' if crash_a else 'blm'
             raise ValueError('{}[{}] contains nan/inf.'.format(name, i-1))
-        
+
         N = max_spin + 1
         lmax = hp.Alm.getlmax(alm[0].size)
 
