@@ -1751,8 +1751,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if self.hwp_dict['mode'] == 'continuous':
 
+#            self.hwp_ang = np.linspace(start_ang,
+#                   start_ang + 2 * np.pi * chunk_size / float(freq * self.fsamp),
+#                   num=chunk_size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
+
             self.hwp_ang = np.linspace(start_ang,
-                   start_ang + 2 * np.pi * chunk_size / float(freq * self.fsamp),
+                   start_ang + 2 * np.pi * chunk_size / (self.fsamp / float(freq)),
                    num=chunk_size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
 
             # update mod 2pi start angle for next chunk
@@ -1904,6 +1908,9 @@ class ScanStrategy(Instrument, qp.QMap):
                 tod += np.real(func[n,pix])
 
             if n > 0:
+                # equal to 0.5 ( func exp(n pa) + c.c)
+                # check if Im(f) * sin(n pa) does not just cancel between -n and n
+                # no, its fine becuase you only loop over n >= 0.
                 tod += 2 * np.real(func[n,pix]) * np.cos(n * pa)
                 tod -= 2 * np.imag(func[n,pix]) * np.sin(n * pa)
 
@@ -2036,6 +2043,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 flmn = hp.almxfl(alm[0], bell, inplace=False)
                 flmmn = hp.almxfl(alm[0], np.conj(bell), inplace=False)
 
+                # turn into plus and minus (think E and B) modes for healpy's
+                # alm2map_spin 
                 flmnp = - (flmn + flmmn) / 2.
                 flmnm = 1j * (flmn - flmmn) / 2.
                 spinmaps = hp.alm2map_spin([flmnp, flmnm], nside_spin, n, lmax,

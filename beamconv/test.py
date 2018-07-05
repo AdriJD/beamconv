@@ -22,8 +22,7 @@ def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
         Absolute path to file
     '''
 
-    cls = np.loadtxt('../ancillary/wmap7_r0p03_lensed_uK_ext.txt',
-                     unpack=True) # Cl in uK^2
+    cls = np.loadtxt(fname, unpack=True) # Cl in uK^2
     return cls[0], cls[1:]
 
 def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,

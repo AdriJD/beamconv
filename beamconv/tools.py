@@ -537,7 +537,7 @@ def quat_conj_by(q, q2):
 
     return q3
 
-def blm2bl(blm, m=0, inplace=False):
+def blm2bl(blm, m=0, copy=True):
     '''
     A tool to return blm for a fixed m-mode
 
@@ -545,11 +545,13 @@ def blm2bl(blm, m=0, inplace=False):
     ---------
     blm : array-like
        Complex numpy array corresponding to the spherical harmonics of the beam
-
+        
+    Keyword arguments
+    -----------------
     m : int
-        The m-mode being requested
-    inplace : bool, optional
-        Perform normalization in place, default=False
+        The m-mode being requested (default : 0)
+    copy : bool
+        Return copied slice or not (default : True)
 
     Returns
     -------
@@ -561,12 +563,15 @@ def blm2bl(blm, m=0, inplace=False):
     if blm.ndim > 1:
         raise ValueError('blm should have have ndim == 1')
 
-    lmax = hp.Alm.getlmax(len(blm))
+    lmax = hp.Alm.getlmax(blm.size)
 
-    start = m*lmax
-    end = (m+1)*lmax+1
-    if not inplace:
-        blm = blm.copy()
+    start = m * lmax
+    end = (m + 1) * lmax + 1
 
-    return blm[start:end]
+    bell = blm[start:end]
+
+    if copy:
+        return bell.copy()
+    else:
+        return bell
 
