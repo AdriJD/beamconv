@@ -1040,7 +1040,9 @@ class ScanStrategy(Instrument, qp.QMap):
         subchunks = []
         start = chunk['start']
 
-        nchunks = int(np.ceil((chunk_size - self.rot_dict['remainder']) / float(rot_chunk_size)))
+        nchunks = (chunk_size - self.rot_dict['remainder'])
+        nchunks /= float(rot_chunk_size)
+        nchunks = int(np.ceil(nchunks))
         nchunks = 1 if nchunks < 1 else nchunks
 
         if nchunks == 1:
@@ -1682,26 +1684,115 @@ class ScanStrategy(Instrument, qp.QMap):
         alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
         **kwargs):
         '''
-        A function to simulate satellite scanning strategy
+        A function to simulate satellite scanning strategy. 
+
+        Keyword arguments
+        -----------------
+        alpha : float
+            Angle between spin axis and precession axis in degree.
+            (default : 50.)
+        beta : float
+            Angle between spin axis and boresight in degree.
+            (default : 50.)
+        alpha_period : float
+            Time period for precession in seconds. (default : 5400)
+        beta_period : float
+            Spin period in seconds. (default : 600.)
+        jitter_amp : float
+            Std of iid Gaussian noise added to elevation coords. 
+            (default : 0.0)
+        return_all : bool
+            Also return az, el, lon, lat. (default : False)
+        start : int
+            Start index
+        end : int
+            End index
+        
+        Returns
+        -------
+        (az, el, lon, lat,) q_bore : array-like
+            Depending on return_all
+
+        Notes
+        -----
+        See Wallis et al., 2017, MNRAS, 466, 425. 
         '''
 
-        # if not self.ctime:
-        #     raise ValueError('Have to define initiate ctime before calling')
+        deg_per_day = 360.9863
+        dt = 1 / self.fsamp
+        nsamp = self.ctime.size
+        ndays = float(nsamp) / self.fsamp / (24 * 3600)
 
-        dt = 1/self.fsamp
-        nsamp = len(self.ctime)
-        ndays = float(nsamp)/self.fsamp/(24*3600)
-
-        jitter = jitter_amp * np.random.randn(int(nsamp))
         az = np.mod(np.arange(nsamp)*dt*360/beta_period, 360)
-        el = beta*np.ones_like(az) + jitter
+
+        if jitter_amp != 0.:            
+            jitter = jitter_amp * np.random.randn(int(nsamp))        
+            el = beta * np.ones_like(az) + jitter
+        else:
+            el = beta * np.ones_like(az)
+
+        # Continue from position left chunk finished
+        if self.lon:
+            lon_0 = self.lon
+        else:
+            # no position yet. So start at zero
+            lon_0 = 0.
+
+        if self.lat:
+            lat_0 = self.lat
+        else:
+            lat_0 = 0.
 
         # Anti sun at all times
-        lon = np.mod(-np.linspace(0, ndays*360.9863, nsamp), 360.)
-        lat = alpha*np.sin(2*np.pi*np.arange(nsamp)*dt/alpha_period)
+        lon = np.mod(-np.linspace(lon_0, ndays * deg_per_day + lon_0, nsamp),
+                     360.)
+        # the starting argument of the sin. Zero if lat_0 = 0.
+        t_start = np.arcsin(lat_0 / float(alpha))
 
-        q_bore = self.azel2bore(az, el, None, None, lon, lat, self.ctime)
+        lat = np.sin(np.linspace(
+            t_start, 2*np.pi*dt*nsamp/alpha_period + t_start,
+            num=nsamp, endpoint=False))
+        lat *= alpha
 
+        if self.mpi:
+            # Calculate boresight quaternion in parallel
+            chunk_size = nsamp
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = np.divmod(chunk_size,
+                                        self.mpi_size)
+            sub_size += quot
+
+            if remainder:
+                # give first ranks one extra quaternion
+                sub_size[:int(remainder)] += 1
+
+            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            sub_end = sub_start + sub_size[self.mpi_rank]
+
+            q_bore = np.empty(chunk_size * 4, dtype=float)
+
+            # calculate section of q_bore
+            q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                    el[sub_start:sub_end],
+                                    None, None, 
+                                    self.lon[sub_start:sub_end],
+                                    self.lat[sub_start:sub_end],
+                                    self.ctime[sub_start:sub_end])
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # for the flattened quat array
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+
+            # combine all sections on all ranks
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            q_bore = q_bore.reshape(chunk_size, 4)
+
+        else:
+            q_bore = self.azel2bore(az, el, None, None, lon,
+                                         lat, self.ctime)
         self.flag = np.zeros_like(az, dtype=bool)
 
         if return_all:
