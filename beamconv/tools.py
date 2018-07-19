@@ -187,31 +187,31 @@ def unpol2pol(blm):
         if m < lmax:
             end = getidx(lmax, m+1, m+1)
         else:
-            # we're in the very last element
+            # We're in the very last element
             start = end
             end += 1 # add one, otherwise you have empty array
             assert end == hp.Alm.getsize(lmax)
         if m == 0:
-            #+2 here because spin-2, so we can't have nonzero ell=1 bins
+            # +2 here because spin-2, so we can't have nonzero ell=1 bins
             blmm2[start+2:end] = np.conj(blm[2*lmax+1:3*lmax])
 
             blmp2[start+2:end] = blm[2*lmax+1:3*lmax]
 
         elif m == 1:
-            #+1 here because spin-2, so we can't have nonzero ell=1 bins
+            # +1 here because spin-2, so we can't have nonzero ell=1 bins
             blmm2[start+1:end] = -np.conj(blm[start+1:end])
 
             blmp2[start+2:end] = blm[3*lmax:4*lmax-2]
 
         else:
-            start_0 = getidx(lmax, m-2, m-2) # spin-0 start and end
+            start_0 = getidx(lmax, m-2, m-2) # Spin-0 start and end
             end_0 = getidx(lmax, m-1, m-1)
 
             blmm2[start:end] = blm[start_0+2:end_0]
 
             start_p0 = getidx(lmax, m+2, m+2)
             if m + 2 > lmax:
-                # stop filling blmp2
+                # Stop filling blmp2
                 continue
             end_p0 = getidx(lmax, m+3, m+3)
 
@@ -233,10 +233,10 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
 
     Keyword arguments
     ---------
-    c2 : float, None
-        fwhm in arcmin. Used to multiply \pm 2
-        coefficients with exp 2 sigma**2. Needed
-        to match healpy Gaussian smoothing for pol.
+    c2_fwhm : float, None
+        fwhm in arcmin. Used to multiply \pm 2 blm coefficients
+        with exp 2 sigma**2. Needed to match healpy Gaussian 
+        smoothing for pol (see Challinor et al. 2000)
         (default : None)
     kwargs : {scale_blm_opts}
 
@@ -289,7 +289,8 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
     blmm2_q, blmp2_q = unpol2pol(blm_q)
     blmm2_u, blmp2_u = unpol2pol(blm_u)
 
-    # note the signs here, phi -> -phi+pi w/ respect to Challinor
+    # Note the signs here, phi -> -phi+pi compared to to 
+    # Challinor et al. 2000
     blmm2 = blmm2_q + 1j * blmm2_u
     blmp2 = blmp2_q - 1j * blmp2_u
 
@@ -524,7 +525,6 @@ def quat_conj_by(q, q2):
         Float array of shape (4,), representing a
         quaternion
 
-
     Returns
     -------
     q3 : array-like
@@ -549,7 +549,7 @@ def blm2bl(blm, m=0, copy=True):
     Keyword arguments
     -----------------
     m : int
-        The m-mode being requested (default : 0)
+        The m-mode being requested (note m >= 0) (default : 0)
     copy : bool
         Return copied slice or not (default : True)
 
@@ -562,7 +562,9 @@ def blm2bl(blm, m=0, copy=True):
 
     if blm.ndim > 1:
         raise ValueError('blm should have have ndim == 1')
-
+    if m < 0:
+        raise ValueError('m cannot be negative')
+        
     lmax = hp.Alm.getlmax(blm.size)
 
     start = m * lmax

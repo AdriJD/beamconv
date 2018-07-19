@@ -9,7 +9,7 @@ import tools
 
 class Beam(object):
     '''
-    A class representing detector centroid and beam information
+    A class representing detector and beam properties.
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
          pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
@@ -17,28 +17,32 @@ class Beam(object):
          eg_file=None, cross_pol=True, deconv_q=True,
          normalize=True):
         '''
+        Initialize a detector beam.
+
         Keyword arguments
-        ---------
+        -----------------
         az : float 
             Azimuthal location of detector relative to boresight
             in degrees (default : 0.)
         el : float 
             Elevation location of detector relative to boresight
             in degrees (default : 0.)
-        polang : float (default: 0.)
+        polang : float 
             The polarization orientation of the beam/detector [deg]
-        name : str (default: None)
-            The callsign of this particular beam
-        pol : str (default: A)
+            (default: 0.)
+        name : str 
+            The callsign of this particular beam (default: None)
+        pol : str 
             The polarization callsign of the beam (A or B)
-        dead : bool (default: False)
-            True if the beam is dead (not functioning)
-        btype : str (default: Gaussian)
-            Type of detector spatial response model. Can be one of three
-            Gaussian : A symmetric Gaussian beam, definied by centroids and FWHM
-            Gaussian_map : A symmetric Gaussian, defined by centroids and a map
-            EG       : An elliptical Gaussian
-            PO       : A realistic beam based on optical simulations or beam maps
+            (default: A)
+        dead : bool 
+            True if the beam is dead (not functioning) (default: False)
+        btype : str 
+            Type of detector spatial response model. Options:
+                Gaussian : A symmetric Gaussian beam, definied by FWHM
+                EG       : An elliptical Gaussian
+                PO       : A physical optics beam
+            (default: Gaussian)
         fwhm : float 
             Detector beam FWHM in arcmin (default : 43)
         lmax : int
@@ -53,10 +57,10 @@ class Beam(object):
             means that b00 = amplitude / sqrt(4 pi) (default : 1.)
         po_file : str, None
             Absolute or relative path to .npy file with blm array for the
-            (unpolarized) Physical Optics beam (default : None)
+            physical optics beam (default : None)
         eg_file : str, None
             Absolute or relative path to .npy file with blm array for the
-            (unpolarized) Elliptical Gaussian beam (default : None)
+            elliptical Gaussian beam (default : None)
         cross_pol : bool
             Whether to use the cross-polar response of the beam (requires
             blm .npy file to be of shape (3,), containing blm, blmm2 and blmp2
@@ -89,7 +93,7 @@ class Beam(object):
         self.normalize = normalize
 
         self.__ghost = ghost
-        # ghosts are not allowed to have ghosts
+        # Ghosts are not allowed to have ghosts
         if not self.ghost:
             self.__ghosts = []
             self.ghost_count = 0
@@ -141,7 +145,7 @@ class Beam(object):
             for ghost in self.ghosts:
                 ghost.__dead = val
         except AttributeError:
-            # instance is ghost
+            # Instance is ghost
             pass
 
     @property
@@ -154,7 +158,7 @@ class Beam(object):
         Make sure lmax is >= 0 and defaults to something sensible
         '''
         if val is None and fwhm:
-            # Going up to 1.4 naieve Nyquist frequency set by beam scale 
+            # Going up to 1.4 naive Nyquist frequency set by beam scale 
             self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
         else:
             self.__lmax = max(val, 0)
@@ -286,7 +290,7 @@ class Beam(object):
         
         pname, ext = os.path.splitext(filename)
         if not ext:
-            # assume .npy extension
+            # Assume .npy extension
             ext = '.npy'
         blm = np.load(os.path.join(pname+ext))
         blm = np.atleast_2d(blm)
@@ -298,25 +302,24 @@ class Beam(object):
             blm = blm[0]
 
         if cross_pol:
-            # assume co- and cross-polar beams are provided
+            # Assume co- and cross-polar beams are provided
             # c2_fwhm has no meaning if cross-pol is known
             kwargs.pop('c2_fwhm', None)
             blm = tools.scale_blm(blm, **kwargs)
             
             if self.amplitude != 1:
-                # scale beam if needed
+                # Scale beam if needed
                 blm *= self.amplitude
 
             self.blm = blm[0], blm[1], blm[2]
 
         else:
-            # assume co-polarized beam
-
+            # Assume co-polarized beam
             if self.amplitude != 1:
                 # scale beam if needed
                 blm *= self.amplitude
 
-            # create spin \pm 2 components
+            # Create spin \pm 2 components
             self.blm = tools.get_copol_blm(blm, **kwargs)
 
     def create_ghost(self, tag='ghost', **kwargs):

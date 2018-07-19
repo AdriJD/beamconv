@@ -3,9 +3,11 @@ import sys
 import time
 import copy
 from warnings import warn, catch_warnings, simplefilter
+
 import numpy as np
 import qpoint as qp
 import healpy as hp
+
 import tools
 from detector import Beam
 
@@ -241,25 +243,26 @@ class MPIBase(object):
 
 class Instrument(MPIBase):
     '''
-    Initialize a (ground-based) telescope and specify its properties.
+    Initialize a telescope and specify its properties.
     '''
 
     def __init__(self, location='spole', lat=None, lon=None,
                  **kwargs):
         '''
-        Set location of telescope on earth.
+        Set location of telescope.
 
-        Arguments
-        ---------
-        location : str, optional
+        Keyword arguments
+        -----------------
+        location : str
             Predefined locations. Current options:
                 spole    : (lat=-89.9, lon=169.15)
                 atacama  : (lat=-22.96, lon=-67.79)
                 space    : (Fixed lat, time-variable lon)
-        lon : float, optional
-            Longitude in degrees
-        lat : float, optional
-            Latitude in degrees
+            (default : spole)
+        lon : float, None
+            Longitude in degrees. (default : None)
+        lat : float, None
+            Latitude in degrees (default : None)
         kwargs : {mpi_opts}
         '''
 
@@ -290,7 +293,7 @@ class Instrument(MPIBase):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
-        rectangular grid on the sky.
+        rectangular az-el grid on the sky.
 
         Keyword arguments
         ---------
@@ -332,7 +335,7 @@ class Instrument(MPIBase):
                 warn('{}={} option to `Beam.__init__()` is ignored'
                      .format(key, arg))
 
-        # some kwargs need to be dealt with seperately
+        # Some kwargs need to be dealt with seperately
         polang = kwargs.pop('polang', 0.)
         dead = kwargs.pop('dead', False)
 
@@ -365,7 +368,7 @@ class Instrument(MPIBase):
         # If MPI, distribute beams over ranks
         beams = self.distribute_array(beams)
 
-        # check for existing beams
+        # Check for existing beams
         if not hasattr(self, 'beams') or not combine:
             self.beams = beams
         else:
@@ -517,8 +520,8 @@ class Instrument(MPIBase):
 
     def get_beams(self, bdir, tag=None, return_fwhm=False, **kwargs):
         '''
-        Unlike load_focal_plane, this function only extracts the blm's stored in
-        the directory so that they can be used for analysis
+        Unlike load_focal_plane, this function only extracts the blm's
+        stored in the directory so that they can be used for analysis.
 
         Arguments
         ---------
@@ -532,13 +535,11 @@ class Instrument(MPIBase):
         tag : str, None
             If set to string, only load files that contain <tag>
             (default : None)
-
         kwargs : {beam_opts}
 
         Notes
         -----
         Raises a RuntimeError if no files are found.
-
         '''
 
         import glob
@@ -566,11 +567,6 @@ class Instrument(MPIBase):
 
                 pkl_file = open(bfile, 'rb')
                 beam_opts = pickle.load(pkl_file)
-
-                # print('beam_opts')
-                # print(beam_opts)
-                # print(beam_opts[0].keys())
-                
                 pkl_file.close()
 
                 fwhms[i] = beam_opts[0]['fwhm']
@@ -608,19 +604,15 @@ class Instrument(MPIBase):
             ndet = None
 
         lmax = hp.Alm.getlmax(len(beams[0].blm[0]))
-        bls = np.nan*np.ones((ndet, lmax+1))
+        bls = np.nan * np.ones((ndet, lmax+1))
         
-
         for i, beam in enumerate(beams):
             bls[i] = tools.blm2bl(beam.blm[0])
 
         if return_fwhm:
-
             return bls, fwhms
-
         else:
             return bls
-
 
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 rand_stdev=0., **kwargs):
@@ -1107,9 +1099,9 @@ class ScanStrategy(Instrument, qp.QMap):
             Nside of output (default : 256)
         '''
 
+        self.vec = np.zeros((3, 12*nside**2), dtype=float)
+        self.proj = np.zeros((6, 12*nside**2), dtype=float)
         self.nside_out = nside
-        self.vec = np.zeros((3, 12*self.nside_out**2), dtype=float)
-        self.proj = np.zeros((6, 12*self.nside_out**2), dtype=float)
 
     def scan_instrument(self, verbose=True, mapmaking=True,
         **kwargs):
@@ -1720,7 +1712,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         deg_per_day = 360.9863
         dt = 1 / self.fsamp
-        nsamp = self.ctime.size
+        nsamp = self.ctime.size # ctime determines chunk size
         ndays = float(nsamp) / self.fsamp / (24 * 3600)
 
         az = np.mod(np.arange(nsamp)*dt*360/beta_period, 360)
@@ -1753,6 +1745,10 @@ class ScanStrategy(Instrument, qp.QMap):
             t_start, 2*np.pi*dt*nsamp/alpha_period + t_start,
             num=nsamp, endpoint=False))
         lat *= alpha
+        
+        # Store last lon, lat coord for start next chunk
+        self.lon = lon[-1]
+        self.lat = lat[-1]
 
         if self.mpi:
             # Calculate boresight quaternion in parallel
@@ -1775,8 +1771,8 @@ class ScanStrategy(Instrument, qp.QMap):
             q_boresub = self.azel2bore(az[sub_start:sub_end],
                                     el[sub_start:sub_end],
                                     None, None, 
-                                    self.lon[sub_start:sub_end],
-                                    self.lat[sub_start:sub_end],
+                                    lon[sub_start:sub_end],
+                                    lat[sub_start:sub_end],
                                     self.ctime[sub_start:sub_end])
             q_boresub = q_boresub.ravel()
 
@@ -1841,10 +1837,6 @@ class ScanStrategy(Instrument, qp.QMap):
         start_ang = np.radians(self.hwp_dict['angle'])
 
         if self.hwp_dict['mode'] == 'continuous':
-
-#            self.hwp_ang = np.linspace(start_ang,
-#                   start_ang + 2 * np.pi * chunk_size / float(freq * self.fsamp),
-#                   num=chunk_size, endpoint=False, dtype=float) # radians (w = 2 pi freq)
 
             self.hwp_ang = np.linspace(start_ang,
                    start_ang + 2 * np.pi * chunk_size / (self.fsamp / float(freq)),
@@ -2001,7 +1993,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if n > 0:
                 # equal to 0.5 ( func exp(n pa) + c.c)
                 # check if Im(f) * sin(n pa) does not just cancel between -n and n
-                # no, its fine becuase you only loop over n >= 0.
+                # no, its fine because you only loop over n >= 0.
                 tod += 2 * np.real(func[n,pix]) * np.cos(n * pa)
                 tod -= 2 * np.imag(func[n,pix]) * np.sin(n * pa)
 
