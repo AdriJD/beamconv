@@ -1867,7 +1867,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
         # to avoid doing triginometry at each n
         expipa = np.exp(1j * pa) # used for recursion
-        expipan = np.exp(1j * pa * -N + 1) # starting point (n = -N+1)
+        expipan = np.exp(1j * pa * (-N + 1)) # starting point (n = -N+1)
 
         for nidx, n in enumerate(xrange(-N+1, N)):
 
