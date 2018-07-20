@@ -567,8 +567,8 @@ def blm2bl(blm, m=0, copy=True):
         
     lmax = hp.Alm.getlmax(blm.size)
 
-    start = m * lmax
-    end = (m + 1) * lmax + 1
+    start = hp.Alm.getidx(lmax, m, m)
+    end = start + lmax + 1 - m
 
     bell = blm[start:end]
 

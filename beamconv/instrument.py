@@ -518,102 +518,6 @@ class Instrument(MPIBase):
             self.beams += beams
             self.ndet += ndet
 
-    def get_beams(self, bdir, tag=None, return_fwhm=False, **kwargs):
-        '''
-        Unlike load_focal_plane, this function only extracts the blm's
-        stored in the directory so that they can be used for analysis.
-
-        Arguments
-        ---------
-        bdir : str
-            The absolute or relative path to the directory
-            with .pkl files containing (a list of two)
-            <detector.Beam> options in a dictionary.
-
-        Keyword arguments
-        -----------------
-        tag : str, None
-            If set to string, only load files that contain <tag>
-            (default : None)
-        kwargs : {beam_opts}
-
-        Notes
-        -----
-        Raises a RuntimeError if no files are found.
-        '''
-
-        import glob
-        import pickle
-
-        # do all I/O on root
-        if self.mpi_rank == 0:
-
-            beams = []
-
-            opj = os.path.join
-            tag = '' if tag is None else tag
-
-            file_list = glob.glob(opj(bdir, '*'+tag+'*.pkl'))
-
-            if not file_list:
-                raise RuntimeError(
-                    'No files matching <*{}*.pkl> found in {}'.format(
-                                                             tag, bdir))
-
-            file_list.sort()
-            fwhms = np.nan*np.ones(len(file_list))    
-
-            for i, bfile in enumerate(file_list):
-
-                pkl_file = open(bfile, 'rb')
-                beam_opts = pickle.load(pkl_file)
-                pkl_file.close()
-
-                fwhms[i] = beam_opts[0]['fwhm']
-
-                if isinstance(beam_opts, dict):
-                    # single dict of opts -> assume A, create A and B
-
-                    beam_opts_a = beam_opts
-                    if beam_opts.get('name'):
-                        beam_opts_a['name'] += 'A'
-
-                    # set polang to 0/90 or polang/polang+90
-                    polang = beam_opts_a.setdefault('polang', 0)
-
-                elif isinstance(beam_opts, (list, tuple, np.ndarray)):
-                    # assume list of dicts for A and B
-
-                    if len(beam_opts) != 2:
-                        raise ValueError('Need two elements: A and B')
-
-                    beam_opts_a = beam_opts[0]
-
-                # overrule options with given kwargs
-                beam_opts_a.update(kwargs)
-
-                beam_opts_a.pop('pol', None)
-
-                beam_a = Beam(pol='A', **beam_opts_a)
-                beams.append(beam_a)
-
-            ndet = len(beams)
-
-        else:
-            beams = None
-            ndet = None
-
-        lmax = hp.Alm.getlmax(len(beams[0].blm[0]))
-        bls = np.nan * np.ones((ndet, lmax+1))
-        
-        for i, beam in enumerate(beams):
-            bls[i] = tools.blm2bl(beam.blm[0])
-
-        if return_fwhm:
-            return bls, fwhms
-        else:
-            return bls
-
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 rand_stdev=0., **kwargs):
         '''
@@ -1898,23 +1802,20 @@ class ScanStrategy(Instrument, qp.QMap):
             ghost_idx = beam_obj.ghost_idx
             func, func_c = self.spinmaps['ghosts'][ghost_idx]
 
-        # extract N (max_spin + 1) and nside_spin
+        # Extract N (= max_spin + 1) and nside of spin maps
         N, npix = func.shape
         nside_spin = hp.npix2nside(npix)
 
-        # just a check
+        # Paranoid android
         N2, npix2 = func_c.shape
         assert 2*N-1 == N2, "func and func_c have different max_spin"
         assert npix == npix2, "func and func_c have different npix"
 
-        # NOTE nicer if you give q_off directly instead of az_off, el_off
-        # we use a offset quaternion without polang.
+        # We use a offset quaternion without polang.
         # We apply polang at the beam level later.
         q_off = self.det_offset(az_off, el_off, 0)
 
-        # Rotate offset given rot_dict
-        # works, but shouldnt it be switched around? No, that would
-        # rotate the polang of the centroid, but not the centroid
+        # Rotate offset given rot_dict. We rotate the centroid
         # around the boresight. It's q_bore * q_rot * q_off
         ang = np.radians(self.rot_dict['angle'])
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
@@ -1955,18 +1856,25 @@ class ScanStrategy(Instrument, qp.QMap):
         np.radians(pa, out=pa)
         pix = tools.radec2ind_hp(ra, dec, nside_spin)
 
-        # expose pixel indices for test centroid
+        # Expose pixel indices for test centroid
         # and store pointing offset for mapmaking
         self.pix = pix
         if not add_to_tod:
             self.q_off = q_off
             self.polang = polang
 
-        # Fill complex array
+        # Fill complex array, i.e. the linearly polarized part
+        # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
+        # to avoid doing triginometry at each n
+        expipa = np.exp(1j * pa) # used for recursion
+        expipan = np.exp(1j * pa * -N + 1) # starting point (n = -N+1)
+
         for nidx, n in enumerate(xrange(-N+1, N)):
 
-            exppais = np.exp(1j * n * pa)
-            tod_c += func_c[nidx,pix] * exppais
+            if nidx != 0: # expipan is already initialized for nidx=0
+                expipan *= expipa
+
+            tod_c += func_c[nidx,pix] * expipan
 
         # check for HWP angle array
         if self.hwp_ang is None:
@@ -1984,18 +1892,18 @@ class ScanStrategy(Instrument, qp.QMap):
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         tod = np.real(tod_c) # shares memory with tod_c
 
-        # add unpolarized tod
-        for nidx, n in enumerate(xrange(-N+1, N)):
+        # Add unpolarized tod
+        # Reset starting point recursion 
+        expipan[:] = 1.
+        for n in xrange(N):
 
+            # equal to 0.5 ( func exp(n pa) + c.c) (pa: position angle)
             if n == 0:
                 tod += np.real(func[n,pix])
 
             if n > 0:
-                # equal to 0.5 ( func exp(n pa) + c.c)
-                # check if Im(f) * sin(n pa) does not just cancel between -n and n
-                # no, its fine because you only loop over n >= 0.
-                tod += 2 * np.real(func[n,pix]) * np.cos(n * pa)
-                tod -= 2 * np.imag(func[n,pix]) * np.sin(n * pa)
+                expipan *= expipa
+                tod += np.real(func[n,pix] * expipan)
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -2107,7 +2015,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Unpolarized sky and beam first
         func = np.zeros((N, 12*nside_spin**2),
-                             dtype=np.complex128) # s <=0 spheres
+                             dtype=np.complex128) # s >=0 spheres
 
         start = 0
         for n in xrange(N): # NOTE, n is spin
