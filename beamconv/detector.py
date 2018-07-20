@@ -359,16 +359,23 @@ class Beam(object):
 
         # mostly default to parent kwargs
         ghost_opts = dict(az=self.az,
-                           el=self.el,
-                           polang=self.polang,
-                           name=name,
-                           pol=self.pol,
-                           btype=self.btype,
-                           fwhm=self.fwhm,
-                           dead=self.dead,                          
-                           lmax=self.lmax,
-                           mmax=self.mmax)
+                          el=self.el,
+                          polang=self.polang,
+                          name=name,
+                          pol=self.pol,
+                          btype=self.btype,
+                          fwhm=self.fwhm,
+                          dead=self.dead,                          
+                          lmax=self.lmax,
+                          mmax=self.mmax,
+                          amplitude=self.amplitude,
+                          po_file=self.po_file,
+                          eg_file=self.eg_file,
+                          cross_pol=self.cross_pol, 
+                          deconv_q=self.deconv_q,
+                          normalize=self.normalize) 
 
+        # Note, amplitude is applied after normalization
         # update options with specified kwargs
         ghost_opts.update(kwargs)
         ghost_opts.update(dict(ghost=True))
