@@ -36,6 +36,9 @@ def plot_map(map_arr, write_dir, tag,
         plt.savefig(filename+'.png')
     plt.close()
 
+def round_sig(x, sig=1):
+
+    return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
 def plot_iqu(maps, write_dir, tag,
              sym_limits=None, mask=None, **kwargs):
@@ -59,6 +62,10 @@ def plot_iqu(maps, write_dir, tag,
     kwargs : {plot_map_opts, healpy_plt_opts}
     '''
 
+    dim1 = np.shape(maps)[0]
+    if dim1 != 3:
+        raise ValueError('maps should be a sequence of three arrays')
+
     if not hasattr(sym_limits, "__iter__"):
         sym_limits = [sym_limits] * 3
 
@@ -70,7 +77,14 @@ def plot_iqu(maps, write_dir, tag,
         except TypeError:
             minn = maxx
 
-        map2plot = maps[pidx]
+        map2plot = np.copy(maps[pidx])
+        
+        if minn is None:
+            minn = round_sig(np.nanmin(map2plot), sig=1)
+
+        if maxx is None:
+            maxx = round_sig(np.nanmax(map2plot), sig=1)
+
         if mask is not None:
             map2plot[~mask] = np.nan
 
