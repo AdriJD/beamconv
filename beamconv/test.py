@@ -349,8 +349,14 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                           polang=polang, lmax=lmax, fwhm=fwhm)
 
     # move detector away from boresight
-    ss.beams[0][0].az = az_off
-    ss.beams[0][0].el = el_off
+    try:
+        ss.beams[0][0].az = az_off
+        ss.beams[0][0].el = el_off
+    except IndexError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
 
     # Start instrument rotated (just to make things complicated)
     rot_period =  ss.mlen
@@ -366,40 +372,53 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                            max_spin=2)
 
     # Store the tod and pixel indices made with symmetric beam
-    tod_sym = ss.tod.copy()
-    pix_sym = ss.pix.copy()
-
+    try:
+        tod_sym = ss.tod.copy()
+        pix_sym = ss.pix.copy()
+    except AttributeError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
+    
     # now repeat with asymmetric beam and no detector offset
     # set offsets to zero such that tods are generated using
     # only the boresight pointing.
-    ss.beams[0][0].az = 0
-    ss.beams[0][0].el = 0
-    ss.beams[0][0].polang = 0
+    try:
+        ss.beams[0][0].az = 0
+        ss.beams[0][0].el = 0
+        ss.beams[0][0].polang = 0
 
-    # Convert beam spin modes to E and B modes and rotate them
-    # create blm again, scan_instrument_mpi detetes blms when done
-    ss.beams[0][0].gen_gaussian_blm()
-    blm = ss.beams[0][0].blm
-    blmI = blm[0].copy()
-    blmE, blmB = tools.spin2eb(blm[1], blm[2])
+        # Convert beam spin modes to E and B modes and rotate them
+        # create blm again, scan_instrument_mpi detetes blms when done
+        ss.beams[0][0].gen_gaussian_blm()
+        blm = ss.beams[0][0].blm
+        blmI = blm[0].copy()
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
 
-    # Rotate blm to match centroid.
-    # Note that rotate_alm uses the ZYZ euler convention.
-    # Note that we include polang here as first rotation.
-    q_off = ss.det_offset(az_off, el_off, polang)
-    ra, dec, pa = ss.quat2radecpa(q_off)
+        # Rotate blm to match centroid.
+        # Note that rotate_alm uses the ZYZ euler convention.
+        # Note that we include polang here as first rotation.
+        q_off = ss.det_offset(az_off, el_off, polang)
+        ra, dec, pa = ss.quat2radecpa(q_off)
 
-    # convert between healpy and math angle conventions
-    phi = np.radians(ra - 180)
-    theta = np.radians(90 - dec)
-    psi = np.radians(-pa)
+        # convert between healpy and math angle conventions
+        phi = np.radians(ra - 180)
+        theta = np.radians(90 - dec)
+        psi = np.radians(-pa)
 
-    # rotate blm
-    hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+        # rotate blm
+        hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
 
-    # convert beam coeff. back to spin representation.
-    blmm2, blmp2 = tools.eb2spin(blmE, blmB)
-    ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+        # convert beam coeff. back to spin representation.
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+        ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+
+    except IndexError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
 
     ss.reset_instr_rot()
     ss.reset_hwp_mod()
@@ -497,24 +516,32 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
     ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
                           polang=polang, lmax=lmax, fwhm=fwhm)
 
-    beam = ss.beams[0][0]
+    try:
+        beam = ss.beams[0][0]
 
-    # set main beam to zero
-    beam.amplitude = 0.
+        # set main beam to zero
+        beam.amplitude = 0.
 
-    # create Gaussian beam (would be done by code anyway otherwise)
-    beam.gen_gaussian_blm()
+        # create Gaussian beam (would be done by code anyway otherwise)
+        beam.gen_gaussian_blm()
 
-    #explicitely set offset to zero
-    beam.az = 0.
-    beam.el = 0.
-    beam.polang = 0.
+        #explicitely set offset to zero
+        beam.az = 0.
+        beam.el = 0.
+        beam.polang = 0.
 
-    # create full-amplitude ghost
-    beam.create_ghost(az=az_off, el=el_off, polang=polang,
-                      amplitude=1.)
-    ghost = beam.ghosts[0]
-    ghost.gen_gaussian_blm()
+        # create full-amplitude ghost
+        beam.create_ghost(az=az_off, el=el_off, polang=polang,
+                          amplitude=1.)
+        ghost = beam.ghosts[0]
+        ghost.gen_gaussian_blm()
+
+    except IndexError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
+
 
     # Start instrument rotated (just to make things complicated)
     rot_period =  ss.mlen
@@ -530,48 +557,62 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
                            max_spin=2, verbose=2)
 
     # Store the tod and pixel indices made with ghost
-    tod_ghost = ss.tod.copy()
-    pix_ghost = ss.pix.copy()
+    try:
+        tod_ghost = ss.tod.copy()
+        pix_ghost = ss.pix.copy()
+    except AttributeError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
 
     # now repeat with asymmetric beam and no detector offset
     # set offsets to zero such that tods are generated using
     # only the boresight pointing.
+    try:
+        beam = ss.beams[0][0]
+        beam.amplitude = 1.
+        beam.gen_gaussian_blm()
 
-    beam.amplitude = 1.
-    beam.gen_gaussian_blm()
+        # Convert beam spin modes to E and B modes and rotate them
+        blm = beam.blm
+        blmI = blm[0].copy()
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
 
-    # Convert beam spin modes to E and B modes and rotate them
-    blm = beam.blm
-    blmI = blm[0].copy()
-    blmE, blmB = tools.spin2eb(blm[1], blm[2])
+        # Rotate blm to match centroid.
+        # Note that rotate_alm uses the ZYZ euler convention.
+        # Note that we include polang here as first rotation.
+        q_off = ss.det_offset(az_off, el_off, polang)
+        ra, dec, pa = ss.quat2radecpa(q_off)
 
-    # Rotate blm to match centroid.
-    # Note that rotate_alm uses the ZYZ euler convention.
-    # Note that we include polang here as first rotation.
-    q_off = ss.det_offset(az_off, el_off, polang)
-    ra, dec, pa = ss.quat2radecpa(q_off)
+        # convert between healpy and math angle conventions
+        phi = np.radians(ra - 180)
+        theta = np.radians(90 - dec)
+        psi = np.radians(-pa)
 
-    # convert between healpy and math angle conventions
-    phi = np.radians(ra - 180)
-    theta = np.radians(90 - dec)
-    psi = np.radians(-pa)
+        # rotate blm
+        hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
 
-    # rotate blm
-    hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+        # convert beam coeff. back to spin representation.
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+        beam.blm = (blmI, blmm2, blmp2)
 
-    # convert beam coeff. back to spin representation.
-    blmm2, blmp2 = tools.eb2spin(blmE, blmB)
-    beam.blm = (blmI, blmm2, blmp2)
+        # kill ghost
+        ghost.dead = True
+        # spinmaps will still be created, so make as painless as possible
+        ghost.lmax = 1
+        ghost.mmax = 0
+
+    except IndexError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
+
 
     # reset instr. rot and hwp modulation
     ss.reset_instr_rot()
     ss.reset_hwp_mod()
-
-    # kill ghost
-    ghost.dead = True
-    # spinmaps will still be created, so make as painless as possible
-    ghost.lmax = 1
-    ghost.mmax = 0
 
     ss.scan_instrument_mpi(alm, binning=False, nside_spin=512, verbose=2,
                            max_spin=lmax) # now we use all spin modes
@@ -1158,7 +1199,7 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
                  unit='Hits', plot_func=hp.mollview, **cart_opts)
 
 if __name__ == '__main__':
-    # scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=8, ncol=8,
     #     fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
 
@@ -1169,4 +1210,9 @@ if __name__ == '__main__':
     # idea_jon()
     # azel4point()
 
-    test_satellite_scan()
+    # test_satellite_scan()
+
+    # **************************
+    # All tests should work with mpi, so e.g. you can use:
+    # $ mpirun -n 10 python test.py
+    # **************************
