@@ -289,7 +289,8 @@ class Instrument(MPIBase):
         super(Instrument, self).__init__(**kwargs)
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           no_pairs=False, combine=True, **kwargs):
+                           no_pairs=False, combine=True, 
+                           scatter=False, **kwargs):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
@@ -312,6 +313,8 @@ class Instrument(MPIBase):
             If some beams already exist, combine these new
             beams with them
             (default : True)
+        scatter : bool
+            Scatter created pairs over ranks (default : False)
         kwargs : {beam_opts}
 
         Notes
@@ -366,7 +369,8 @@ class Instrument(MPIBase):
                 beams.append([beam_a, beam_b])
 
         # If MPI, distribute beams over ranks
-        beams = self.distribute_array(beams)
+        if scatter:
+            beams = self.distribute_array(beams)
 
         # Check for existing beams
         if not hasattr(self, 'beams') or not combine:
@@ -375,7 +379,7 @@ class Instrument(MPIBase):
             self.beams += beams
 
     def load_focal_plane(self, bdir, tag=None, no_pairs=False,
-                         combine=True, **kwargs):
+                         combine=True, scatter=False, **kwargs):
         '''
         Create focal plane by loading up a collection
         of beam properties stored in pickle files.
@@ -400,6 +404,8 @@ class Instrument(MPIBase):
             If some beams already exist, combine these new
             beams with them
             (default : True)
+        scatter : bool
+            Scatter loaded pairs over ranks (default : False)
         kwargs : {beam_opts}
 
         Notes
@@ -504,9 +510,13 @@ class Instrument(MPIBase):
             beams = None
             ndet = None
 
-        # if MPI scatter to ranks
-        beams = self.scatter_list(beams, root=0)
-
+        if scatter:
+            # If MPI scatter to ranks
+            beams = self.scatter_list(beams, root=0)
+        else:
+            # Broadcast otherwise because root did all I/O
+            beams = self.broadcast(beams)
+            
         # all ranks need to know total number of detectors
         ndet = self.broadcast(ndet)
 
@@ -576,29 +586,43 @@ class Instrument(MPIBase):
 
                 beam.create_ghost(**kwargs)
 
-    def kill_channels(self, killfrac=0.2, pairs=False):
+    def kill_channels(self, killfrac=0.2, pairs=False, rnd_state=None):
         '''
-        Randomly identifies detectors in the beams list and sets their 'dead'
-        attribute to True.
+        Randomly identifies detectors in the beams list 
+        and sets their 'dead' attribute to True.
 
         Keyword arguments
         ---------
-
         killfrac : 0 < float < 1  (default: 0.2)
             The fraction of detectors to kill
         pairs : bool
             If True, kill pairs of detectors
             (default : False)
+        rnd_state : mtrand.RandomState
+            Numpy random state instance. If None, use
+            global instance (default : None)
         '''
+
         if pairs:
             ndet = self.ndet / 2
         else:
             ndet = self.ndet
 
-        kill_indices = np.random.choice(ndet, int(ndet*killfrac), replace=False)
+        # Calculate the kill indices on root and broadcast
+        # to ensure all ranks share dead detectors        
+        if self.mpi_rank == 0:
+            if rnd_state:            
+                kill_indices = rnd_state.choice(ndet, int(ndet*killfrac), 
+                                            replace=False)
+            else:
+                kill_indices = np.random.choice(ndet, int(ndet*killfrac), 
+                                                replace=False)
+        else:
+            kill_indices = None
 
+        kill_indices = self.broadcast(kill_indices)
+                        
         for kidx in kill_indices:
-
             if pairs:
                 self.beams[kidx][0].dead = True
                 self.beams[kidx][1].dead = True
@@ -1131,7 +1155,7 @@ class ScanStrategy(Instrument, qp.QMap):
         beam_b.delete_blm(del_ghosts_blm=True)
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
-        create_memmap=False, **kwargs):
+        create_memmap=False, scatter=True, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1158,6 +1182,8 @@ class ScanStrategy(Instrument, qp.QMap):
             q_bore from file on subsequent passes. If
             False, recalculate q_bore for each detector
             pair. (default : False)
+        scatter : bool
+            Scatter beam pairs over ranks (default : True)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`
@@ -1178,6 +1204,13 @@ class ScanStrategy(Instrument, qp.QMap):
                                       order='C')
             else:
                 self.mmap = None
+
+        # Scatter beams if needed, self.beams stays broadcasted
+        if scatter:
+            beams = self.scatter_list(self.beams, root=0)
+        else:
+            beams = self.beams
+
         # let every core loop over max number of beams per core
         # this makes sure that cores still participate in
         # calculating boresight quaternion
@@ -1192,7 +1225,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.reset_el_steps()
 
             try:
-                beampair = self.beams[bidx]
+                beampair = beams[bidx]
             except IndexError:
                 beampair = [None, None]
 

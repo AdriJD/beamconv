@@ -346,7 +346,8 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
 
     # create single detector
     ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
-                          polang=polang, lmax=lmax, fwhm=fwhm)
+                          polang=polang, lmax=lmax, fwhm=fwhm,
+                          scatter=True)
 
     # move detector away from boresight
     try:
@@ -514,7 +515,8 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
 
     # create single detector on boresight
     ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
-                          polang=polang, lmax=lmax, fwhm=fwhm)
+                          polang=polang, lmax=lmax, fwhm=fwhm,
+                          scatter=True)
 
     try:
         beam = ss.beams[0][0]
