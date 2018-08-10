@@ -289,7 +289,7 @@ class Instrument(MPIBase):
         super(Instrument, self).__init__(**kwargs)
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           no_pairs=False, combine=True, 
+                           no_pairs=False, combine=True,
                            scatter=False, **kwargs):
         '''
         Create Beam objects for orthogonally polarized
@@ -379,7 +379,8 @@ class Instrument(MPIBase):
             self.beams += beams
 
     def load_focal_plane(self, bdir, tag=None, no_pairs=False,
-                         combine=True, scatter=False, **kwargs):
+        combine=True, scatter=False, print_list=False, **kwargs):
+
         '''
         Create focal plane by loading up a collection
         of beam properties stored in pickle files.
@@ -406,6 +407,9 @@ class Instrument(MPIBase):
             (default : True)
         scatter : bool
             Scatter loaded pairs over ranks (default : False)
+        print_list : bool
+            Print list of beam files loaded up (for debugging)
+            (default : False)
         kwargs : {beam_opts}
 
         Notes
@@ -455,6 +459,14 @@ class Instrument(MPIBase):
                     'No files matching <*{}*.pkl> found in {}'.format(
                                                              tag, bdir))
             file_list.sort()
+
+            if print_list:
+                print('Load focal plane beam file_list:')
+                for ii, fname in enumerate(file_list):
+                    print('{}/{}: {}'.format(
+                        ii+1, len(file_list), os.path.split(fname)[-1]))
+
+                print('tag = {}'.format(tag))
 
             for bfile in file_list:
 
@@ -516,7 +528,7 @@ class Instrument(MPIBase):
         else:
             # Broadcast otherwise because root did all I/O
             beams = self.broadcast(beams)
-            
+
         # all ranks need to know total number of detectors
         ndet = self.broadcast(ndet)
 
@@ -588,7 +600,7 @@ class Instrument(MPIBase):
 
     def kill_channels(self, killfrac=0.2, pairs=False, rnd_state=None):
         '''
-        Randomly identifies detectors in the beams list 
+        Randomly identifies detectors in the beams list
         and sets their 'dead' attribute to True.
 
         Keyword arguments
@@ -609,19 +621,19 @@ class Instrument(MPIBase):
             ndet = self.ndet
 
         # Calculate the kill indices on root and broadcast
-        # to ensure all ranks share dead detectors        
+        # to ensure all ranks share dead detectors
         if self.mpi_rank == 0:
-            if rnd_state:            
-                kill_indices = rnd_state.choice(ndet, int(ndet*killfrac), 
+            if rnd_state:
+                kill_indices = rnd_state.choice(ndet, int(ndet*killfrac),
                                             replace=False)
             else:
-                kill_indices = np.random.choice(ndet, int(ndet*killfrac), 
+                kill_indices = np.random.choice(ndet, int(ndet*killfrac),
                                                 replace=False)
         else:
             kill_indices = None
 
         kill_indices = self.broadcast(kill_indices)
-                        
+
         for kidx in kill_indices:
             if pairs:
                 self.beams[kidx][0].dead = True
@@ -1613,7 +1625,7 @@ class ScanStrategy(Instrument, qp.QMap):
         alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
         **kwargs):
         '''
-        A function to simulate satellite scanning strategy. 
+        A function to simulate satellite scanning strategy.
 
         Keyword arguments
         -----------------
@@ -1628,7 +1640,7 @@ class ScanStrategy(Instrument, qp.QMap):
         beta_period : float
             Spin period in seconds. (default : 600.)
         jitter_amp : float
-            Std of iid Gaussian noise added to elevation coords. 
+            Std of iid Gaussian noise added to elevation coords.
             (default : 0.0)
         return_all : bool
             Also return az, el, lon, lat. (default : False)
@@ -1636,7 +1648,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Start index
         end : int
             End index
-        
+
         Returns
         -------
         (az, el, lon, lat,) q_bore : array-like
@@ -1644,7 +1656,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Notes
         -----
-        See Wallis et al., 2017, MNRAS, 466, 425. 
+        See Wallis et al., 2017, MNRAS, 466, 425.
         '''
 
         deg_per_day = 360.9863
@@ -1654,8 +1666,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         az = np.mod(np.arange(nsamp)*dt*360/beta_period, 360)
 
-        if jitter_amp != 0.:            
-            jitter = jitter_amp * np.random.randn(int(nsamp))        
+        if jitter_amp != 0.:
+            jitter = jitter_amp * np.random.randn(int(nsamp))
             el = beta * np.ones_like(az) + jitter
         else:
             el = beta * np.ones_like(az)
@@ -1682,7 +1694,7 @@ class ScanStrategy(Instrument, qp.QMap):
             t_start, 2*np.pi*dt*nsamp/alpha_period + t_start,
             num=nsamp, endpoint=False))
         lat *= alpha
-        
+
         # Store last lon, lat coord for start next chunk
         self.lon = lon[-1]
         self.lat = lat[-1]
@@ -1707,7 +1719,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # calculate section of q_bore
             q_boresub = self.azel2bore(az[sub_start:sub_end],
                                     el[sub_start:sub_end],
-                                    None, None, 
+                                    None, None,
                                     lon[sub_start:sub_end],
                                     lat[sub_start:sub_end],
                                     self.ctime[sub_start:sub_end])
@@ -1926,7 +1938,7 @@ class ScanStrategy(Instrument, qp.QMap):
         tod = np.real(tod_c) # shares memory with tod_c
 
         # Add unpolarized tod
-        # Reset starting point recursion 
+        # Reset starting point recursion
         expipan[:] = 1.
         for n in xrange(N):
 
@@ -2068,7 +2080,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 flmmn = hp.almxfl(alm[0], np.conj(bell), inplace=False)
 
                 # turn into plus and minus (think E and B) modes for healpy's
-                # alm2map_spin 
+                # alm2map_spin
                 flmnp = - (flmn + flmmn) / 2.
                 flmnm = 1j * (flmn - flmmn) / 2.
                 spinmaps = hp.alm2map_spin([flmnp, flmnm], nside_spin, n, lmax,
