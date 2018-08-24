@@ -249,7 +249,8 @@ class Instrument(MPIBase):
     def __init__(self, location='spole', lat=None, lon=None,
                  **kwargs):
         '''
-        Set location of telescope.
+        Set location of telescope and initialize empty focal 
+        plane.
 
         Keyword arguments
         -----------------
@@ -264,6 +265,13 @@ class Instrument(MPIBase):
         lat : float, None
             Latitude in degrees (default : None)
         kwargs : {mpi_opts}
+
+        Notes
+        -----
+        The Instrument holds an `beams` attribute that 
+        consists of a nested list reprenting pairs of
+        beamconv.Beam objects (detectors). `beams` is
+        equal on all MPI ranks.
         '''
 
         if location == 'spole':
@@ -286,8 +294,73 @@ class Instrument(MPIBase):
         if (location != 'space') and (not self.lat or not self.lon):
             raise ValueError('Specify location of telescope')
 
-        super(Instrument, self).__init__(**kwargs)
+        self.beams = []
+        self.ndet = 0
 
+        super(Instrument, self).__init__(**kwargs)
+        
+    def add_to_focal_plane(self, beams, combine=True):
+        '''
+        Add beam(s) or beam pair(s) to total list of beam pairs.
+
+        Arguments
+        ---------
+        beams : (list of) Beam instances
+            If nested list: assumed to be list of beam pairs.
+
+        Keyword arguments
+        -----------------
+        combine : bool
+            If some beams already exist, combine these new
+            beams with them.
+            (default : True)
+        '''
+
+        # Check whether single beam, list of beams or list of pairs.
+        try:
+            beams[0]
+            isseq = True
+        except TypeError:
+            isseq = False
+
+        if isseq:                    
+            try:
+                beams[0][0]
+                isnestseq = True
+            except TypeError:
+                isnestseq = False
+        else:
+            isnestseq = False
+
+        # If not pairs, we add None as partner.
+        ndet2add = 0
+        if isseq is False:
+            beams2add = [[beams, None]]
+            ndet2add += 1
+
+        if isseq:
+            beams2add = []
+            for pair in beams:
+                if isnestseq is False:
+                    pair = [pair, None]
+                    ndet2add += 1
+                else:
+                    ndet2add += 2
+
+                beams2add.append(pair)
+
+        if not hasattr(self, 'beams') or not combine:
+            self.beams = beams2add
+        else:
+            self.beams += beams2add
+
+        if not hasattr(self, 'ndet') or not combine:
+            self.ndet = ndet2add
+        else:
+            self.ndet += ndet2add
+
+        return
+            
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
                            scatter=False, **kwargs):
@@ -528,16 +601,19 @@ class Instrument(MPIBase):
         else:
             # Broadcast otherwise because root did all I/O
             beams = self.broadcast(beams)
-
-        # all ranks need to know total number of detectors
+            
+        # All ranks need to know total number of detectors
         ndet = self.broadcast(ndet)
 
-        # check for existing beams
+        # Check for existing beams
         if not hasattr(self, 'beams') or not combine:
             self.beams = beams
-            self.ndet = ndet
         else:
             self.beams += beams
+
+        if not hasattr(self, 'ndet') or not combine:
+            self.ndet = ndet
+        else:
             self.ndet += ndet
 
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',

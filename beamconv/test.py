@@ -108,6 +108,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
     # Plotting
     if b2.mpi_rank == 0:
         print 'plotting results'
+        img_out_path = '../scratch/img/' 
 
         cart_opts = dict(rot=[ra0, dec0, 0],
                 lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
@@ -115,7 +116,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
                  unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
         # plot rescanned maps
-        plot_iqu(maps, '../scratch/img/', 'rescan_bicep',
+        plot_iqu(maps, img_out_path, 'rescan_bicep',
                  sym_limits=[250, 5, 5],
                  plot_func=hp.cartview, **cart_opts)
 
@@ -124,7 +125,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
         maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-        plot_iqu(maps_raw, '../scratch/img/', 'raw_bicep',
+        plot_iqu(maps_raw, img_out_path, 'raw_bicep',
                  sym_limits=[250, 5, 5],
                  plot_func=hp.cartview, **cart_opts)
 
@@ -135,14 +136,14 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
         diff = maps_raw - maps
 
-        plot_iqu(diff, '../scratch/img/', 'diff_bicep',
+        plot_iqu(diff, img_out_path, 'diff_bicep',
                  sym_limits=[1e-6, 1e-6, 1e-6],
                  plot_func=hp.cartview, **cart_opts)
 
         # plot condition number map
         cart_opts.pop('unit', None)
 
-        plot_map(cond, '../scratch/img/', 'cond_bicep',
+        plot_map(cond, img_out_path, 'cond_bicep',
                  min=2, max=5, unit='condition number',
                  plot_func=hp.cartview, **cart_opts)
 
@@ -158,6 +159,8 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.xlabel(r'Multipole [$\ell$]')
         plt.savefig('../scratch/img/cls_bicep.png')
         plt.close()
+        
+        print "Results written to {}".format(os.path.abspath(img_out_path)) 
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
                  mlen = 48 * 60 * 60, nrow=3, ncol=3, fov=5.0,
@@ -251,11 +254,12 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
     # Plotting
     if ac.mpi_rank == 0:
         print 'plotting results'
+        img_out_path = '../scratch/img/' 
 
         moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
         # plot rescanned maps
-        plot_iqu(maps, '../scratch/img/', 'rescan_atacama',
+        plot_iqu(maps, img_out_path, 'rescan_atacama',
                  sym_limits=[250, 5, 5],
                  plot_func=hp.mollview, **moll_opts)
 
@@ -264,7 +268,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
         maps_raw = hp.alm2map(alm, nside, verbose=False)
 
-        plot_iqu(maps_raw, '../scratch/img/', 'raw_atacama',
+        plot_iqu(maps_raw, img_out_path, 'raw_atacama',
                  sym_limits=[250, 5, 5],
                  plot_func=hp.mollview, **moll_opts)
 
@@ -275,14 +279,14 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
         diff = maps_raw - maps
 
-        plot_iqu(diff, '../scratch/img/', 'diff_atacama',
+        plot_iqu(diff, img_out_path, 'diff_atacama',
                  sym_limits=[1e-6, 1e-6, 1e-6],
                  plot_func=hp.mollview, **moll_opts)
 
         # plot condition number map
         moll_opts.pop('unit', None)
 
-        plot_map(cond, '../scratch/img/', 'cond_atacama',
+        plot_map(cond, img_out_path, 'cond_atacama',
                  min=2, max=5, unit='condition number',
                  plot_func=hp.mollview, **moll_opts)
 
@@ -298,6 +302,8 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         plt.xlabel(r'Multipole [$\ell$]')
         plt.savefig('../scratch/img/cls_atacama.png')
         plt.close()
+
+        print "Results written to {}".format(os.path.abspath(img_out_path)) 
 
 def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                 fwhm=200, hwp_freq=25., pol_only=True):

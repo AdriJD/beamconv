@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import healpy as hp
 from beamconv import instrument
+from beamconv import Beam
 import os
 import pickle
 
@@ -31,15 +32,15 @@ class TestTools(unittest.TestCase):
                          amplitude=0.5,
                          po_file=blm_name,
                          name='aap',
-                         pol='B', # ign
+                         pol='B', 
                          ghost=False)
 
         cls.beam_opts = beam_opts
-        # Store options as pickle file
+        # Store options as pickle file.
         with open(beam_file, 'wb') as handle:
             pickle.dump(beam_opts, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # Store blm array
+        # Store blm array.
         cls.lmax = 3
         alm_size = hp.Alm.getsize(cls.lmax)
         blm = np.zeros(alm_size, dtype=np.complex128)
@@ -49,7 +50,7 @@ class TestTools(unittest.TestCase):
                        dtype=np.complex128)
         cls.blm = blm
 
-        # derived using eq.24 in hivon 2016 (gamma=sigma=0)
+        # Derived using eq.24 in hivon 2016 (gamma=sigma=0).
         cls.blmm2_expd = np.array([0, 0, 3, 3, 0, -2, -2, 1, 1, 2],
                                   dtype=np.complex128)
         cls.blmp2_expd = np.array([0, 0, 3, 3, 0, 0, 4, 0, 0, 0],
@@ -65,6 +66,65 @@ class TestTools(unittest.TestCase):
 
         os.remove(cls.blm_name)
         os.remove(cls.beam_file)
+
+    def test_add_to_focal_plane(self):
+
+        instr = instrument.Instrument()
+
+        beam = Beam()
+        
+        # Add single beam.
+        instr.add_to_focal_plane(beam, combine=True)
+        self.assertEqual(instr.ndet, 1)
+
+        for pair in instr.beams:
+
+            self.assertEqual(pair[0], beam)
+            self.assertEqual(pair[1], None)
+
+        # Add three more individual beam.
+        instr.add_to_focal_plane([beam, beam, beam],
+                                      combine=True)
+
+        self.assertEqual(instr.ndet, 4)        
+        for pair in instr.beams:
+            
+            self.assertEqual(pair[0], beam)
+            self.assertEqual(pair[1], None)
+
+        # Add a pair.
+        instr.add_to_focal_plane([[beam, beam]],
+                                      combine=True)
+
+        self.assertEqual(instr.ndet, 6)   
+        for n, pair in enumerate(instr.beams):
+            
+            self.assertEqual(pair[0], beam)
+            if n > 3:
+                self.assertEqual(pair[1], beam)
+            
+        # Add two pair.
+        instr.add_to_focal_plane([[beam, beam], [beam, beam]],
+                                      combine=True)
+
+        self.assertEqual(instr.ndet, 10)
+        for n, pair in enumerate(instr.beams):
+            
+            self.assertEqual(pair[0], beam)
+            if n > 3:
+                self.assertEqual(pair[1], beam)
+
+        # Start new focal plane with pair.
+        instr.add_to_focal_plane([[beam, beam]],
+                                      combine=False)
+
+        self.assertEqual(instr.ndet, 2)
+
+        for pair in instr.beams:
+            
+            self.assertEqual(pair[0], beam)
+            self.assertEqual(pair[1], beam)
+
 
     def test_load_focal_plane(self):
 
@@ -139,11 +199,11 @@ class TestTools(unittest.TestCase):
         
         instr = instrument.Instrument()
 
-        # create some channels
+        # Create some channels.
         instr.create_focal_plane(nrow=10, ncol=10)
         self.assertEqual(instr.ndet, 200)
 
-        # kill some channels
+        # Kill some channels
         instr.kill_channels(killfrac=0.5, pairs=False)
         
         dead_count = 0
@@ -155,7 +215,7 @@ class TestTools(unittest.TestCase):
 
         self.assertEqual(dead_count, instr.ndet / 2.)
         
-        # redo but now with killing pairs
+        # Redo but now with killing pairs
         instr_2 = instrument.Instrument()
         instr_2.create_focal_plane(nrow=10, ncol=10)
         instr_2.kill_channels(killfrac=0.5, pairs=True)
@@ -168,6 +228,31 @@ class TestTools(unittest.TestCase):
                 self.assertEqual(pair[1].dead, False)
 
         self.assertEqual(dead_count, instr_2.ndet / 2.)
+
+    def test_set_btypes(self):
+
+        instr = instrument.Instrument()
+
+        # Create some channels.
+        instr.create_focal_plane(nrow=10, ncol=10, btype='PO')
+
+        for pair in instr.beams:
+            for beam in pair:
+                self.assertEqual(beam.btype, 'PO')
+
+        instr.set_btypes(btype='EG')
+
+        for pair in instr.beams:
+            for beam in pair:
+                self.assertEqual(beam.btype, 'EG')
+
+        # Test default behaviour
+        instr.set_btypes()
+
+        for pair in instr.beams:
+            for beam in pair:
+                self.assertEqual(beam.btype, 'Gaussian')
+        
 
 if __name__ == '__main__':
     unittest.main()
