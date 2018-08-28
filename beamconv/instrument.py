@@ -1248,7 +1248,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
-            **kwargs):
+            interp=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1280,6 +1280,9 @@ class ScanStrategy(Instrument, qp.QMap):
         reuse_spinmaps : bool
             Do not calculate spinmaps when spinmaps attribute
             exists. Useful when iterating single beam per core.
+            (default : False)
+        interp : bool
+            If set, use bi-linear interpolation to obtain TOD.
             (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
@@ -1392,25 +1395,29 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # scan and bin
                     if beam_a and not beam_a.dead:
-                        self.scan(beam_a, **subchunk)
+                        self.scan(beam_a, interp=interp,
+                                  **subchunk)
 
                         # add ghost signal if present
                         if any(beam_a.ghosts):
                             for ghost in beam_a.ghosts:
                                 self.scan(ghost,
                                           add_to_tod=True,
+                                          interp=interp,
                                           **subchunk)
 
                         if binning:
                             self.bin_tod(add_to_global=True)
 
                     if beam_b and not beam_b.dead:
-                        self.scan(beam_b, **subchunk)
+                        self.scan(beam_b, interp=interp,
+                                  **subchunk)
 
                         if any(beam_b.ghosts):
                             for ghost in beam_b.ghosts:
                                 self.scan(ghost,
                                           add_to_tod=True,
+                                          interp=interp,
                                           **subchunk)
 
                         if binning:
@@ -1919,7 +1926,7 @@ class ScanStrategy(Instrument, qp.QMap):
             scanning a subset of a chunk (default : None)
         interp : bool
             If set, use bi-linear interpolation to obtain TOD.
-            (default : False) TODO
+            (default : False)
         start : int
             Start index
         end : int
@@ -1956,6 +1963,11 @@ class ScanStrategy(Instrument, qp.QMap):
         # We apply polang at the beam level later.
         q_off = self.det_offset(az_off, el_off, 0)
 
+        # Expose pointing offset for mapmaking
+        if not add_to_tod:
+            self.q_off = q_off
+            self.polang = polang
+        
         # Rotate offset given rot_dict. We rotate the centroid
         # around the boresight. It's q_bore * q_rot * q_off
         ang = np.radians(self.rot_dict['angle'])
@@ -1995,18 +2007,19 @@ class ScanStrategy(Instrument, qp.QMap):
                        ra=ra, dec=dec, pa=pa)
 
         np.radians(pa, out=pa)
-        pix = tools.radec2ind_hp(ra, dec, nside_spin)
+        
+        if interp:
+            # Convert qpoint output to input healpy (in-place).
+            tools.radec2colatlong(ra, dec)
+        else:
+            pix = tools.radec2ind_hp(ra, dec, nside_spin)
 
-        # Expose pixel indices for test centroid
-        # and store pointing offset for mapmaking
-        self.pix = pix
-        if not add_to_tod:
-            self.q_off = q_off
-            self.polang = polang
+            # Expose pixel indices for test centroid
+            self.pix = pix
 
         # Fill complex array, i.e. the linearly polarized part
         # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
-        # to avoid doing triginometry at each n
+        # to avoid doing triginometry at each n.
         expipa = np.exp(1j * pa) # used for recursion
         expipan = np.exp(1j * pa * (-N + 1)) # starting point (n = -N+1)
 
@@ -2015,7 +2028,11 @@ class ScanStrategy(Instrument, qp.QMap):
             if nidx != 0: # expipan is already initialized for nidx=0
                 expipan *= expipa
 
-            tod_c += func_c[nidx,pix] * expipan
+            if interp:
+                tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
+                         * expipan
+            else:
+                tod_c += func_c[nidx,pix] * expipan
 
         # check for HWP angle array
         if self.hwp_ang is None:
@@ -2040,11 +2057,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # equal to 0.5 ( func exp(n pa) + c.c) (pa: position angle)
             if n == 0:
-                tod += np.real(func[n,pix])
+                if interp:
+                    tod += np.real(hp.get_interp_val(func[n], dec, ra))
+                else:
+                    tod += np.real(func[n,pix])
 
             if n > 0:
                 expipan *= expipa
-                tod += np.real(func[n,pix] * expipan)
+
+                if interp:
+                    tod += np.real(hp.get_interp_val(func[n], dec, ra) \
+                                   * expipan)
+                else:
+                    tod += np.real(func[n,pix] * expipan)
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod

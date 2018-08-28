@@ -353,6 +353,35 @@ def eb2spin(almE, almB):
 
     return almm2, almp2
 
+def radec2colatlong(ra, dec):
+    '''
+    In-place conversion of qpoints ra, dec output to co-latitude
+    and longitude used for healpy.
+
+    Long = RA
+    Co-lat = -DEC + pi/2 
+
+    Arguments
+    ---------
+    ra : array-like
+        Right ascension in degrees.
+    dec : array-like
+        Declination in degrees.
+    
+    '''
+
+    # Convert RA to healpix longitude (=phi) 
+    ra *= (np.pi / 180.)
+    ra = np.mod(ra, 2 * np.pi, out=ra)
+
+    # convert from DEC to co-latitude (=theta)
+    dec *= (np.pi / 180.)
+    dec *= -1.
+    dec += np.pi / 2.
+    dec = np.mod(dec, np.pi, out=dec)
+
+    return ra, dec
+    
 def radec2ind_hp(ra, dec, nside):
     '''
     Turn qpoint ra and dec output into healpix ring-order
@@ -373,16 +402,7 @@ def radec2ind_hp(ra, dec, nside):
         Pixel indices corresponding to ra, dec.
     '''
 
-    # Get indices
-    ra *= (np.pi / 180.)
-    ra = np.mod(ra, 2 * np.pi, out=ra)
-
-    # convert from latitude to colatitude
-    dec *= (np.pi / 180.)
-    dec *= -1.
-    dec += np.pi / 2.
-    dec = np.mod(dec, np.pi, out=dec)
-
+    radec2colatlong(ra, dec)
     pix = hp.ang2pix(nside, dec, ra, nest=False)
 
     return pix
