@@ -1176,7 +1176,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         self.vec += self.depo['vec']
                         self.proj += self.depo['proj']
 
-    def init_detpair(self, alm, beam_a, beam_b, **kwargs):
+    def init_detpair(self, alm, beam_a, beam_b=None, **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
         for a detector pair and all its ghosts.
@@ -1188,11 +1188,11 @@ class ScanStrategy(Instrument, qp.QMap):
             Healpix-formatted complex numpy arrays
         beam_a : <detector.Beam> object
             The A detector.
-        beam_b : <detector.Beam> object
-            The B detector
 
         Keyword arguments
         -----------------
+        beam_b : <detector.Beam> object
+            The B detector. (default : None)
         kwargs : {spinmaps_opts}
             Extra kwargs are assumed input to
             `init_spinmaps()`
@@ -1204,11 +1204,13 @@ class ScanStrategy(Instrument, qp.QMap):
         needs to specified.
         '''
 
-        # Silently return if no input is given
-        if not beam_a or not beam_b:
-            return
-
-        # We give the ghosts identical Gaussian beams
+        if beam_b is not None:
+            b_exists = True
+        else:
+            b_exists = False
+        
+        # We give the ghosts identical Gaussian beams if they
+        # have no blm.
         if beam_a.ghosts:
 
             for gidx in xrange(beam_a.ghost_count):
@@ -1221,29 +1223,32 @@ class ScanStrategy(Instrument, qp.QMap):
                 else:
                     if not hasattr(ghost_a, 'blm'):
                         ghost_a.reuse_blm(beam_a.ghosts[0])
+        if b_exists:
+            if beam_b.ghosts:
 
-        if beam_b.ghosts:
+                for gidx in xrange(beam_b.ghost_count):
+                    ghost_b = beam_b.ghosts[gidx]
 
-            for gidx in xrange(beam_b.ghost_count):
-                ghost_b = beam_b.ghosts[gidx]
+                    if gidx == 0:
+                        if not hasattr(ghost_b, 'blm'):
+                            ghost_b.reuse_blm(beam_a.ghosts[0])
+                    else:
+                        if not hasattr(ghost_b, 'blm'):
 
-                if gidx == 0:
-                    if not hasattr(ghost_b, 'blm'):
-                        ghost_b.reuse_blm(beam_a.ghosts[0])
-                else:
-                    if not hasattr(ghost_b, 'blm'):
-
-                        beam_b.ghosts[gidx].reuse_blm(beam_a.ghosts[0])
+                            beam_b.ghosts[gidx].reuse_blm(
+                                beam_a.ghosts[0])
 
 
         self.init_spinmaps(alm, beam_obj=beam_a, **kwargs)
 
         # free blm attributes
         beam_a.delete_blm(del_ghosts_blm=True)
-        beam_b.delete_blm(del_ghosts_blm=True)
+        if b_exists:
+            beam_b.delete_blm(del_ghosts_blm=True)
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
-        create_memmap=False, scatter=True, **kwargs):
+            create_memmap=False, scatter=True, reuse_spinmaps=False,
+            **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1272,6 +1277,10 @@ class ScanStrategy(Instrument, qp.QMap):
             pair. (default : False)
         scatter : bool
             Scatter beam pairs over ranks (default : True)
+        reuse_spinmaps : bool
+            Do not calculate spinmaps when spinmaps attribute
+            exists. Useful when iterating single beam per core.
+            (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`
@@ -1327,17 +1336,25 @@ class ScanStrategy(Instrument, qp.QMap):
                 print('[rank {:03d}]: working on: {}, {}'.format(
                         self.mpi_rank, beam_a.name, beam_b.name))
 
-            # pop init_spinmaps kwargs
+            # Pop init_spinmaps kwargs and initialize spinmaps.
             max_spin = kwargs.pop('max_spin', 5)
             nside_spin = kwargs.pop('nside_spin', 256)
             spinmaps_opts = dict(max_spin=max_spin,
                                  nside_spin=nside_spin,
                                  verbose=(verbose==2))
 
-            self.init_detpair(alm, beam_a, beam_b, **spinmaps_opts)
+            # Skip creating spinmaps when no beams or spinmaps
+            # already initialized with reuse_spinmaps.
+            if not beam_a and not beam_b:
+                pass
+            elif hasattr(self, 'spinmaps') and reuse_spinmaps:
+                pass
+            else:
+                self.init_detpair(alm, beam_a, beam_b=beam_b,
+                                  **spinmaps_opts)
 
             if not hasattr(self, 'chunks'):
-                # assume no chunking is needed and use full mission
+                # Assume no chunking is needed and use full mission length.
                 self.partition_mission()
 
             for cidx, chunk in enumerate(self.chunks):
@@ -1347,17 +1364,17 @@ class ScanStrategy(Instrument, qp.QMap):
                            ' samples {:d}-{:d}').format(self.mpi_rank,
                             cidx, chunk['start'], chunk['end']))
 
-                # Make the boresight move
+                # Make the boresight move.
                 ces_opts = kwargs.copy()
                 ces_opts.update(chunk)
 
-                # Use precomputed pointing on subsequent passes
-                # Note, not used if memmap is not initialized
+                # Use precomputed pointing on subsequent passes.
+                # Note, not used if memmap is not initialized.
                 if bidx > 0:
                     ces_opts.update(dict(use_precomputed=True))
                 self.constant_el_scan(**ces_opts)
 
-                # if required, loop over boresight rotations
+                # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
                 for subchunk in subchunks:
 
@@ -1881,7 +1898,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
             self.hwp_ang = hwp_ang
 
-    def scan(self, beam_obj, add_to_tod=False,
+    def scan(self, beam_obj, add_to_tod=False, interp=False,
              **kwargs):
         '''
         Update boresight pointing with detector offset, and
@@ -1900,6 +1917,9 @@ class ScanStrategy(Instrument, qp.QMap):
         cidx : int, None
             Index to `chunks` attribute. Only needed when
             scanning a subset of a chunk (default : None)
+        interp : bool
+            If set, use bi-linear interpolation to obtain TOD.
+            (default : False) TODO
         start : int
             Start index
         end : int
@@ -2008,7 +2028,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             hwp_ang = self.hwp_ang
 
-        # modulate by hwp angle and polarization angle
+        # Modulate by hwp angle and polarization angle
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         tod = np.real(tod_c) # shares memory with tod_c
@@ -2048,7 +2068,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Keyword arguments
         -----------------
         max_spin : int, optional
-            Maximum spin value describing the beam
+            Maximum azimuthal mode describing the beam
             (default : 5)
         nside_spin : int
             Nside of spin maps (default : 256)
@@ -2057,6 +2077,12 @@ class ScanStrategy(Instrument, qp.QMap):
             all ghosts (if present). `ghost_idx` attribute
             decides whether ghosts have distinct beams. See
             `Beam.__init__()`
+
+        Notes
+        -----
+        Uses minimum lmax value of beam and sky SWSH coefficients.
+        Uses min value of max_spin and the mmax of beam object as azimuthal
+        band-limit.
         '''
 
         # NOTE it would be nice to have a symmetric beam option
@@ -2110,7 +2136,8 @@ class ScanStrategy(Instrument, qp.QMap):
                     self.spinmaps['ghosts'][u][:] = func, func_c
             return
 
-        # check for nans
+        # Check for nans in alms. E.g from when there was a nan in original maps.
+        # If so, crash. Otherwise healpy will just create nan alms.
         crash_a = False
         crash_b = False
         i = 0
@@ -2134,39 +2161,38 @@ class ScanStrategy(Instrument, qp.QMap):
         elif lmax_beam > lmax:
             blm = tools.trunc_alm(blm, lmax)
 
-        # Unpolarized sky and beam first
+        # Unpolarized sky and beam first.
         func = np.zeros((N, 12*nside_spin**2),
-                             dtype=np.complex128) # s >=0 spheres
+                             dtype=np.complex128) # only s >=0 spheres
 
         start = 0
-        for n in xrange(N): # NOTE, n is spin
-            end = lmax + 1 - n
-            if n == 0: # scalar transform
+        for s in xrange(N): # s are the azimuthal modes in bls.
+            end = lmax + 1 - s
+            if s == 0: # scalar transform
 
-                flmn = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
-                func[n,:] += hp.alm2map(flmn, nside_spin, verbose=False)
+                flms = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
+                func[s,:] += hp.alm2map(flms, nside_spin, verbose=False)
 
             else: # spin transforms
 
                 bell = np.zeros(lmax+1, dtype=np.complex128)
-                # spin n beam
-                bell[n:] = blm[0][start:start+end]
+                # s beam modes
+                bell[s:] = blm[0][start:start+end]
 
-                flmn = hp.almxfl(alm[0], bell, inplace=False)
-                flmmn = hp.almxfl(alm[0], np.conj(bell), inplace=False)
+                flms = hp.almxfl(alm[0], bell, inplace=False)
+                flmms = hp.almxfl(alm[0], np.conj(bell), inplace=False)
 
-                # turn into plus and minus (think E and B) modes for healpy's
+                # Turn into plus and minus (think E and B) modes for healpy's
                 # alm2map_spin
-                flmnp = - (flmn + flmmn) / 2.
-                flmnm = 1j * (flmn - flmmn) / 2.
-                spinmaps = hp.alm2map_spin([flmnp, flmnm], nside_spin, n, lmax,
+                flmsp = - (flms + flmms) / 2.
+                flmsm = 1j * (flms - flmms) / 2.
+                spinmaps = hp.alm2map_spin([flmsp, flmsm], nside_spin, s, lmax,
                                            lmax)
-                func[n,:] = spinmaps[0] + 1j * spinmaps[1]
+                func[s,:] = spinmaps[0] + 1j * spinmaps[1]
 
             start += end
 
-        # Pol
-        # all spin spheres
+        # Pol (all s spheres).
         func_c = np.zeros((2*N-1, 12*nside_spin**2), dtype=np.complex128)
 
         almp2 = -1 * (alm[1] + 1j * alm[2])
@@ -2176,14 +2202,14 @@ class ScanStrategy(Instrument, qp.QMap):
         blmp2 = blm[2]
 
         start = 0
-        for n in xrange(N):
-            end = lmax + 1 - n
+        for s in xrange(N):
+            end = lmax + 1 - s
 
             bellp2 = np.zeros(lmax+1, dtype=np.complex128)
             bellm2 = bellp2.copy()
 
-            bellp2[np.abs(n):] = blmp2[start:start+end]
-            bellm2[np.abs(n):] = blmm2[start:start+end]
+            bellp2[np.abs(s):] = blmp2[start:start+end]
+            bellm2[np.abs(s):] = blmm2[start:start+end]
 
             ps_flm_p = hp.almxfl(almp2, bellm2, inplace=False) + \
                 hp.almxfl(almm2, np.conj(bellm2), inplace=False)
@@ -2201,22 +2227,22 @@ class ScanStrategy(Instrument, qp.QMap):
                 hp.almxfl(almp2, np.conj(bellp2), inplace=False)
             ms_flm_m *= 1j / 2.
 
-            if n == 0:
+            if s == 0:
                 spinmaps = [hp.alm2map(-ps_flm_p, nside_spin, verbose=False),
                             hp.alm2map(-ms_flm_m, nside_spin, verbose=False)]
 
-                func_c[N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
+                func_c[N-s-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             else:
-                # positive spin
+                # Positive s.
                 spinmaps = hp.alm2map_spin([ps_flm_p, ps_flm_m],
-                                           nside_spin, n, lmax, lmax)
-                func_c[N+n-1,:] = spinmaps[0] + 1j * spinmaps[1]
+                                           nside_spin, s, lmax, lmax)
+                func_c[N+s-1,:] = spinmaps[0] + 1j * spinmaps[1]
 
-                # negative spin
+                # Negative s.
                 spinmaps = hp.alm2map_spin([ms_flm_p, ms_flm_m],
-                                           nside_spin, n, lmax, lmax)
-                func_c[N-n-1,:] = spinmaps[0] - 1j * spinmaps[1]
+                                           nside_spin, s, lmax, lmax)
+                func_c[N-s-1,:] = spinmaps[0] - 1j * spinmaps[1]
 
             start += end
 

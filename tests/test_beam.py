@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import healpy as hp
-from beamconv import detector
+from beamconv import Beam
 import os
 import pickle
 
@@ -64,13 +64,21 @@ class TestTools(unittest.TestCase):
         '''
 
         os.remove(cls.blm_name)
-    
+
+    def test_init(self):
+        '''
+        Test initializing a Beam object.
+        '''
+        
+        beam = Beam(fwhm=0.)
+        self.assertEqual(0, beam.fwhm)
+        
     def test_load_blm(self):
         '''
         Test loading up a blm array
         '''
         
-        beam = detector.Beam(**self.beam_opts)
+        beam = Beam(**self.beam_opts)
         
         # test if unpolarized beam is loaded and scaled
         np.testing.assert_array_almost_equal(beam.blm[0],
@@ -92,5 +100,6 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
                                              beam.blm[2])
 
+        
 if __name__ == '__main__':
     unittest.main()

@@ -157,7 +157,7 @@ class Beam(object):
         '''
         Make sure lmax is >= 0 and defaults to something sensible
         '''
-        if val is None and fwhm:
+        if val is None and fwhm is not None:
             # Going up to 1.4 naive Nyquist frequency set by beam scale 
             self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
         else:
@@ -174,7 +174,7 @@ class Beam(object):
         input and returns 1.4 * 2 * pi / lmax if
         fwhm is None.        
         '''
-        if not val and self.lmax:
+        if val is None and self.lmax:
             val = (1.4 * 2. * np.pi) / self.lmax
             self.__fwhm = np.degrees(val) * 60
         else:
