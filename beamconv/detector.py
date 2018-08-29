@@ -335,9 +335,12 @@ class Beam(object):
                 
                 blm = (blm, blmm2, blmp2)
                 
-            # Update mmax.
-            if mmax < self.mmax:
+            # Update mmax if needed.
+            if mmax is None:
                 self.mmax = mmax
+            else:
+                if mmax < self.mmax:
+                    self.mmax = mmax
             
         # If tuple turn to (3, ) or (1, ..) array.
         blm = np.atleast_2d(blm)

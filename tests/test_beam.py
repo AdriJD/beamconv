@@ -26,7 +26,13 @@ class TestTools(unittest.TestCase):
         # .fits versions
         cls.blm_name_fits = cls.blm_name.replace('.npy', '.fits')
         cls.blm_cross_name_fits = cls.blm_cross_name.replace('.npy',
-                                                             '.fits')        
+                                                             '.fits')
+        # .fits versions that are truncated in m
+        cls.blm_name_mmax_fits = opj(test_data_dir,
+                                     'blm_test_mmax.fits')
+        cls.blm_cross_name_mmax_fits = opj(test_data_dir,
+                                           'blm_cross_test_mmax.fits')
+        
         beam_opts = dict(az=10,
                          el=5,
                          polang=90.,
@@ -48,7 +54,7 @@ class TestTools(unittest.TestCase):
                        dtype=np.complex128)
         cls.blm = blm
 
-        # derived using eq.24 in hivon 2016 (gamma=sigma=0)
+        # Derived using eq.24 in hivon 2016 (gamma=sigma=0).
         cls.blmm2_expd = np.array([0, 0, 3, 3, 0, -2, -2, 1, 1, 2],
                                   dtype=np.complex128)
         cls.blmp2_expd = np.array([0, 0, 3, 3, 0, 0, 4, 0, 0, 0],
@@ -63,8 +69,12 @@ class TestTools(unittest.TestCase):
                                            cls.blm]))
         hp.write_alm(cls.blm_cross_name_fits,
                      [cls.blm, cls.blm, cls.blm], overwrite=True)
-                
 
+        # Write .fits files that have mmax = 2.
+        hp.write_alm(cls.blm_name_mmax_fits, cls.blm, overwrite=True, mmax=2)
+        hp.write_alm(cls.blm_cross_name_mmax_fits,
+                     [cls.blm, cls.blm, cls.blm], overwrite=True, mmax=2)
+        
     @classmethod
     def tearDownClass(cls):
         '''
@@ -136,6 +146,36 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
                                              beam.blm[2])
 
+    def test_load_blm_mmax_fits(self):
+        '''
+        Test loading up a blm .fits array that has mmax < lmax
+        '''
+
+        beam = Beam(**self.beam_opts)
+        beam.po_file = self.blm_name_mmax_fits
+
+        # test if unpolarized beam is loaded and scaled
+        blm_expd = beam.amplitude * self.blm
+        blm_expd[-1] = 0
+        np.testing.assert_array_almost_equal(beam.blm[0],
+                                             blm_expd)
+
+        # After loading we expect mmax to be equal to the truncated value.
+        self.assertEqual(beam.mmax, 2)
+        
+        # Test if you can also load up the full beam, note that these
+        # are just 3 copies of main beam, but truncated.
+        beam.delete_blm()
+        beam.po_file = self.blm_cross_name_mmax_fits
+        
+        np.testing.assert_array_almost_equal(blm_expd,
+                                             beam.blm[0])
+        np.testing.assert_array_almost_equal(blm_expd,
+                                             beam.blm[1])
+        np.testing.assert_array_almost_equal(blm_expd,
+                                             beam.blm[2])
+
         
 if __name__ == '__main__':
     unittest.main()
+
