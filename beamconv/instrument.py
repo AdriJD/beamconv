@@ -719,7 +719,8 @@ class Instrument(MPIBase):
                 quot, rem = divmod(kidx, 2)
                 self.beams[quot][rem].dead = True
 
-    def set_global_prop(self, prop, incl_ghosts=True):
+    def set_global_prop(self, prop, incl_ghosts=True,
+                        rand_stdev=0., per_pair=False):
         '''
         Set a property for all beams on the focal plane.
 
@@ -733,27 +734,49 @@ class Instrument(MPIBase):
         incl_ghosts : bool
             If set, also update attributes of ghosts.
             (default : True)
+        rand_stdev : float
+            Standard deviation of Gaussian random variable
+            added to each beam's property (default : 0.)
+        per_pair : bool
+            If set, add same random number to both partners 
+            in pair. (default : False)
 
         Examples
         --------
         >>> S = Instrument()
         >>> S.create_focal_plane(nrow=10, ncol=10)
         >>> set_global_prop(dict(btype='PO'))        
+
+        Notes
+        -----
+        Ghosts share random deviation with main beam.
         '''
         
         beams = np.atleast_2d(self.beams) #2D: we have pairs
         for pair in beams:
+            
+            if rand_stdev != 0 and per_pair:
+                rndvar = np.random.normal(scale=rand_stdev)
+
             for beam in pair:
+
+                if rand_stdev != 0 and not per_pair:
+                    rndvar = np.random.normal(scale=rand_stdev)
                 
                 if not beam:                
                     continue
                 
-                for key in prop:                    
-                    setattr(beam, key, prop[key])
+                for key in prop:
+                    val = prop[key]
+                    val = val + rndvar if rand_stdev != 0 else val
+                    setattr(beam, key, val)
 
                 if incl_ghosts:
                     for ghost in beam.ghosts:
-                        setattr(ghost, key, prop[key])
+                        for key in prop:
+                            val = prop[key]
+                            val = val + rndvar if rand_stdev != 0 else val
+                            setattr(ghost, key, val)
                 
     def set_btypes(self, btype='Gaussian'):
         '''

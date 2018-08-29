@@ -260,7 +260,6 @@ class TestTools(unittest.TestCase):
                 self.assertEqual(beam.btype, 'Gaussian')
         
     def test_global_prop(self):
-        '''Test if props are transfered to all beams and ghosts.'''
         
         instr = instrument.Instrument()
 
@@ -285,8 +284,8 @@ class TestTools(unittest.TestCase):
         for pair in instr.beams:        
             for beam in pair:
                 for ghost in beam.ghosts:
-                    self.assertEqual(beam.btype, 'EG')
-                    self.assertEqual(beam.polang_error, 10)
+                    self.assertEqual(ghost.btype, 'EG')
+                    self.assertEqual(ghost.polang_error, 10)
 
         instr.set_global_prop(dict(btype='PO', polang_error=5))
 
@@ -295,6 +294,28 @@ class TestTools(unittest.TestCase):
                 for ghost in beam.ghosts:
                     self.assertEqual(beam.btype, 'PO')
                     self.assertEqual(beam.polang_error, 5)
+
+        # Add random var
+        instr.set_global_prop(dict(polang=100), rand_stdev=30)
+
+        for pair in instr.beams:
+            self.assertNotEqual(pair[0].polang, pair[1].polang)
+            
+            for beam in pair:                
+                for ghost in beam.ghosts:
+                    self.assertEqual(beam.polang, ghost.polang)
+
+        # Add random var per pair
+        instr.set_global_prop(dict(polang=100), rand_stdev=30,
+                              per_pair=True)
+
+        for pair in instr.beams:
+            self.assertEqual(pair[0].polang, pair[1].polang)
+            
+            for beam in pair:                
+                for ghost in beam.ghosts:
+                    self.assertEqual(beam.polang, ghost.polang)
+
 
 if __name__ == '__main__':
     unittest.main()
