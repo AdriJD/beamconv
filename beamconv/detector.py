@@ -5,6 +5,7 @@ import glob
 import os
 import inspect
 import numpy as np
+import healpy as hp
 import tools
 
 class Beam(object):
@@ -266,13 +267,15 @@ class Beam(object):
 
     def load_blm(self, filename, **kwargs):
         '''
-        Load a .npy file containing with blm array(s), 
+        Load file containing with blm array(s), 
         and use array(s) to populate `blm` attribute.
+
+        May update mmax attribute.
 
         Arguments
         ---------
         filename : str
-            Absolute or relative path to file
+            Absolute or relative path to .npy or .fits file
 
         Keyword arguments
         -----------------
@@ -286,13 +289,57 @@ class Beam(object):
         blm file can be rank 1 or 2. If rank is 1: array is blm and 
         blmm2 and blmp2 are created assuming only the co-polar response
         If rank is 2, shape has to be (3,), with blm, blmm2 and blmp2
+
+        .npy files are assumed to be healpy alm arrays written using
+        `numpy.save`. .fits files are assumed in l**2+l+m+1 order (i.e.
+        written by healpy.write_alm. mmax may be smaller than lmax.
         '''
         
         pname, ext = os.path.splitext(filename)
-        if not ext:
-            # Assume .npy extension
-            ext = '.npy'
-        blm = np.load(os.path.join(pname+ext))
+        try:
+            if not ext:
+                # Assume .npy extension
+                ext = '.npy'
+            blm = np.load(os.path.join(pname+ext))
+            
+        except IOError:
+            if not ext:
+                # Assume .fits file instead
+                ext = '.fits'
+            blm_file = os.path.join(pname+ext)
+
+            hdulist = hp.fitsfunc.pf.open(blm_file)
+            npol = len(hdulist)-1
+            hdulist.close()
+
+            blm_read, mmax = hp.read_alm(blm_file, hdu=1, return_mmax=True)
+
+            # For now, expand blm to full size.
+            lmax = hp.Alm.getlmax(blm_read.size, mmax=mmax)
+            blm = np.zeros(hp.Alm.getsize(lmax), dtype=np.complex128)
+            blm[:blm_read.size] = blm_read
+            
+            if npol == 3:
+                blmm2_read, mmaxm2 = hp.read_alm(blm_file, hdu=2, return_mmax=True)
+                blmp2_read, mmaxp2 = hp.read_alm(blm_file, hdu=3, return_mmax=True)
+                
+                if not (mmax == mmaxm2 == mmaxp2):
+                    raise ValueError("mmax does not match between s=0,-2,2")
+                
+                # Expand.
+                blmm2 = np.zeros_like(blm)
+                blmp2 = np.zeros_like(blm)
+
+                blmm2[:blmm2_read.size] = blmm2_read
+                blmp2[:blmp2_read.size] = blmp2_read
+                
+                blm = (blm, blmm2, blmp2)
+                
+            # Update mmax.
+            if mmax < self.mmax:
+                self.mmax = mmax
+            
+        # If tuple turn to (3, ) or (1, ..) array.
         blm = np.atleast_2d(blm)
 
         if blm.shape[0] == 3 and self.cross_pol:

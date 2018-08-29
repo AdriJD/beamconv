@@ -14,7 +14,7 @@ class TestTools(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         '''
-        Create a .npy blm array
+        Create .npy and .fits blm arrays.
         '''
         
         blm_name = opj(test_data_dir, 'blm_test.npy')
@@ -23,6 +23,10 @@ class TestTools(unittest.TestCase):
         blm_cross_name = opj(test_data_dir, 'blm_cross_test.npy')
         cls.blm_cross_name = blm_cross_name
 
+        # .fits versions
+        cls.blm_name_fits = cls.blm_name.replace('.npy', '.fits')
+        cls.blm_cross_name_fits = cls.blm_cross_name.replace('.npy',
+                                                             '.fits')        
         beam_opts = dict(az=10,
                          el=5,
                          polang=90.,
@@ -51,11 +55,15 @@ class TestTools(unittest.TestCase):
                                   dtype=np.complex128)
 
         np.save(blm_name, cls.blm)
+        hp.write_alm(cls.blm_name_fits, cls.blm, overwrite=True)
 
-        # also save explicit co- and cross-polar beams
-        # but just use blm three times
+        # Also save explicit co- and cross-polar beams
+        # but just use blm three times.
         np.save(blm_cross_name, np.asarray([cls.blm, cls.blm,
                                            cls.blm]))
+        hp.write_alm(cls.blm_cross_name_fits,
+                     [cls.blm, cls.blm, cls.blm], overwrite=True)
+                
 
     @classmethod
     def tearDownClass(cls):
@@ -93,6 +101,34 @@ class TestTools(unittest.TestCase):
         # test if you can also load up the full beam
         beam.delete_blm()
         beam.po_file = self.blm_cross_name
+        np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
+                                             beam.blm[0])
+        np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
+                                             beam.blm[1])
+        np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
+                                             beam.blm[2])
+
+    def test_load_blm_fits(self):
+        '''
+        Test loading up a blm .fits array
+        '''
+
+        beam = Beam(**self.beam_opts)
+        beam.po_file = self.blm_name_fits
+        
+        # test if unpolarized beam is loaded and scaled
+        np.testing.assert_array_almost_equal(beam.blm[0],
+                                  beam.amplitude*self.blm)
+
+        # test if copol parts are correct
+        blmm2_expd = self.blmm2_expd * beam.amplitude
+        blmp2_expd = self.blmp2_expd * beam.amplitude
+        np.testing.assert_array_almost_equal(blmm2_expd, beam.blm[1])
+        np.testing.assert_array_almost_equal(blmp2_expd, beam.blm[2])
+                   
+        # test if you can also load up the full beam
+        beam.delete_blm()
+        beam.po_file = self.blm_cross_name_fits
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
                                              beam.blm[0])
         np.testing.assert_array_almost_equal(self.blm*beam.amplitude,
