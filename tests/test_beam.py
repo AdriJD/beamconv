@@ -61,19 +61,25 @@ class TestTools(unittest.TestCase):
                                   dtype=np.complex128)
 
         np.save(blm_name, cls.blm)
-        hp.write_alm(cls.blm_name_fits, cls.blm, overwrite=True)
+        
+        # Older healpy versions have bugs with write_alm writing multiple alm.
+        if int(hp.__version__.replace('.','')) >= 1101:
+            hp.write_alm(cls.blm_name_fits, cls.blm, overwrite=True)
 
         # Also save explicit co- and cross-polar beams
         # but just use blm three times.
         np.save(blm_cross_name, np.asarray([cls.blm, cls.blm,
                                            cls.blm]))
-        hp.write_alm(cls.blm_cross_name_fits,
+
+        if int(hp.__version__.replace('.','')) >= 1101:
+            hp.write_alm(cls.blm_cross_name_fits,
                      [cls.blm, cls.blm, cls.blm], overwrite=True)
 
         # Write .fits files that have mmax = 2.
-        hp.write_alm(cls.blm_name_mmax_fits, cls.blm, overwrite=True, mmax=2)
-        hp.write_alm(cls.blm_cross_name_mmax_fits,
-                     [cls.blm, cls.blm, cls.blm], overwrite=True, mmax=2)
+        if int(hp.__version__.replace('.','')) >= 1101:
+            hp.write_alm(cls.blm_name_mmax_fits, cls.blm, overwrite=True, mmax=2)
+            hp.write_alm(cls.blm_cross_name_mmax_fits,
+                         [cls.blm, cls.blm, cls.blm], overwrite=True, mmax=2)
         
     @classmethod
     def tearDownClass(cls):
@@ -123,6 +129,9 @@ class TestTools(unittest.TestCase):
         Test loading up a blm .fits array
         '''
 
+        if int(hp.__version__.replace('.','')) < 1101:
+            return
+
         beam = Beam(**self.beam_opts)
         beam.po_file = self.blm_name_fits
         
@@ -150,6 +159,9 @@ class TestTools(unittest.TestCase):
         '''
         Test loading up a blm .fits array that has mmax < lmax
         '''
+
+        if int(hp.__version__.replace('.','')) < 1101:
+            return
 
         beam = Beam(**self.beam_opts)
         beam.po_file = self.blm_name_mmax_fits
