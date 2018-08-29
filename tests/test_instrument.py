@@ -5,6 +5,7 @@ from beamconv import instrument
 from beamconv import Beam
 import os
 import pickle
+import warnings
 
 opj = os.path.join
 test_fpu_dir = os.path.abspath(opj(os.path.dirname(__file__),
@@ -131,7 +132,9 @@ class TestTools(unittest.TestCase):
         instr = instrument.Instrument()
         instr.load_focal_plane(test_fpu_dir)
 
-        instr.load_focal_plane(test_fpu_dir, ghost=True, pol='B') # should be ignored
+        with warnings.catch_warnings(record=True) as w:
+            instr.load_focal_plane(test_fpu_dir, ghost=True, pol='B') # Bould be ignored
+            self.assertEqual(len(w), 2) # ghost and pol.
         self.assertEqual(len(instr.beams), 2)
 
         for pair in instr.beams:
@@ -173,9 +176,12 @@ class TestTools(unittest.TestCase):
         are not propagated, but others are.
         '''
         instr = instrument.Instrument()
-        instr.create_focal_plane(name='name_that_should_not_appear',
-                                 az=11, el=11, polang=10, ghost=True,
-                                 pol='B', fov=10)
+
+        with warnings.catch_warnings(record=True) as w:
+            instr.create_focal_plane(name='name_that_should_not_appear',
+                                     az=11, el=11, polang=10, ghost=True,
+                                     pol='B', fov=10)
+            self.assertEqual(len(w), 5) # az, el, ghost, pol, name
         self.assertEqual(len(instr.beams), 1)
         self.assertEqual(instr.ndet, 2)
 
@@ -253,6 +259,42 @@ class TestTools(unittest.TestCase):
             for beam in pair:
                 self.assertEqual(beam.btype, 'Gaussian')
         
+    def test_global_prop(self):
+        '''Test if props are transfered to all beams and ghosts.'''
+        
+        instr = instrument.Instrument()
+
+        # Create some channels.
+        instr.create_focal_plane(nrow=10, ncol=10, btype='PO')
+
+        for pair in instr.beams:
+            for beam in pair:
+                self.assertEqual(beam.btype, 'PO')
+
+        instr.set_global_prop(dict(btype='EG', polang_error=10))
+
+        for pair in instr.beams:
+            for beam in pair:
+                self.assertEqual(beam.btype, 'EG')
+                self.assertEqual(beam.polang_error, 10)
+
+        # Add ghosts
+        instr.create_reflected_ghosts()
+        instr.create_reflected_ghosts()
+        
+        for pair in instr.beams:        
+            for beam in pair:
+                for ghost in beam.ghosts:
+                    self.assertEqual(beam.btype, 'EG')
+                    self.assertEqual(beam.polang_error, 10)
+
+        instr.set_global_prop(dict(btype='PO', polang_error=5))
+
+        for pair in instr.beams:        
+            for beam in pair:
+                for ghost in beam.ghosts:
+                    self.assertEqual(beam.btype, 'PO')
+                    self.assertEqual(beam.polang_error, 5)
 
 if __name__ == '__main__':
     unittest.main()

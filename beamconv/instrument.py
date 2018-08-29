@@ -404,14 +404,14 @@ class Instrument(MPIBase):
         B-detectors get polang + 90.
         '''
 
-        # Ignore these kwargs and warn user
+        # Ignore these kwargs and warn user.
         for key in ['az', 'el', 'pol', 'name', 'ghost']:
             arg = kwargs.pop(key, None)
             if arg:
                 warn('{}={} option to `Beam.__init__()` is ignored'
                      .format(key, arg))
 
-        # Some kwargs need to be dealt with seperately
+        # Some kwargs need to be dealt with seperately.
         polang = kwargs.pop('polang', 0.)
         dead = kwargs.pop('dead', False)
 
@@ -719,6 +719,42 @@ class Instrument(MPIBase):
                 quot, rem = divmod(kidx, 2)
                 self.beams[quot][rem].dead = True
 
+    def set_global_prop(self, prop, incl_ghosts=True):
+        '''
+        Set a property for all beams on the focal plane.
+
+        Arguments
+        ---------
+        prop : dict
+            Dict with attribute(s) and values for beams
+
+        Keyword arguments
+        -----------------
+        incl_ghosts : bool
+            If set, also update attributes of ghosts.
+            (default : True)
+
+        Examples
+        --------
+        >>> S = Instrument()
+        >>> S.create_focal_plane(nrow=10, ncol=10)
+        >>> set_global_prop(dict(btype='PO'))        
+        '''
+        
+        beams = np.atleast_2d(self.beams) #2D: we have pairs
+        for pair in beams:
+            for beam in pair:
+                
+                if not beam:                
+                    continue
+                
+                for key in prop:                    
+                    setattr(beam, key, prop[key])
+
+                if incl_ghosts:
+                    for ghost in beam.ghosts:
+                        setattr(ghost, key, prop[key])
+                
     def set_btypes(self, btype='Gaussian'):
         '''
         Set btype for all main beams
@@ -1942,7 +1978,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         az_off = beam_obj.az
         el_off = beam_obj.el
-        polang = beam_obj.polang
+        polang = beam_obj.polang_truth # True polang for scanning.
 
         if not beam_obj.ghost:
             func, func_c = self.spinmaps['main_beam']
@@ -1966,7 +2002,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Expose pointing offset for mapmaking
         if not add_to_tod:
             self.q_off = q_off
-            self.polang = polang
+            self.polang = beam_obj.polang # Possibly offset polang for binning.
         
         # Rotate offset given rot_dict. We rotate the centroid
         # around the boresight. It's q_bore * q_rot * q_off
@@ -2305,8 +2341,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # use q_off quat with polang (and instr. ang) included.
         q_off = self.q_off
-
-        polang = -np.radians(self.polang) # why is there a minus needed here?
+        
+        # Note minus sign. Also not true polang when polang_error != 0.
+        polang = -np.radians(self.polang) 
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
 

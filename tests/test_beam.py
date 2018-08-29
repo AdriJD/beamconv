@@ -175,7 +175,33 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(blm_expd,
                                              beam.blm[2])
 
-        
+    def test_polang_error(self):
+        '''
+        Test wheter polang_truth = polang + polang_error
+        and correctly updates.
+        '''    
+        beam = Beam(**self.beam_opts)
+
+        # Default Value.
+        self.assertEqual(beam.polang_error, 0.)
+
+        self.assertEqual(beam.polang_truth,
+                         beam.polang + beam.polang_error)
+        beam.polang = 40
+        self.assertEqual(beam.polang_truth,
+                         beam.polang + beam.polang_error)
+        beam.polang_error = 40
+        self.assertEqual(beam.polang_truth,
+                         beam.polang + beam.polang_error)
+
+        # User cannot change polang_truth directly.
+        try:
+            beam.polang_truth = 42
+        except:
+            AttributeError
+        self.assertEqual(beam.polang_truth,
+                         beam.polang + beam.polang_error)
+
 if __name__ == '__main__':
     unittest.main()
 

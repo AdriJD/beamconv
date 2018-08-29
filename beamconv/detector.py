@@ -16,7 +16,7 @@ class Beam(object):
          pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
          dead=False, ghost=False, amplitude=1., po_file=None, 
          eg_file=None, cross_pol=True, deconv_q=True,
-         normalize=True):
+         normalize=True, polang_error=0.):
         '''
         Initialize a detector beam.
 
@@ -45,7 +45,8 @@ class Beam(object):
                 PO       : A physical optics beam
             (default: Gaussian)
         fwhm : float 
-            Detector beam FWHM in arcmin (default : 43)
+            Detector beam FWHM in arcmin (used for Guassian beam) 
+            (default : 43)
         lmax : int
             Bandlimit beam. If None, use 1.4*2*pi/fwhm. (default : None)
         mmax : int 
@@ -73,6 +74,10 @@ class Beam(object):
         normalize : bool 
             Normalize loaded up blm's such that 00 component is 1.
             Done after deconv_q operation if that option is set.
+        polang_error : float
+            Angle offset for polarization angle in deg. Scanning is 
+            done with `polang_truth` = `polang` + `polang_error`, binning 
+            can then be done with just `polang`.
         '''
 
         self.az = az
@@ -86,12 +91,12 @@ class Beam(object):
         self.po_file = po_file
         self.eg_file = eg_file
         self.cross_pol = cross_pol
-
         self.lmax = lmax           
         self.mmax = mmax
         self.fwhm = fwhm
         self.deconv_q = deconv_q
         self.normalize = normalize
+        self.polang_error = polang_error
 
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
@@ -105,6 +110,7 @@ class Beam(object):
 
     @property
     def ghosts(self):
+        '''Return list of ghost beams.'''        
         return self.__ghosts
 
     @property
@@ -120,9 +126,7 @@ class Beam(object):
 
     @property
     def ghost_idx(self):
-        '''
-        If two ghosts share ghost_idx, they share blm
-        '''
+        '''If two ghosts share ghost_idx, they share blm.'''
         return self.__ghost_idx
 
     @ghost_idx.setter
@@ -138,9 +142,7 @@ class Beam(object):
 
     @dead.setter
     def dead(self, val):
-        '''
-        Make sure ghosts are also declared dead when main beam is
-        '''
+        '''Make sure ghosts are also declared dead when main beam is.'''
         self.__dead = val
         try:
             for ghost in self.ghosts:
@@ -155,9 +157,7 @@ class Beam(object):
     
     @lmax.setter
     def lmax(self, val):
-        '''
-        Make sure lmax is >= 0 and defaults to something sensible
-        '''
+        '''Make sure lmax is >= 0 and defaults to something sensible'''
         if val is None and fwhm is not None:
             # Going up to 1.4 naive Nyquist frequency set by beam scale 
             self.__lmax = int(2 * np.pi / np.radians(self.fwhm/60.) * 1.4)
@@ -187,9 +187,7 @@ class Beam(object):
 
     @mmax.setter
     def mmax(self, mmax):
-        '''
-        Set mmax to lmax if not set        
-        '''
+        '''Set mmax to lmax if not set.'''
         self.__mmax = min(i for i in [mmax, self.lmax] \
                               if i is not None)
 
@@ -237,13 +235,17 @@ class Beam(object):
     def blm(self):
         del self.__blm
 
+    @property
+    def polang_truth(self):
+        return self.polang + self.polang_error
+        
     def __str__(self):
 
         return "name   : {} \nbtype  : {} \nalive  : {} \nFWHM"\
             "   : {} arcmin \naz     : {} deg \nel     : {} deg "\
             "\npolang : {} deg\n".format(self.name, self.btype,
             str(not self.dead), self.fwhm, self.az, self.el,
-            self.polang)
+                self.polang_truth)
 
     def gen_gaussian_blm(self):
         '''
@@ -423,7 +425,8 @@ class Beam(object):
                           eg_file=self.eg_file,
                           cross_pol=self.cross_pol, 
                           deconv_q=self.deconv_q,
-                          normalize=self.normalize) 
+                          normalize=self.normalize,
+                          polang_error=self.polang_error) 
 
         # Note, amplitude is applied after normalization
         # update options with specified kwargs
@@ -492,11 +495,12 @@ class Beam(object):
         Returns
         -------
         az : float
-            Azimuth of offset in degrees
+            Azimuth of offset in degrees.
         el : float
-            Elevation of offset in degrees
+            Elevation of offset in degrees.
         polang : float 
-            Polarization angle in degrees
+            Polarization angle in degrees (with
+            polang_error included).
 
         Notes
         -----
@@ -510,5 +514,5 @@ class Beam(object):
         and azimuth with respect to the local horizon and meridian.
         '''
         
-        return self.az, self.el, self.polang
+        return self.az, self.el, self.polang_truth
 

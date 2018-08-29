@@ -100,7 +100,7 @@ class TestTools(unittest.TestCase):
         # Since we have a infinitely narrow Gaussian the convolved
         # maps should just match the input (up to healpix quadrature
         # wonkyness).
-        input_map = hp.alm2map(self.alm, nside) # I, Q, U
+        input_map = hp.alm2map(self.alm, nside, verbose=False) # I, Q, U
         zero_map = np.zeros_like(input_map[0])
         np.testing.assert_array_almost_equal(input_map[0],
                                              func[0], decimal=6)
