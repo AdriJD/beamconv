@@ -2121,31 +2121,34 @@ class ScanStrategy(Instrument, qp.QMap):
         self.qidx_start = qidx_start
         self.qidx_end = qidx_end
 
-        # more efficient if you do bore2pix, i.e. skip
-        # the allocation of ra, dec, pa etc. But you need pa....
-        # Perhaps ask Sasha if she can make bore2pix output pix
-        # and pa (instead of sin2pa, cos2pa)
-        ra = np.empty(tod_size, dtype=np.float64)
-        dec = np.empty(tod_size, dtype=np.float64)
-        pa = np.empty(tod_size, dtype=np.float64)
+        if interp:            
+            ra = np.empty(tod_size, dtype=np.float64)
+            dec = np.empty(tod_size, dtype=np.float64)
+            pa = np.empty(tod_size, dtype=np.float64)
 
-        self.bore2radec(q_off,
-                       self.ctime[self.qidx_start:self.qidx_end],
-                       self.q_bore[qidx_start:qidx_end],
-                       q_hwp=None, sindec=False, return_pa=True,
-                       ra=ra, dec=dec, pa=pa)
+            self.bore2radec(q_off,
+                            self.ctime[qidx_start:qidx_end],
+                            self.q_bore[qidx_start:qidx_end],
+                            q_hwp=None, sindec=False, return_pa=True,
+                            ra=ra, dec=dec, pa=pa)
 
-        np.radians(pa, out=pa)
-        
-        if interp:
-            # Convert qpoint output to input healpy (in-place).
+            # Convert qpoint output to input healpy (in-place),
+            # needed for interpolation later.
             tools.radec2colatlong(ra, dec)
+            
         else:
-            pix = tools.radec2ind_hp(ra, dec, nside_spin)
-
+            # In no interpolation is required, we can go straight
+            # from quaternion to pix and pa.
+            pix, pa = self.bore2pix(q_off,
+                        self.ctime[qidx_start:qidx_end],
+                        self.q_bore[qidx_start:qidx_end],
+                        q_hwp=None, nside=nside_spin, return_pa=True)
+            
             # Expose pixel indices for test centroid.
             self.pix = pix
 
+        np.radians(pa, out=pa)
+            
         # Expose pointing offset for mapmaking
         if not add_to_tod:
             self.q_off = q_off

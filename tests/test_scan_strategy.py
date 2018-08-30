@@ -156,7 +156,6 @@ class TestTools(unittest.TestCase):
         mmax = 2        
         ra0=-10
         dec0=-57.5
-        lmax = 10
         fwhm = 200
         nside = 256
         az_throw = 10
@@ -165,7 +164,7 @@ class TestTools(unittest.TestCase):
 
         # Create a 1 x 2 square grid of Gaussian beams.
         scs.create_focal_plane(nrow=1, ncol=2, fov=4,
-                              lmax=lmax, fwhm=fwhm)
+                              lmax=self.lmax, fwhm=fwhm)
         
         # Allocate and assign parameters for mapmaking.
         scs.allocate_maps(nside=nside)
@@ -204,6 +203,49 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(maps_raw[2,cond<2.5],
                                              maps[2,cond<2.5], decimal=10)
 
+    def test_interpolate(self):
+        '''
+        Compare interpoted TOD to raw for extremely bandlimited 
+        input such that should agree relatively well.
+        '''
+
+        mlen = 60
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 1
+        nside = 128
+        az_throw = 10
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create a 1 x 1 square grid of Gaussian beams.
+        scs.create_focal_plane(nrow=1, ncol=1, fov=4,
+                              lmax=self.lmax, fwhm=fwhm)
+        
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2.,
+                                nside_spin=nside,
+                                max_spin=mmax,
+                                binning=False)
+
+        tod_raw = scs.tod.copy()
+
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2.,
+                                nside_spin=nside,
+                                max_spin=mmax,
+                                reuse_spinmaps=False,
+                                inerpolate=True,
+                                binning=False)
+
+
+        np.testing.assert_array_almost_equal(tod_raw,
+                                             scs.tod, decimal=10)
+        
 if __name__ == '__main__':
     unittest.main()
 
