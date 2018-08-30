@@ -452,8 +452,8 @@ class Instrument(MPIBase):
             self.beams += beams
 
     def load_focal_plane(self, bdir, tag=None, no_pairs=False,
-        combine=True, scatter=False, print_list=False, **kwargs):
-
+                         combine=True, scatter=False, polang_A=0.,
+                         polang_B=90., print_list=False, **kwargs):
         '''
         Create focal plane by loading up a collection
         of beam properties stored in pickle files.
@@ -480,6 +480,12 @@ class Instrument(MPIBase):
             (default : True)
         scatter : bool
             Scatter loaded pairs over ranks (default : False)
+        polang_A : float
+            Polarization angle of A detector in pair [deg]. 
+            Added to existing or provided polang. (default: 0.)
+        polang_B : float
+            Polarization angle of b detector in pair [deg].
+            Added to existing or provided polang. (default: 90.)
         print_list : bool
             Print list of beam files loaded up (for debugging)
             (default : False)
@@ -492,8 +498,8 @@ class Instrument(MPIBase):
         If loaded files contain a single dictionary, those
         options are assumed to hold for the A detector.
         It is assumed that the B-detectors share the
-        A-detectors' beams (up to a +90 deg shift in polang:
-        B-polang is A-polang + 90). Other properties of
+        A-detectors' beams (up to a shift in polang
+        (see A/B-polang). Other properties of
         B-detectors are shared with A.
 
         Appends "A" or "B" to beam names if provided,
@@ -503,8 +509,7 @@ class Instrument(MPIBase):
         Any keywords accepted by the `Beam` class will be
         assumed to hold for all beams created. with the
         exception of (`pol`, `ghost`), which are
-        ignored. `polang` is used for A-detectors,
-        B-detectors get polang + 90.
+        ignored. 
         '''
 
         import glob
@@ -547,8 +552,8 @@ class Instrument(MPIBase):
                 beam_opts = pickle.load(pkl_file)
                 pkl_file.close()
 
-                if isinstance(beam_opts, dict):
-                    # single dict of opts -> assume A, create A and B
+                if isinstance(beam_opts, dict):                    
+                    # Single dict of opts: assume A, create A and B.
 
                     beam_opts_a = beam_opts
                     beam_opts_b = copy.deepcopy(beam_opts)
@@ -557,12 +562,8 @@ class Instrument(MPIBase):
                         beam_opts_a['name'] += 'A'
                         beam_opts_b['name'] += 'B'
 
-                    # set polang to 0/90 or polang/polang+90
-                    polang = beam_opts_a.setdefault('polang', 0)
-                    beam_opts_b['polang'] = polang + 90
-
                 elif isinstance(beam_opts, (list, tuple, np.ndarray)):
-                    # assume list of dicts for A and B
+                    # Assume list of dicts for A and B.
 
                     if len(beam_opts) != 2:
                         raise ValueError('Need two elements: A and B')
@@ -570,14 +571,16 @@ class Instrument(MPIBase):
                     beam_opts_a = beam_opts[0]
                     beam_opts_b = beam_opts[1]
 
-                # overrule options with given kwargs
+                # Overrule options with given kwargs
                 beam_opts_a.update(kwargs)
-
-                # if kwargs contain polang, update it for B
-                if kwargs.get('polang'):
-                    kwargs['polang'] += 90
-
                 beam_opts_b.update(kwargs)
+
+                # Add polang A and B (perhaps on top of provided or esisting
+                # polang).
+                polang_Ai = beam_opts_a.setdefault('polang', 0)
+                polang_Bi = beam_opts_b.setdefault('polang', 0)
+                beam_opts_a['polang'] = polang_Ai + polang_A
+                beam_opts_b['polang'] = polang_Bi + polang_B
 
                 if no_pairs:
                     beam_opts_b['dead'] = True
