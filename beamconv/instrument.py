@@ -689,9 +689,9 @@ class Instrument(MPIBase):
         pairs : bool
             If True, kill pairs of detectors
             (default : False)
-        rnd_state : mtrand.RandomState
+        rnd_state : numpy.random.RandomState
             Numpy random state instance. If None, use
-            global instance (default : None)
+            global instance. (default : None)
         '''
 
         if pairs:
@@ -700,7 +700,7 @@ class Instrument(MPIBase):
             ndet = self.ndet
 
         # Calculate the kill indices on root and broadcast
-        # to ensure all ranks share dead detectors
+        # to ensure all ranks share dead detectors.
         if self.mpi_rank == 0:
             if rnd_state:
                 kill_indices = rnd_state.choice(ndet, int(ndet*killfrac),
@@ -718,12 +718,11 @@ class Instrument(MPIBase):
                 self.beams[kidx][0].dead = True
                 self.beams[kidx][1].dead = True
             else:
-                # if even kill A, else kill B
+                # If even kill A, else kill B.
                 quot, rem = divmod(kidx, 2)
                 self.beams[quot][rem].dead = True
 
-    def set_global_prop(self, prop, incl_ghosts=True,
-                        rand_stdev=0., per_pair=False):
+    def set_global_prop(self, prop, incl_ghosts=True):
         '''
         Set a property for all beams on the focal plane.
 
@@ -737,12 +736,6 @@ class Instrument(MPIBase):
         incl_ghosts : bool
             If set, also update attributes of ghosts.
             (default : True)
-        rand_stdev : float
-            Standard deviation of Gaussian random variable
-            added to each beam's property (default : 0.)
-        per_pair : bool
-            If set, add same random number to both partners 
-            in pair. (default : False)
 
         Examples
         --------
@@ -756,31 +749,108 @@ class Instrument(MPIBase):
         '''
         
         beams = np.atleast_2d(self.beams) #2D: we have pairs
-        for pair in beams:
-            
-            if rand_stdev != 0 and per_pair:
-                rndvar = np.random.normal(scale=rand_stdev)
-
+        
+        for pair in beams:            
             for beam in pair:
 
-                if rand_stdev != 0 and not per_pair:
-                    rndvar = np.random.normal(scale=rand_stdev)
-                
                 if not beam:                
                     continue
                 
                 for key in prop:
                     val = prop[key]
-                    val = val + rndvar if rand_stdev != 0 else val
                     setattr(beam, key, val)
 
                 if incl_ghosts:
                     for ghost in beam.ghosts:
                         for key in prop:
                             val = prop[key]
-                            val = val + rndvar if rand_stdev != 0 else val
                             setattr(ghost, key, val)
+
+    def add_to_prop(self, prop, incl_ghosts=True,
+                    rand_stdev=0., per_pair=False,
+                    no_B=False, no_A=False, rnd_state=None):
+        '''
+        Add a value to a property for all beams on the focal plane.
+
+        Arguments
+        ---------
+        prop : dict
+            Dict with attribute and value for beams
+
+        Keyword arguments
+        -----------------
+        incl_ghosts : bool
+            If set, also update attributes of ghosts.
+            (default : True)
+        rand_stdev : float
+            Standard deviation of Gaussian random variable
+            added to each beam's property (default : 0.)
+        per_pair : bool
+            If set, add same random number to both partners 
+            in pair. (default : False)
+        no_B : bool
+            Do not add value to B beams.
+        no_A
+            Do not add value to A beams.  
+        rnd_state : numpy.random.RandomState
+            Numpy random state instance. If None, use
+            global instance. (default : None)
+          
+        Examples
+        --------
+        >>> S = Instrument()
+        >>> S.create_focal_plane(nrow=10, ncol=10)
+        >>> add_to_prop(dict(polang=0), rand_stdev=1)
+
+        Notes
+        -----
+        Ghosts share random deviation with main beam.
+        '''
+
+        beams = np.atleast_2d(self.beams) #2D: we have pairs
+
+        if len(prop) != 1:
+            raise ValueError("Only update one property at a time.")
+        
+        for pair in beams:
+            
+            if rand_stdev != 0 and per_pair:
+                if rnd_state:
+                    rndvar = rnd_state.normal(scale=rand_stdev)
+                else:
+                    rndvar = np.random.normal(scale=rand_stdev)
+
+            for bidx, beam in enumerate(pair):
+
+                if no_B and bidx == 1:
+                    continue
+
+                if no_A and bidx == 0:
+                    continue
+
+                if rand_stdev != 0 and not per_pair:
+                    if rnd_state:
+                        rndvar = rnd_state.normal(scale=rand_stdev)
+                    else:
+                        rndvar = np.random.normal(scale=rand_stdev)
+
+                if not beam:                
+                    continue
                 
+                for key in prop: # Loops over single entry.
+                    val = prop[key]
+                    val = val + rndvar if rand_stdev != 0 else val
+                    val0 = getattr(beam, key, 0) # Add to existing val.
+                    setattr(beam, key, val0 + val)
+
+                if incl_ghosts:
+                    for ghost in beam.ghosts:
+                        for key in prop:
+                            val = prop[key]
+                            val = val + rndvar if rand_stdev != 0 else val
+                            val0 = getattr(ghost, key, 0)
+                            setattr(ghost, key, val)
+                            
     def set_btypes(self, btype='Gaussian'):
         '''
         Set btype for all main beams
@@ -1531,13 +1601,13 @@ class ScanStrategy(Instrument, qp.QMap):
             return arr
 
         elif nsteps > 1:
-            # you can fit at most nstep - 1 full steps in chunk
-            # remainder is at most stepsize
+            # You can fit at most nstep - 1 full steps in chunk.
+            # Remainder is at most stepsize.
             if step_dict['remainder']:
                 arr[:step_dict['remainder']] += step_dict['angle']
 
             startidx = step_dict['remainder']
-            # loop over full steps
+            # Loop over full steps.
             for step in xrange(nsteps-1):
                 endidx = startidx + step_size
 
@@ -1546,7 +1616,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 startidx = endidx
 
-            # fill last part and determine remainder
+            # Fill last part and determine remainder.
             step_dict['angle'] = step_gen.next()
             arr[endidx:] += step_dict['angle']
             step_dict['remainder'] = step_size - arr[endidx:].size
@@ -1621,7 +1691,7 @@ class ScanStrategy(Instrument, qp.QMap):
         end = kwargs.pop('end')
 
         if self.ext_point:
-            # use external pointing, so skip rest of function
+            # Use external pointing, so skip rest of function.
             self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
@@ -1632,7 +1702,7 @@ class ScanStrategy(Instrument, qp.QMap):
         ctime += self.ctime0
         self.ctime = ctime
 
-        # read q_bore from disk if needed (and skip rest)
+        # Read q_bore from disk if needed (and skip rest).
         if use_precomputed and hasattr(self, 'mmap'):
             if self.mpi_rank == 0:
                 self.q_bore = self.mmap[start:end]
@@ -1672,7 +1742,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 az0[elidx] = azn[elidx]
 
             else:
-
                 elidx = (el0<el_min)
                 el0[elidx] = el_min
 
@@ -1689,6 +1758,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Scan boresight, note that it will slowly drift away from az0, el0
         if vel_prf is 'triangle':
+            if scan_speed == 0:
+                # Replace with small number to simulate staring.
+                scan_speed = 1e-12
             scan_period = 2 * az_throw / float(scan_speed)
             if scan_period == 0.:
                 az = np.zeros(chunk_size)
@@ -2076,7 +2148,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             pix = tools.radec2ind_hp(ra, dec, nside_spin)
 
-            # Expose pixel indices for test centroid
+            # Expose pixel indices for test centroid.
             self.pix = pix
 
         # Fill complex array, i.e. the linearly polarized part
@@ -2112,12 +2184,12 @@ class ScanStrategy(Instrument, qp.QMap):
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         tod = np.real(tod_c) # shares memory with tod_c
 
-        # Add unpolarized tod
-        # Reset starting point recursion
+        # Add unpolarized tod.
+        # Reset starting point recursion.
         expipan[:] = 1.
         for n in xrange(N):
 
-            # equal to 0.5 ( func exp(n pa) + c.c) (pa: position angle)
+            # Equal to 0.5 ( func exp(n pa) + c.c) (pa: position angle).
             if n == 0:
                 if interp:
                     tod += np.real(hp.get_interp_val(func[n], dec, ra))
@@ -2239,7 +2311,7 @@ class ScanStrategy(Instrument, qp.QMap):
         N = max_spin + 1
         lmax = hp.Alm.getlmax(alm[0].size)
 
-        # Match up bandlimits beam and sky
+        # Match up bandlimits beam and sky.
         lmax_beam = hp.Alm.getlmax(blm[0].size)
 
         if lmax > lmax_beam:
@@ -2255,22 +2327,22 @@ class ScanStrategy(Instrument, qp.QMap):
         start = 0
         for s in xrange(N): # s are the azimuthal modes in bls.
             end = lmax + 1 - s
-            if s == 0: # scalar transform
+            if s == 0: # Scalar transform.
 
                 flms = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
                 func[s,:] += hp.alm2map(flms, nside_spin, verbose=False)
 
-            else: # spin transforms
+            else: # Spin transforms.
 
                 bell = np.zeros(lmax+1, dtype=np.complex128)
-                # s beam modes
+                # s beam modes.
                 bell[s:] = blm[0][start:start+end]
 
                 flms = hp.almxfl(alm[0], bell, inplace=False)
                 flmms = hp.almxfl(alm[0], np.conj(bell), inplace=False)
 
                 # Turn into plus and minus (think E and B) modes for healpy's
-                # alm2map_spin
+                # alm2map_spin.
                 flmsp = - (flms + flmms) / 2.
                 flmsm = 1j * (flms - flmms) / 2.
                 spinmaps = hp.alm2map_spin([flmsp, flmsm], nside_spin, s, lmax,
@@ -2384,7 +2456,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.from_tod(q_off, tod=tod, flag=flag)
 
         if add_to_global:
-            # add local maps to global maps
+            # Add local maps to global maps.
             self.vec += self.depo['vec']
             self.proj += self.depo['proj']
 
@@ -2414,16 +2486,16 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         if self.mpi:
-            # collect the binned maps on the root process
+            # Collect the binned maps on the root process.
             vec = self.reduce_array(self.vec)
             proj = self.reduce_array(self.proj)
         else:
             vec = self.vec
             proj = self.proj
 
-        # solve map on root process
+        # Solve map on root process.
         if self.mpi_rank == 0:
-            # suppress 1/0 warnings from numpy linalg
+            # Suppress 1/0 warnings from numpy linalg.
             with catch_warnings(RuntimeWarning):
                 simplefilter("ignore")
 

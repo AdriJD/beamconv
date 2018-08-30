@@ -312,27 +312,70 @@ class TestTools(unittest.TestCase):
                     self.assertEqual(beam.btype, 'PO')
                     self.assertEqual(beam.polang_error, 5)
 
-        # Add random var
-        instr.set_global_prop(dict(polang=100), rand_stdev=30)
 
+    def test_add_to_prop(self):
+
+        instr = instrument.Instrument()
+
+        # Create some channels.
+        instr.create_focal_plane(nrow=10, ncol=10, btype='PO')
+
+        # Add value 
+        instr.add_to_prop(dict(amplitude=10))
+        
         for pair in instr.beams:
-            self.assertNotEqual(pair[0].polang, pair[1].polang)
-            
-            for beam in pair:                
+            for beam in pair:
+                self.assertEqual(beam.amplitude, 11)
+                
                 for ghost in beam.ghosts:
-                    self.assertEqual(beam.polang, ghost.polang)
+                    self.assertEqual(ghost.amplitude, 11)
+
+        # Add value only to main beams.
+        instr.add_to_prop(dict(amplitude=10), incl_ghosts=False)
+        
+        for pair in instr.beams:
+            for beam in pair:
+                self.assertEqual(beam.amplitude, 21)
+                
+                for ghost in beam.ghosts:
+                    self.assertEqual(ghost.amplitude, 11)
+
+        # Add value only to A beams.
+        instr.add_to_prop(dict(amplitude=10), incl_ghosts=True,
+                          no_B=True)
+        
+        for pair in instr.beams:
+            self.assertEqual(pair[0].amplitude, 31)
+            self.assertEqual(pair[1].amplitude, 21)
+            
+            for bidx, beam in enumerate(pair):
+                
+                for ghost in beam.ghosts:
+                    if bidx == 0:
+                        self.assertEqual(ghost.amplitude, 21)
+                    else:
+                        self.assertEqual(ghost.amplitude, 11)
 
         # Add random var per pair
-        instr.set_global_prop(dict(polang=100), rand_stdev=30,
+        instr.add_to_prop(dict(polang=100), rand_stdev=30,
                               per_pair=True)
 
         for pair in instr.beams:
-            self.assertEqual(pair[0].polang, pair[1].polang)
+            self.assertAlmostEqual(pair[0].polang, pair[1].polang - 90)
+            
+            for beam in pair:                
+                for ghost in beam.ghosts:
+                    self.assertAlmostEqual(beam.polang, ghost.polang)
+                        
+        # Add random var.
+        instr.add_to_prop(dict(polang=100), rand_stdev=30)
+
+        for pair in instr.beams:
+            self.assertNotAlmostEqual(pair[0].polang, pair[1].polang - 90)
             
             for beam in pair:                
                 for ghost in beam.ghosts:
                     self.assertEqual(beam.polang, ghost.polang)
-
 
 if __name__ == '__main__':
     unittest.main()
