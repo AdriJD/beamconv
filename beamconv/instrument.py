@@ -2097,11 +2097,6 @@ class ScanStrategy(Instrument, qp.QMap):
         # We apply polang at the beam level later.
         q_off = self.det_offset(az_off, el_off, 0)
 
-        # Expose pointing offset for mapmaking
-        if not add_to_tod:
-            self.q_off = q_off
-            self.polang = beam_obj.polang # Possibly offset polang for binning.
-        
         # Rotate offset given rot_dict. We rotate the centroid
         # around the boresight. It's q_bore * q_rot * q_off
         ang = np.radians(self.rot_dict['angle'])
@@ -2151,6 +2146,11 @@ class ScanStrategy(Instrument, qp.QMap):
             # Expose pixel indices for test centroid.
             self.pix = pix
 
+        # Expose pointing offset for mapmaking
+        if not add_to_tod:
+            self.q_off = q_off
+            self.polang = beam_obj.polang # Possibly offset polang for binning.
+        
         # Fill complex array, i.e. the linearly polarized part
         # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
         # to avoid doing triginometry at each n.

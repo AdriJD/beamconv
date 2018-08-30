@@ -380,8 +380,6 @@ def radec2colatlong(ra, dec):
     dec += np.pi / 2.
     dec = np.mod(dec, np.pi, out=dec)
 
-    return ra, dec
-    
 def radec2ind_hp(ra, dec, nside):
     '''
     Turn qpoint ra and dec output into healpix ring-order
