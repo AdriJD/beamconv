@@ -133,7 +133,8 @@ class TestTools(unittest.TestCase):
         instr.load_focal_plane(test_fpu_dir)
 
         with warnings.catch_warnings(record=True) as w:
-            instr.load_focal_plane(test_fpu_dir, ghost=True, pol='B') # Bould be ignored
+            # Should be ignored
+            instr.load_focal_plane(test_fpu_dir, ghost=True, pol='B') 
             self.assertEqual(len(w), 2) # ghost and pol.
         self.assertEqual(len(instr.beams), 2)
 
@@ -166,9 +167,25 @@ class TestTools(unittest.TestCase):
         self.assertEqual(instr.beams[2][0].polang, 1000)
         self.assertEqual(instr.beams[2][1].polang, 1090)
 
-        # test wheter you can change btype when loading up beam
+        # Test whether you can change btype when loading up beam.
         instr.load_focal_plane(test_fpu_dir, btype='EG')
         self.assertEqual(instr.beams[3][0].btype, 'EG')
+        
+        # Test wheter you can overwrite existing beams
+        instr.load_focal_plane(test_fpu_dir, combine=False)
+        self.assertEqual(len(instr.beams), 1)
+
+        # Test polang_A and polang_B.
+        instr.load_focal_plane(test_fpu_dir, combine=False,
+                               polang=10)
+        self.assertEqual(instr.beams[0][0].polang, 10)
+        self.assertEqual(instr.beams[0][1].polang, 100)
+
+        instr.load_focal_plane(test_fpu_dir, combine=False,
+                               polang=10, polang_A=20,
+                               polang_B=0)
+        self.assertEqual(instr.beams[0][0].polang, 30)
+        self.assertEqual(instr.beams[0][1].polang, 10)
 
     def test_create_focal_plane(self):
         '''
