@@ -147,6 +147,85 @@ class TestTools(unittest.TestCase):
 
     def test_scan_spole(self):
         '''
+        Perform a (low resolution) scan and see if TOD make sense.
+        '''
+
+        mlen = 10 * 60 
+        rot_period = 120
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 200
+        nside = 256
+        az_throw = 10
+        polang = 20.
+
+        ces_opts = dict(ra0=ra0, dec0=dec0, az_throw=az_throw,
+                        scan_speed=2.)
+        
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create a 1 x 1 square grid of Gaussian beams.
+        scs.create_focal_plane(nrow=1, ncol=1, fov=4,
+                               lmax=self.lmax, fwhm=fwhm,
+                               polang=polang)
+        beam = scs.beams[0][0]
+        scs.init_detpair(self.alm, beam, nside_spin=nside,
+                                   max_spin=mmax)
+        scs.partition_mission()
+
+        chunk = scs.chunks[0]
+        ces_opts.update(chunk)
+
+        # Populate boresight.
+        scs.constant_el_scan(**ces_opts)
+
+        # Test without returning anything (default behaviour).
+        scs.scan(beam, **chunk)
+
+        tod = scs.scan(beam, return_tod=True, **chunk)
+        self.assertEqual(tod.size, chunk['end'] - chunk['start'])
+
+        pix, nside_out, pa, hwp_ang = scs.scan(beam, return_point=True,
+                                           **chunk)
+        self.assertEqual(pix.size, tod.size)
+        self.assertEqual(nside, nside_out)
+        self.assertEqual(pa.size, tod.size)
+        self.assertEqual(hwp_ang, 0)
+
+        # Turn on HWP
+        scs.set_hwp_mod(mode='continuous', freq=1., start_ang=0)
+        scs.rotate_hwp(**chunk)
+        tod2, pix2, nside_out2, pa2, hwp_ang2 = scs.scan(beam,
+                        return_tod=True, return_point=True, **chunk)
+        np.testing.assert_almost_equal(pix, pix2)
+        np.testing.assert_almost_equal(pix, pix2)
+        np.testing.assert_almost_equal(pa, pa2)
+        self.assertTrue(np.any(np.not_equal(tod, tod2)), True)
+        self.assertEqual(nside_out, nside_out2)
+        self.assertEqual(hwp_ang2.size, tod.size)
+
+        # Construct TOD manually.
+        polang = beam.polang
+        maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.)))
+
+        np.testing.assert_almost_equal(maps_sm[0], scs.spinmaps['main_beam'][0][0])
+        q = np.real(scs.spinmaps['main_beam'][1][mmax + 2])
+        u = np.imag(scs.spinmaps['main_beam'][1][mmax + 2])
+        np.testing.assert_almost_equal(maps_sm[1], q)
+        np.testing.assert_almost_equal(maps_sm[2], u)
+
+        tod_man = maps_sm[0][pix]
+        tod_man += (maps_sm[1][pix] \
+                    * np.cos(-2 * np.radians(pa + polang + 2 * hwp_ang2)))
+        tod_man += (maps_sm[2][pix] \
+                    * np.sin(-2 * np.radians(pa + polang + 2 * hwp_ang2)))
+
+        np.testing.assert_almost_equal(tod2, tod_man)
+        
+    def test_scan_spole_bin(self):
+        '''
         Perform a (low resolution) scan, bin and compare
         to input.
         '''
@@ -241,7 +320,6 @@ class TestTools(unittest.TestCase):
                                 reuse_spinmaps=False,
                                 inerpolate=True,
                                 binning=False)
-
 
         np.testing.assert_array_almost_equal(tod_raw,
                                              scs.tod, decimal=10)

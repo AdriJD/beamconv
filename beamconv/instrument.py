@@ -1418,7 +1418,7 @@ class ScanStrategy(Instrument, qp.QMap):
             (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
-            `constant_el_scan()` or `init_spinmaps()`
+            `constant_el_scan()` or `init_spinmaps()`.
         '''
 
         if verbose and self.mpi_rank == 0:
@@ -2040,7 +2040,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.hwp_ang = hwp_ang
 
     def scan(self, beam_obj, add_to_tod=False, interp=False,
-             **kwargs):
+             return_tod=False, return_point=False, **kwargs):
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
@@ -2061,10 +2061,33 @@ class ScanStrategy(Instrument, qp.QMap):
         interp : bool
             If set, use bi-linear interpolation to obtain TOD.
             (default : False)
+        return_tod : bool
+            If set, return TOD. (default : False)
+        return_point : bool
+            If set, return pix, nside, pa, hwp_ang (HEALPix 
+            pixel numbers, nside, position angle [deg] and HWP
+            angle(s) [deg]) (default : False)
         start : int
             Start index
         end : int
             End index
+        
+        Returns
+        -------
+        tod : array-like
+            If return_tod=True: TOD of length: end - start. 
+        pix : array-like
+            If return_point=True: healpy (ring) pixel numbers 
+            of length: end - start. 
+        nside : int
+            Nside parameter corresponding to pixel numbers.
+        pa : array-like
+            If return_point=True: position angle [deg] of 
+            length: end - start. 
+        hwp : array-like, float
+            If return_point=True: HWP angle(s) [deg] of 
+            length: end - start for continuously spinning HWP
+            otherwise single angle.
         '''
 
         if beam_obj.dead:
@@ -2073,7 +2096,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         start = kwargs.get('start')
         end = kwargs.get('end')
-
+        if start is None or end is None:
+            raise ValueError("Scan() called without start and end.")
+        
         az_off = beam_obj.az
         el_off = beam_obj.el
         polang = beam_obj.polang_truth # True polang for scanning.
@@ -2171,21 +2196,16 @@ class ScanStrategy(Instrument, qp.QMap):
             else:
                 tod_c += func_c[nidx,pix] * expipan
 
-        # check for HWP angle array
-        if self.hwp_ang is None:
+        # Check for HWP angle array.
+        if not hasattr(self, 'hwp_ang'):
             hwp_ang = 0
-
-            if self.hwp_dict:
-                # HWP options set, but not executed
-                warn('call rotate_hwp() to have HWP modulation',
-                     RuntimeWarning)
         else:
             hwp_ang = self.hwp_ang
 
-        # Modulate by hwp angle and polarization angle
+        # Modulate by HWP angle and polarization angle.
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        tod = np.real(tod_c) # shares memory with tod_c
+        tod = np.real(tod_c) # Note, shares memory with tod_c.
 
         # Add unpolarized tod.
         # Reset starting point recursion.
@@ -2213,6 +2233,29 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             self.tod = tod
 
+        # Handle returned values.
+        if return_tod:
+            ret_tod = tod.copy()
+        if return_point:
+            if interp:
+                # Note, dec and ra are already theta, phi.
+                pix = hp.ang2pix(nside_spin, dec, ra, nest=False)
+            else:
+                ret_pix = pix.copy()
+
+            ret_nside = nside_spin
+            ret_pa = np.degrees(pa)
+            ret_hwp = np.degrees(hwp_ang) # Note, 0 if not set.
+
+        if return_tod and not return_point:
+            return ret_tod
+        
+        elif not return_tod and return_point:
+            return ret_pix, ret_nside, ret_pa, ret_hwp
+        
+        elif return_tod and return_point:
+            return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
+        
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                      verbose=True, beam_obj=None):
         '''
