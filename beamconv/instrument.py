@@ -8,7 +8,7 @@ import numpy as np
 import qpoint as qp
 import healpy as hp
 
-import tools
+from beamconv import tools
 from detector import Beam
 
 class MPIBase(object):
