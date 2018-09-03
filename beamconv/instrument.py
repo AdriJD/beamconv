@@ -1630,17 +1630,6 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_point=save_point,
                                             **subchunk)
 
-                        #self.scan(beam_a, interp=interp,
-                        #          **subchunk)
-
-                        # Add ghost signal if present
-                        #if any(beam_a.ghosts):
-                        #    for ghost in beam_a.ghosts:
-                        #        self.scan(ghost,
-                        #                  add_to_tod=True,
-                        #                  interp=interp,
-                        #                  **subchunk)
-
                         if binning:
                             self.bin_tod(add_to_global=True)
 
@@ -1650,17 +1639,6 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             **subchunk)
-
-                        
-                        #self.scan(beam_b, interp=interp,
-                        #          **subchunk)
-
-                        #if any(beam_b.ghosts):
-                        #    for ghost in beam_b.ghosts:
-                        #        self.scan(ghost,
-                        #                  add_to_tod=True,
-                        #                  interp=interp,
-                        #                  **subchunk)
 
                         if binning:
                             self.bin_tod(add_to_global=True)
@@ -2541,7 +2519,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if return_point:
             if interp:
                 # Note, dec and ra are already theta, phi.
-                pix = hp.ang2pix(nside_spin, dec, ra, nest=False)
+                ret_pix = hp.ang2pix(nside_spin, dec, ra, nest=False)
             else:
                 ret_pix = pix.copy()
 
