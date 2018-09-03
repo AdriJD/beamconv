@@ -11,7 +11,7 @@ class Beam(object):
                  pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
-                 normalize=True, polang_error=0.):
+                 normalize=True, polang_error=0., idx=None):
         '''
         Initialize a detector beam.
 
@@ -27,7 +27,7 @@ class Beam(object):
             The polarization orientation of the beam/detector [deg]
             (default: 0.)
         name : str
-            The callsign of this particular beam (default: None)
+            Optional callsign of this particular beam (default: None)
         pol : str
             The polarization callsign of the beam (A or B)
             (default: A)
@@ -73,6 +73,8 @@ class Beam(object):
             Angle offset for polarization angle in deg. Scanning is
             done with `polang_truth` = `polang` + `polang_error`, binning
             can then be done with just `polang`.
+        idx : int, None
+            Identifier of beam. (default : None)
         '''
 
         self.az = az
@@ -92,12 +94,17 @@ class Beam(object):
         self.deconv_q = deconv_q
         self.normalize = normalize
         self.polang_error = polang_error
-
+        self._idx = idx
+        
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
         if not self.ghost:
             self.__ghosts = []
             self.ghost_count = 0
+
+    @property
+    def idx(self):        
+        return self._idx
 
     @property
     def ghost(self):
@@ -171,7 +178,7 @@ class Beam(object):
         fwhm is None.
         '''
         if val is None and self.lmax:
-            val = (1.4 * 2. * np.pi) / self.lmax
+            val = (1.4 * 2. * np.pi) / float(self.lmax)
             self.__fwhm = np.degrees(val) * 60
         else:
             self.__fwhm = np.abs(val)
@@ -207,7 +214,7 @@ class Beam(object):
                 return self.__blm
 
             else:
-                # NOTE, if blm's are direct map2alm resuls, use deconv_q
+                # NOTE, if blm's are direct map2alm resuls, use deconv_q.
 
                 if self.btype == 'PO':
                     self.load_blm(self.po_file, deconv_q=self.deconv_q,

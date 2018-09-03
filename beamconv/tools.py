@@ -142,7 +142,7 @@ def scale_blm(blm, normalize=False, deconv_q=False):
     ell = np.arange(lmax+1)
 
     if deconv_q:
-        qell = 2 * np.sqrt(np.pi / (2 * ell + 1))
+        qell = 2 * np.sqrt(np.pi / (2. * ell + 1))
         for i in xrange(blm.shape[0]):
             hp.almxfl(blm[i], qell, inplace=True)
     if normalize:
@@ -525,7 +525,7 @@ def quat_inv(q):
     '''
 
     qi = quat_conj(q)
-    qi /= np.sum(qi**2)
+    qi /= np.sum(qi**2, dtype=float)
 
     return qi
 

@@ -298,7 +298,26 @@ class Instrument(MPIBase):
         self.ndet = 0
 
         super(Instrument, self).__init__(**kwargs)
-        
+
+    def beams_idxs(self):
+        '''
+        Return indices of beams currently on focal plane.
+
+        Returns
+        -------
+        idxs : array-like
+            Array of beam indices.
+        '''
+
+        beam_idx = []
+        for pair in self.beams:
+            for beam in pair:
+                if beam is None:
+                    continue
+                beam_idx.append(beam.idx)
+
+        return np.asarray(beam_idx, dtype=int)
+    
     def add_to_focal_plane(self, beams, combine=True):
         '''
         Add beam(s) or beam pair(s) to total list of beam pairs.
@@ -314,6 +333,11 @@ class Instrument(MPIBase):
             If some beams already exist, combine these new
             beams with them.
             (default : True)
+
+        Notes
+        -----
+        This method will overwrite the idx parameter of the
+        beams.
         '''
 
         # Check whether single beam, list of beams or list of pairs.
@@ -332,34 +356,50 @@ class Instrument(MPIBase):
         else:
             isnestseq = False
 
+        # Determine beam indices. If needed start counting from
+        # highest existing index.
+        if combine:
+            idxs = self.beams_idxs()
+            try:
+                idx= idxs.max() + 1
+            except ValueError:
+                # Empty list.
+                idx = 0
+        else:
+            idx = 0
+            
         # If not pairs, we add None as partner.
         ndet2add = 0
         if isseq is False:
             beams2add = [[beams, None]]
             ndet2add += 1
+            beams._idx = idx
 
         if isseq:
             beams2add = []
             for pair in beams:
                 if isnestseq is False:
+                    pair._idx = idx                    
                     pair = [pair, None]
                     ndet2add += 1
+                    idx += 1
                 else:
                     ndet2add += 2
-
+                    pair[0]._idx = idx
+                    pair[1]._idx = idx + 1
+                    idx += 2
+                    
                 beams2add.append(pair)
 
-        if not hasattr(self, 'beams') or not combine:
+        if not combine:
             self.beams = beams2add
         else:
             self.beams += beams2add
 
-        if not hasattr(self, 'ndet') or not combine:
+        if not combine:
             self.ndet = ndet2add
         else:
             self.ndet += ndet2add
-
-        return
             
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
@@ -405,7 +445,7 @@ class Instrument(MPIBase):
         '''
 
         # Ignore these kwargs and warn user.
-        for key in ['az', 'el', 'pol', 'name', 'ghost']:
+        for key in ['az', 'el', 'pol', 'name', 'ghost', 'idx']:
             arg = kwargs.pop(key, None)
             if arg:
                 warn('{}={} option to `Beam.__init__()` is ignored'
@@ -415,16 +455,23 @@ class Instrument(MPIBase):
         polang = kwargs.pop('polang', 0.)
         dead = kwargs.pop('dead', False)
 
-        if not hasattr(self, 'ndet') or not combine:
-            self.ndet = 2 * nrow * ncol # A and B detectors
+        if combine:
+            self.ndet += 2 * nrow * ncol
+            idxs = self.beams_idxs()
+            try:
+                idx= idxs.max() + 1
+            except ValueError:
+                # Empty list.
+                idx = 0
         else:
-            self.ndet += 2 * nrow * ncol # A and B detectors
+            self.ndet = 2 * nrow * ncol # A and B detectors.
+            idx = 0
 
         azs = np.linspace(-fov/2., fov/2., ncol)
         els = np.linspace(-fov/2., fov/2., nrow)
 
         beams = []
-
+        
         for az_idx in xrange(azs.size):
             for el_idx in xrange(els.size):
 
@@ -432,21 +479,23 @@ class Instrument(MPIBase):
 
                 beam_a = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'A', polang=polang,
-                              dead=dead, pol='A', **kwargs)
+                              dead=dead, pol='A', idx=idx,
+                              **kwargs)
 
                 beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'B', polang=polang+90.,
                               dead=dead or no_pairs, pol='B',
-                              **kwargs)
+                              idx=idx, **kwargs)
 
                 beams.append([beam_a, beam_b])
-
-        # If MPI, distribute beams over ranks
+                idx += 2
+                
+        # If MPI, distribute beams over ranks.
         if scatter:
             beams = self.distribute_array(beams)
 
-        # Check for existing beams
-        if not hasattr(self, 'beams') or not combine:
+        # Check for existing beams.
+        if not combine:
             self.beams = beams
         else:
             self.beams += beams
@@ -487,7 +536,7 @@ class Instrument(MPIBase):
             Polarization angle of b detector in pair [deg].
             Added to existing or provided polang. (default: 90.)
         print_list : bool
-            Print list of beam files loaded up (for debugging)
+            Print list of beam files loaded up (for debugging).
             (default : False)
         kwargs : {beam_opts}
 
@@ -510,6 +559,9 @@ class Instrument(MPIBase):
         assumed to hold for all beams created. with the
         exception of (`pol`, `ghost`), which are
         ignored. 
+
+        This method will overwrite the idx parameter of the
+        beams.
         '''
 
         import glob
@@ -518,10 +570,20 @@ class Instrument(MPIBase):
         # do all I/O on root
         if self.mpi_rank == 0:
 
+            if combine:
+                idxs = self.beams_idxs()
+                try:
+                    idx= idxs.max() + 1
+                except ValueError:
+                    # Empty list.
+                    idx = 0
+            else:
+                idx = 0
+                
             beams = []
 
             # Ignore these kwargs and warn user
-            for key in ['pol', 'ghost']:
+            for key in ['pol', 'ghost', 'idx']:
                 arg = kwargs.pop(key, None)
                 if arg:
                     warn('{}={} option to `Beam.__init__()` is ignored'
@@ -575,6 +637,11 @@ class Instrument(MPIBase):
                 beam_opts_a.update(kwargs)
                 beam_opts_b.update(kwargs)
 
+                beam_opts_a.update(dict(idx=idx))
+                beam_opts_b.update(dict(idx=idx+1))
+
+                idx += 2
+                
                 # Add polang A and B (perhaps on top of provided or esisting
                 # polang).
                 polang_Ai = beam_opts_a.setdefault('polang', 0)
@@ -609,7 +676,7 @@ class Instrument(MPIBase):
         ndet = self.broadcast(ndet)
 
         # Check for existing beams
-        if not hasattr(self, 'beams') or not combine:
+        if not combine:
             self.beams = beams
         else:
             self.beams += beams
@@ -916,6 +983,8 @@ class ScanStrategy(Instrument, qp.QMap):
         self.set_instr_rot()
         self.set_hwp_mod()
 
+        self._data = {}
+                
       # Checking qpoint version
         if qp.version() < self._qp_version:
             raise RuntimeError(
@@ -1060,7 +1129,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def reset_hwp_mod(self):
         '''
-        "Reset" the hwp modulation generator
+        "Reset" the hwp modulation generator.
         '''
         self.hwp_angle_gen = tools.angle_gen(
             self.hwp_dict['angles'])
@@ -1130,7 +1199,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Dictionary with start, end indices and index of each
             chunk.
         '''
-
+        
         nsamp = self.nsamp
 
         if not chunksize or chunksize >= nsamp:
@@ -1147,6 +1216,9 @@ class ScanStrategy(Instrument, qp.QMap):
             chunks.append(dict(start=start, end=end, cidx=cidx))
             start += chunksize
 
+            # Create slot for data if needed later.
+            self._data[str(cidx)] = {} 
+            
         self.chunks = chunks
         return chunks
 
@@ -1229,7 +1301,7 @@ class ScanStrategy(Instrument, qp.QMap):
             subchunks.append(dict(start=start, end=chunk['end']))
             self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - start)
 
-        # subchunks get same cidx as parent chunk
+        # Subchunks get same cidx as parent chunk.
         if 'cidx' in chunk:
             cidx = chunk['cidx']
             for subchunk in subchunks:
@@ -1239,7 +1311,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def allocate_maps(self, nside=256):
         '''
-        Allocate space in memory for healpy map-related numpy arrays
+        Allocate space in memory for healpy map-related numpy arrays.
 
         Keyword arguments
         -----------------
@@ -1380,7 +1452,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
-            interp=False, **kwargs):
+            interp=False, save_tod=False, save_point=False,
+            **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1416,10 +1489,30 @@ class ScanStrategy(Instrument, qp.QMap):
         interp : bool
             If set, use bi-linear interpolation to obtain TOD.
             (default : False)
+        save_tod : bool
+            If set, save TOD of beams. (default : False)
+        save_point : bool
+            If set, save boresight quaternions, hwp_angle(s) [deg] and 
+            (per beam) pixel numbers and position angles [deg]) 
+            (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
+
+        Notes
+        -----
+        save_tod and save_point options are meant for display and debugging
+        purposes only.
         '''
+
+        # Pop init_spinmaps kwargs.
+        max_spin = kwargs.pop('max_spin', None)
+        nside_spin = kwargs.pop('nside_spin', None)
+        spinmaps_opts = dict(verbose=(verbose==2))
+        if max_spin:
+            spinmaps_opts.update({'max_spin':max_spin})
+        if nside_spin:
+            spinmaps_opts.update({'nside_spin':nside_spin}) 
 
         if verbose and self.mpi_rank == 0:
             print('Scanning with {:d} detectors'.format(
@@ -1428,7 +1521,7 @@ class ScanStrategy(Instrument, qp.QMap):
             sys.stdout.flush()
         self.barrier() # just to have summary print statement on top
 
-        # init memmap on root
+        # Init memmap on root.
         if create_memmap and not self.ext_point:
             if self.mpi_rank == 0:
                 self.mmap = np.memmap('q_bore.npy', dtype=float,
@@ -1437,15 +1530,15 @@ class ScanStrategy(Instrument, qp.QMap):
             else:
                 self.mmap = None
 
-        # Scatter beams if needed, self.beams stays broadcasted
+        # Scatter beams if needed, self.beams stays broadcasted.
         if scatter:
             beams = self.scatter_list(self.beams, root=0)
         else:
             beams = self.beams
-
-        # let every core loop over max number of beams per core
+            
+        # Let every core loop over max number of beams per core
         # this makes sure that cores still participate in
-        # calculating boresight quaternion
+        # calculating boresight quaternion.
         nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
 
         for bidx in xrange(nmax):
@@ -1471,15 +1564,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 print('[rank {:03d}]: working on: {}, {}'.format(
                         self.mpi_rank, beam_a.name, beam_b.name))
 
-            # Pop init_spinmaps kwargs and initialize spinmaps.
-            max_spin = kwargs.pop('max_spin', 5)
-            nside_spin = kwargs.pop('nside_spin', 256)
-            spinmaps_opts = dict(max_spin=max_spin,
-                                 nside_spin=nside_spin,
-                                 verbose=(verbose==2))
-
             # Skip creating spinmaps when no beams or spinmaps
-            # already initialized with reuse_spinmaps.
+            # or already initialized with reuse_spinmaps.
             if not beam_a and not beam_b:
                 pass
             elif hasattr(self, 'spinmaps') and reuse_spinmaps:
@@ -1492,12 +1578,12 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Assume no chunking is needed and use full mission length.
                 self.partition_mission()
 
-            for cidx, chunk in enumerate(self.chunks):
+            for chunk in self.chunks:                
 
                 if verbose:
                     print(('[rank {:03d}]:\tWorking on chunk {:03}:'
                            ' samples {:d}-{:d}').format(self.mpi_rank,
-                            cidx, chunk['start'], chunk['end']))
+                            chunk['cidx'], chunk['start'], chunk['end']))
 
                 # Make the boresight move.
                 ces_opts = kwargs.copy()
@@ -1509,6 +1595,17 @@ class ScanStrategy(Instrument, qp.QMap):
                     ces_opts.update(dict(use_precomputed=True))
                 self.constant_el_scan(**ces_opts)
 
+                # If needed, allocate arrays for data.
+                if bidx == 0:
+                    self._allocate_hwp_data(save_point=save_point,
+                                            **chunk)
+                if beam_a and not beam_a.dead:
+                    self._allocate_detector_data(beam_a, save_tod=save_tod,
+                                                 save_point=save_point, **chunk)
+                if beam_b and not beam_b.dead:
+                    self._allocate_detector_data(beam_b, save_tod=save_tod,
+                                                 save_point=save_point, **chunk)
+
                 # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
                 for subchunk in subchunks:
@@ -1519,38 +1616,51 @@ class ScanStrategy(Instrument, qp.QMap):
                                                  subchunk['start'], subchunk['end'],
                                                        subchunk.get('norot', False)))
 
-                    # rotate instrument and hwp if needed
+                    # Rotate instrument and hwp if needed.
                     if not subchunk.get('norot', False):
                         self.rotate_instr()
 
                     self.rotate_hwp(**subchunk)
 
-                    # scan and bin
+                    # Scan and bin.
                     if beam_a and not beam_a.dead:
-                        self.scan(beam_a, interp=interp,
-                                  **subchunk)
 
-                        # add ghost signal if present
-                        if any(beam_a.ghosts):
-                            for ghost in beam_a.ghosts:
-                                self.scan(ghost,
-                                          add_to_tod=True,
-                                          interp=interp,
-                                          **subchunk)
+                        self._scan_detector(beam_a, interp=interp,
+                                            save_tod=save_tod,
+                                            save_point=save_point,
+                                            **subchunk)
+
+                        #self.scan(beam_a, interp=interp,
+                        #          **subchunk)
+
+                        # Add ghost signal if present
+                        #if any(beam_a.ghosts):
+                        #    for ghost in beam_a.ghosts:
+                        #        self.scan(ghost,
+                        #                  add_to_tod=True,
+                        #                  interp=interp,
+                        #                  **subchunk)
 
                         if binning:
                             self.bin_tod(add_to_global=True)
 
                     if beam_b and not beam_b.dead:
-                        self.scan(beam_b, interp=interp,
-                                  **subchunk)
 
-                        if any(beam_b.ghosts):
-                            for ghost in beam_b.ghosts:
-                                self.scan(ghost,
-                                          add_to_tod=True,
-                                          interp=interp,
-                                          **subchunk)
+                        self._scan_detector(beam_b, interp=interp,
+                                            save_tod=save_tod,
+                                            save_point=save_point,
+                                            **subchunk)
+
+                        
+                        #self.scan(beam_b, interp=interp,
+                        #          **subchunk)
+
+                        #if any(beam_b.ghosts):
+                        #    for ghost in beam_b.ghosts:
+                        #        self.scan(ghost,
+                        #                  add_to_tod=True,
+                        #                  interp=interp,
+                        #                  **subchunk)
 
                         if binning:
                             self.bin_tod(add_to_global=True)
@@ -1756,7 +1866,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         RuntimeWarning)
             n += 1
 
-        # Scan boresight, note that it will slowly drift away from az0, el0
+        # Scan boresight, note that it will slowly drift away from az0, el0.
         if vel_prf is 'triangle':
             if scan_speed == 0:
                 # Replace with small number to simulate staring.
@@ -1771,8 +1881,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 np.arcsin(az, out=az)
                 az *= (az_throw / np.pi)
 
-        # slightly complicated way to multiply az with az0
-        # while avoiding expanding az0 to p_len
+        # Slightly complicated way to multiply az with az0
+        # while avoiding expanding az0 to p_len.
         az = az.reshape(nchecks, check_len)
         az += az0[:, np.newaxis]
         az = az.ravel()
@@ -1794,10 +1904,9 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.step_dict.get('period', None):
             el = self.step_array(el, self.step_dict, self.el_step_gen)
 
-        # Transform from horizontal frame to celestial, i.e. az, el -> ra, dec
+        # Transform from horizontal frame to celestial, i.e. az, el -> ra, dec.
         if self.mpi:
-            # Calculate boresight quaternion in parallel
-
+            # Calculate boresight quaternion in parallel.
             sub_size = np.zeros(self.mpi_size, dtype=int)
             quot, remainder = np.divmod(chunk_size,
                                         self.mpi_size)
@@ -1894,11 +2003,11 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         deg_per_day = 360.9863
-        dt = 1 / self.fsamp
+        dt = 1 / float(self.fsamp)
         nsamp = self.ctime.size # ctime determines chunk size
-        ndays = float(nsamp) / self.fsamp / (24 * 3600)
+        ndays = float(nsamp) / self.fsamp / (24 * 3600.)
 
-        az = np.mod(np.arange(nsamp)*dt*360/beta_period, 360)
+        az = np.mod(np.arange(nsamp)*dt*360/float(beta_period), 360)
 
         if jitter_amp != 0.:
             jitter = jitter_amp * np.random.randn(int(nsamp))
@@ -1925,7 +2034,7 @@ class ScanStrategy(Instrument, qp.QMap):
         t_start = np.arcsin(lat_0 / float(alpha))
 
         lat = np.sin(np.linspace(
-            t_start, 2*np.pi*dt*nsamp/alpha_period + t_start,
+            t_start, 2*np.pi*dt*nsamp/float(alpha_period) + t_start,
             num=nsamp, endpoint=False))
         lat *= alpha
 
@@ -2038,7 +2147,202 @@ class ScanStrategy(Instrument, qp.QMap):
             # update mod 2pi start angle for next chunk
             self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
             self.hwp_ang = hwp_ang
+                             
+    def _allocate_hwp_data(self, save_point=False, **chunk):
+        '''
+        Allocate inernal arrays for saving HWP angles for given 
+        chunk.
 
+        Keyword arguments
+        -----------------
+        save_point : bool
+            If set, allocate hwp_angles [deg], pixel 
+            numbers and position angles [deg]) (default : False)        
+        start : int
+            Start index.
+        end : int
+            End index.
+        cidx : int
+            Chunk index.
+        '''
+        
+        if save_point:
+
+            start = chunk.get('start')
+            end = chunk.get('end')
+            cidx = chunk.get('cidx')
+        
+            tod_size = end - start  # Size in samples.
+        
+            hwp_ang = np.zeros(tod_size, dtype=float)
+            
+            self._data[str(cidx)]['hwp_ang'] = hwp_ang
+                   
+    def _allocate_detector_data(self, beam, save_tod=False,
+                                save_point=False, **chunk):
+        '''
+        Allocate internal arrays for saving data for given chunk
+        and beam.
+
+        Arguments
+        ---------
+        beam : <detector.Beam> object
+            The main beam of the detector.
+
+        Keyword arguments
+        -----------------
+        save_tod : bool
+            If set, allocate TOD. (default : False)
+        save_point : bool
+            If set, allocate hwp_angles [deg], pixel 
+            numbers and position angles [deg]) (default : False)        
+        start : int
+            Start index.
+        end : int
+            End index.
+        cidx : int
+            Chunk index.
+        '''
+
+        start = chunk.get('start')
+        end = chunk.get('end')
+        cidx = chunk.get('cidx')
+        
+        tod_size = end - start  # Size in samples.
+
+        self._data[str(cidx)][str(beam.idx)] = {} 
+        
+        if save_tod and not save_point:
+            tod = np.zeros(tod_size, dtype=float)
+            
+            self._data[str(cidx)][str(beam.idx)]['tod'] = tod
+
+        elif not save_tod and save_point:            
+            pix = np.zeros(tod_size, dtype=int)
+            pa = np.zeros(tod_size, dtype=float)
+            
+            self._data[str(cidx)][str(beam.idx)]['pix'] = pix
+            self._data[str(cidx)][str(beam.idx)]['pa'] = pa
+
+        elif save_tod and save_point:            
+            tod = np.zeros(tod_size, dtype=float)
+            pix = np.zeros(tod_size, dtype=int)
+            pa = np.zeros(tod_size, dtype=float)
+
+            self._data[str(cidx)][str(beam.idx)]['tod'] = tod
+            self._data[str(cidx)][str(beam.idx)]['pix'] = pix
+            self._data[str(cidx)][str(beam.idx)]['pa'] = pa
+            
+    def _scan_detector(self, beam, interp=False, save_tod=False,
+                       save_point=False, **kwargs):
+        '''
+        Convenience function that adds ghost(s) TOD to main beam TOD
+        and saves TOD and pointing if needed.
+
+        Arguments
+        ---------
+        beam : <detector.Beam> object
+            The main beam of the detector.
+
+        Keyword arguments
+        -----------------
+        interp : bool
+            If set, use bi-linear interpolation to obtain TOD.
+            (default : False)
+        save_tod : bool
+            If set, save TOD of beams. (default : False)
+        save_point : bool
+            If set, save boresight quaternions, hwp_angle(s) [deg] and 
+            (per beam) pixel numbers and position angles [deg]) 
+            (default : False)        
+        kwargs : {chunk}
+
+        Notes
+        -----
+        Returns ValueError when `beam` is a ghost.
+        '''
+
+        if beam.ghost:
+            raise ValueError('_scan_detector() called with ghost.')
+        
+        # Do ghosts first such that returned pointing is that of main
+        # beam.
+        n = 0 # Count alive ghosts
+        if any(beam.ghosts):
+            for gidx, ghost in enumerate(beam.ghosts):
+
+                if ghost.dead:
+                    continue
+                
+                # First alive ghost must start TOD.            
+                add_to_tod = False if n == 0 else True
+                n += 1
+                
+                self.scan(ghost,
+                          add_to_tod=add_to_tod,
+                          interp=interp,
+                          **kwargs)
+
+        tod_exists = True if n > 0 else False                
+        # Scan with main beam. Add to ghost TOD if present.
+        ret = self.scan(beam, interp=interp, return_tod=save_tod,
+                        add_to_tod=tod_exists,
+                        return_point=save_point, **kwargs)
+
+        # Use indices calculated by scan.
+        start = self.qidx_start
+        end = self.qidx_end
+
+        cidx = kwargs.get('cidx')
+        
+        if save_tod and not save_point:
+            # Only TOD is returned
+            tod = ret            
+            self._data[str(cidx)][str(beam.idx)]['tod'][start:end] = tod
+            
+        elif not save_tod and save_point:            
+            ret_pix, ret_nside, ret_pa, ret_hwp = ret            
+            self._data[str(cidx)][str(beam.idx)]['pix'][start:end] = ret_pix
+            self._data[str(cidx)][str(beam.idx)]['pa'][start:end] = ret_pa
+            self._data[str(cidx)]['hwp_ang'][start:end] = ret_hwp
+            
+        elif save_tod and save_point:            
+            tod, ret_pix, ret_nside, ret_pa, ret_hwp = ret
+            self._data[str(cidx)][str(beam.idx)]['tod'][start:end] = tod
+            self._data[str(cidx)][str(beam.idx)]['pix'][start:end] = ret_pix
+            self._data[str(cidx)][str(beam.idx)]['pa'][start:end] = ret_pa
+            self._data[str(cidx)]['hwp_ang'][start:end] = ret_hwp
+
+    def data(self, chunk, beam=None, data_type='tod'):
+        '''
+        Return calculated data.
+
+        Arguments
+        ---------
+        chunk : dict
+            Chunk (see `partition mission`) for which to
+            provide data.
+        
+        Keyword arguments
+        -----------------
+        beam : <detector.Beam> object, None
+            Beam for which to provide data. Can be None for
+            HWP angle data. (default : None)
+        data_type : str
+            Type of data to be returned. Choices are "tod",
+            "pix", "pa", "hwp_ang". (default : tod)
+        
+        Returns
+        -------
+        data : array-like
+            Time-ordered data of specified type.
+        '''
+
+        if data_type == 'hwp_ang':
+            return self._data[str(chunk['cidx'])]['hwp_ang']
+        else:
+            return self._data[str(chunk['cidx'])][str(beam.idx)][data_type]
+                                          
     def scan(self, beam_obj, add_to_tod=False, interp=False,
              return_tod=False, return_point=False, **kwargs):
         '''
@@ -2084,15 +2388,15 @@ class ScanStrategy(Instrument, qp.QMap):
         pa : array-like
             If return_point=True: position angle [deg] of 
             length: end - start. 
-        hwp : array-like, float
+        hwp_ang : array-like, float
             If return_point=True: HWP angle(s) [deg] of 
             length: end - start for continuously spinning HWP
             otherwise single angle.
         '''
 
         if beam_obj.dead:
-            warn('scan() called with dead beam')
-            return
+            raise ValueError('scan() called with dead beam: {}'.format(
+                beam_obj.name))
 
         start = kwargs.get('start')
         end = kwargs.get('end')
@@ -2113,7 +2417,7 @@ class ScanStrategy(Instrument, qp.QMap):
         N, npix = func.shape
         nside_spin = hp.npix2nside(npix)
 
-        # Paranoid android
+        # Paranoid android.
         N2, npix2 = func_c.shape
         assert 2*N-1 == N2, "func and func_c have different max_spin"
         assert npix == npix2, "func and func_c have different npix"
@@ -2136,8 +2440,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if 'cidx' in kwargs:
             cidx = kwargs['cidx']
             qidx_start = start - self.chunks[cidx]['start']
-            # qidx_end = qidx_start + end - start + 1
-            # qidx_end = start - chunks['start'] + end - start + 1
             qidx_end = end - self.chunks[cidx]['start']
         else:
             qidx_start = 0
@@ -2174,8 +2476,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         np.radians(pa, out=pa)
             
-        # Expose pointing offset for mapmaking
-        if not add_to_tod:
+        # Expose pointing offset for mapmaking. Not for ghosts.
+        if not beam_obj.ghost:
             self.q_off = q_off
             self.polang = beam_obj.polang # Possibly offset polang for binning.
         
@@ -2312,10 +2614,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
             if beam_obj.ghosts:
 
-                # find unique ghost beams
+                # Find unique ghost beams.
                 assert len(beam_obj.ghosts) == beam_obj.ghost_count
-
-                g_indices = np.empty(beam_obj.ghost_count, dtype=int) # ghost_indices
+                # Ghost_indices.
+                g_indices = np.empty(beam_obj.ghost_count, dtype=int) 
 
                 for gidx, ghost in enumerate(beam_obj.ghosts):
                     g_indices[gidx] = ghost.ghost_idx
@@ -2453,8 +2755,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func, func_c
 
-    def bin_tod(self, az_off=None, el_off=None, polang=None,
-                init=True, add_to_global=True):
+    def bin_tod(self, init=True, add_to_global=True):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -2462,14 +2763,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         -----------------
-        az_off : float
-            The detector azimuthal offset relative to boresight in deg
-            (default : None)
-        el_off : float
-            The detector elevation offset relative to boresight in deg
-            (default : None)
-        polang : float
-            Polarization angle in deg (default : None)
         init : bool
             Call `init_dest()` before binning (default : True)
         add_to_global : bool
