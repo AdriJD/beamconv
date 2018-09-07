@@ -93,7 +93,7 @@ class TestTools(unittest.TestCase):
         # Note empty lists evaluate to False
         self.assertFalse(scs.spinmaps['ghosts'])
         
-        func, func_c = scs.spinmaps['main_beam']
+        func, func_c = scs.spinmaps['main_beam']['maps']
         self.assertEqual(func.shape, (mmax + 1, 12 * nside ** 2))
         self.assertEqual(func_c.shape, (2 * mmax + 1, 12 * nside ** 2))
 
@@ -141,7 +141,7 @@ class TestTools(unittest.TestCase):
         # Note empty lists evaluate to False
         self.assertFalse(scs.spinmaps['ghosts'])
         
-        func, func_c = scs.spinmaps['main_beam']
+        func, func_c = scs.spinmaps['main_beam']['maps']
         self.assertEqual(func.shape, (mmax + 1, 12 * nside ** 2))
         self.assertEqual(func_c.shape, (2 * mmax + 1, 12 * nside ** 2))
 
@@ -210,9 +210,10 @@ class TestTools(unittest.TestCase):
         maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
-        np.testing.assert_almost_equal(maps_sm[0], scs.spinmaps['main_beam'][0][0])
-        q = np.real(scs.spinmaps['main_beam'][1][mmax + 2])
-        u = np.imag(scs.spinmaps['main_beam'][1][mmax + 2])
+        np.testing.assert_almost_equal(maps_sm[0],
+                                       scs.spinmaps['main_beam']['maps'][0][0])
+        q = np.real(scs.spinmaps['main_beam']['maps'][1][mmax + 2])
+        u = np.imag(scs.spinmaps['main_beam']['maps'][1][mmax + 2])
         np.testing.assert_almost_equal(maps_sm[1], q)
         np.testing.assert_almost_equal(maps_sm[2], u)
 

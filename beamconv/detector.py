@@ -11,7 +11,8 @@ class Beam(object):
                  pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None,
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
-                 normalize=True, polang_error=0., idx=None):
+                 normalize=True, polang_error=0., idx=None,
+                 symmetric=False):
         '''
         Initialize a detector beam.
 
@@ -75,6 +76,8 @@ class Beam(object):
             can then be done with just `polang`.
         idx : int, None
             Identifier of beam. (default : None)
+        symmetric : bool
+            If set, beam is assumed azimuthally symmetric.
         '''
 
         self.az = az
@@ -95,6 +98,7 @@ class Beam(object):
         self.normalize = normalize
         self.polang_error = polang_error
         self._idx = idx
+        self.symmetric = symmetric
         
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
