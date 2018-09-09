@@ -2,7 +2,7 @@
 
 **Authors**: Adri J. Duivenvoorden and Jon E. Gudmundsson
 
-**contact**: adri.j.duivenvoorden@gmail.com
+**contact**: adri.duivenvoorden@fysik.su.se
 
 Simulate the scanning of the CMB sky while incorporating realistic beams and
 scan strategies.
