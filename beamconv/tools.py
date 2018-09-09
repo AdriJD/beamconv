@@ -50,7 +50,7 @@ def trunc_alm(alm, lmax_new, mmax_old=None):
     start = 0
     nstart = 0
 
-    for m in xrange(min(lmax_new, mmax_old) + 1):
+    for m in range(min(lmax_new, mmax_old) + 1):
         indices[nstart:nstart+lmax_new+1-m] = \
             np.arange(start, start+lmax_new+1-m)
         start += lmax + 1 - m
@@ -58,7 +58,7 @@ def trunc_alm(alm, lmax_new, mmax_old=None):
 
     # Fancy indexing so numpy makes copy of alm
     if seq:
-        return tuple([alm[d][indices] for d in xrange(len(alm))])
+        return tuple([alm[d][indices] for d in range(len(alm))])
 
     else:
         alm_new = alm[indices]
@@ -143,7 +143,7 @@ def scale_blm(blm, normalize=False, deconv_q=False):
 
     if deconv_q:
         qell = 2 * np.sqrt(np.pi / (2. * ell + 1))
-        for i in xrange(blm.shape[0]):
+        for i in range(blm.shape[0]):
             hp.almxfl(blm[i], qell, inplace=True)
     if normalize:
         blm /= blm[0,0]
@@ -182,7 +182,7 @@ def unpol2pol(blm):
     blmm2 = np.zeros(blm.size, dtype=np.complex128)
     blmp2 = np.zeros(blm.size, dtype=np.complex128)
 
-    for m in xrange(lmax+1): # loop over spin -2 m's
+    for m in range(lmax+1): # loop over spin -2 m's
         start = getidx(lmax, m, m)
         if m < lmax:
             end = getidx(lmax, m+1, m+1)

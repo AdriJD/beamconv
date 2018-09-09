@@ -8,9 +8,9 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import healpy as hp
 import tools
-from instrument import ScanStrategy, MPIBase, Instrument
-from detector import Beam
-from plot_tools import plot_map, plot_iqu
+from beamconv import ScanStrategy, MPIBase, Instrument
+from beamconv import Beam
+from beamconv import plot_map, plot_iqu
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
@@ -75,7 +75,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     # Create a 3 x 3 square grid of Gaussian beams
     b2.create_focal_plane(nrow=3, ncol=3, fov=10,
-                          lmax=lmax, fwhm=fwhm)
+                          lmax=lmax, fwhm=fwhm, symmetric=True)
 
     # calculate tods in two chunks
     b2.partition_mission(0.5*b2.nsamp)
@@ -107,7 +107,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     # Plotting
     if b2.mpi_rank == 0:
-        print 'plotting results'
+        print('plotting results')
         img_out_path = '../scratch/img/' 
 
         cart_opts = dict(rot=[ra0, dec0, 0],
@@ -160,7 +160,7 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
         plt.savefig('../scratch/img/cls_bicep.png')
         plt.close()
         
-        print "Results written to {}".format(os.path.abspath(img_out_path)) 
+        print("Results written to {}".format(os.path.abspath(img_out_path))) 
 
 def scan_atacama(lmax=700, mmax=5, fwhm=40,
                  mlen = 48 * 60 * 60, nrow=3, ncol=3, fov=5.0,
@@ -253,7 +253,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
     # Plotting
     if ac.mpi_rank == 0:
-        print 'plotting results'
+        print('plotting results')
         img_out_path = '../scratch/img/' 
 
         moll_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
@@ -303,7 +303,7 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
         plt.savefig('../scratch/img/cls_atacama.png')
         plt.close()
 
-        print "Results written to {}".format(os.path.abspath(img_out_path)) 
+        print("Results written to {}".format(os.path.abspath(img_out_path)))
 
 def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
                 fwhm=200, hwp_freq=25., pol_only=True):
@@ -755,7 +755,7 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
     # Plotting
     if b2.mpi_rank == 0:
-        print 'plotting results'
+        print('plotting results')
 
         cart_opts = dict(rot=[ra0, dec0, 0],
                 lonra=[-min(0.5*az_throw, 90), min(0.5*az_throw, 90)],
@@ -997,7 +997,7 @@ def idea_jon():
     maps_po, cond_po = ss.solve_for_map(fill=np.nan)
 
     # Plotting
-    print 'plotting results'
+    print('plotting results')
 
     cart_opts = dict(#rot=[ra0, dec0, 0],
             lonra=[-min(0.5*az_throw, 10), min(0.5*az_throw, 10)],
@@ -1165,7 +1165,7 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
 
     # Plotting
     if sat.mpi_rank == 0:
-        print 'plotting results'
+        print('plotting results')
 
         cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
 
@@ -1208,8 +1208,8 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
 
 if __name__ == '__main__':
     scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
-    # scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=8, ncol=8,
-    #     fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
+    # scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=3, ncol=3,
+    #    fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
 
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=True)
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)

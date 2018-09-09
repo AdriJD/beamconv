@@ -29,7 +29,7 @@ class TestTools(unittest.TestCase):
         # tuple of alms
         alm_tup_t = tools.trunc_alm(self.alm_tup, self.lmax, 
                                     mmax_old=self.mmax)
-        for i in xrange(3):
+        for i in range(3):
             np.testing.assert_array_almost_equal(self.alm_tup[i],
                                                  alm_tup_t[i])
 
@@ -41,7 +41,7 @@ class TestTools(unittest.TestCase):
 
         # tuple of alms
         alm_tup_t = tools.trunc_alm(self.alm_tup, 0, mmax_old=self.mmax)
-        for i in xrange(3):
+        for i in range(3):
             self.assertTrue(alm_tup_t[i].size == 1)
             self.assertEqual(self.alm_tup[i][0], alm_tup_t[i][0])
 
@@ -55,7 +55,7 @@ class TestTools(unittest.TestCase):
                                     mmax_old=self.mmax)
 
         n = 0
-        for idx in xrange(self.alm.size):
+        for idx in range(self.alm.size):
 
             ell, m = hp.Alm.getlm(self.lmax, idx)
             if ell > new_lmax or m > new_lmax or m > self.mmax:
@@ -64,7 +64,7 @@ class TestTools(unittest.TestCase):
 
             self.assertEqual(self.alm[idx], alm_t[idx_new])
             
-            for i in xrange(3):
+            for i in range(3):
                 self.assertEqual(self.alm_tup[i][idx], alm_tup_t[i][idx_new])
             n += 1
 

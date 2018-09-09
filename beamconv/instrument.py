@@ -2,14 +2,15 @@ import os
 import sys
 import time
 import copy
-from warnings import warn, catch_warnings, simplefilter
+from warnings import warn, catch_warnings, filterwarnings
 
 import numpy as np
 import qpoint as qp
 import healpy as hp
 
-from beamconv import tools
-from detector import Beam
+from . import tools
+from .detector import Beam
+
 
 class MPIBase(object):
     '''
@@ -224,7 +225,7 @@ class MPIBase(object):
         if self.mpi:
 
             sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = np.divmod(len(arr), self.mpi_size)
+            quot, remainder = divmod(len(arr), self.mpi_size)
             sub_size += quot
 
             if remainder:
@@ -472,8 +473,8 @@ class Instrument(MPIBase):
 
         beams = []
         
-        for az_idx in xrange(azs.size):
-            for el_idx in xrange(els.size):
+        for az_idx in range(azs.size):
+            for el_idx in range(els.size):
 
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
 
@@ -762,7 +763,7 @@ class Instrument(MPIBase):
         '''
 
         if pairs:
-            ndet = self.ndet / 2
+            ndet = self.ndet // 2
         else:
             ndet = self.ndet
 
@@ -1084,7 +1085,7 @@ class ScanStrategy(Instrument, qp.QMap):
         rotation
         '''
         if self.rot_dict['period']:
-            self.rot_dict['angle'] = self.rot_angle_gen.next()
+            self.rot_dict['angle'] = next(self.rot_angle_gen)
 
     def set_hwp_mod(self, mode=None,
                     freq=None, start_ang=0.,
@@ -1210,7 +1211,7 @@ class ScanStrategy(Instrument, qp.QMap):
         chunks = []
         start = 0
 
-        for cidx, chunk in enumerate(xrange(nchunks)):
+        for cidx, chunk in enumerate(range(nchunks)):
             end = start + chunksize
             end = nsamp if end >= (nsamp) else end
             chunks.append(dict(start=start, end=end, cidx=cidx))
@@ -1291,7 +1292,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 start = end
 
             # loop over full-sized rotation chunks
-            for step in xrange(nchunks-1):
+            for step in range(nchunks-1):
 
                 end = start + rot_chunk_size
                 subchunks.append(dict(start=start, end=end))
@@ -1361,10 +1362,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # rotate instrument if needed
                 if self.rot_dict['period']:
-                    self.rot_dict['angle'] = self.rot_angle_gen.next()
+                    self.rot_dict['angle'] = next(self.rot_angle_gen)
 
                 # Cycling through detectors and scanning
-                for chnidx in xrange(self.ndet):
+                for chnidx in range(self.ndet):
 
                     az_off = self.azs[chnidx]
                     el_off = self.els[chnidx]
@@ -1417,7 +1418,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # have no blm.
         if beam_a.ghosts:
 
-            for gidx in xrange(beam_a.ghost_count):
+            for gidx in range(beam_a.ghost_count):
                 ghost_a = beam_a.ghosts[gidx]
 
                 if gidx == 0:
@@ -1430,7 +1431,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if b_exists:
             if beam_b.ghosts:
 
-                for gidx in xrange(beam_b.ghost_count):
+                for gidx in range(beam_b.ghost_count):
                     ghost_b = beam_b.ghosts[gidx]
 
                     if gidx == 0:
@@ -1541,7 +1542,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # calculating boresight quaternion.
         nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
 
-        for bidx in xrange(nmax):
+        for bidx in range(nmax):
 
             if bidx > 0:
                 # reset instrument
@@ -1681,7 +1682,7 @@ class ScanStrategy(Instrument, qp.QMap):
             else:
                 arr[:step_dict['remainder']] += step_dict['angle']
 
-                step_dict['angle'] = step_gen.next()
+                step_dict['angle'] = next(step_gen)
                 arr[step_dict['remainder']:] += step_dict['angle']
 
                 step_dict['remainder'] = step_size - arr[step_dict['remainder']:].size
@@ -1696,16 +1697,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
             startidx = step_dict['remainder']
             # Loop over full steps.
-            for step in xrange(nsteps-1):
+            for step in range(nsteps-1):
                 endidx = startidx + step_size
 
-                step_dict['angle'] = step_gen.next()
+                step_dict['angle'] = next(step_gen)
                 arr[startidx:endidx] += step_dict['angle']
 
                 startidx = endidx
 
             # Fill last part and determine remainder.
-            step_dict['angle'] = step_gen.next()
+            step_dict['angle'] = next(step_gen)
             arr[endidx:] += step_dict['angle']
             step_dict['remainder'] = step_size - arr[endidx:].size
 
@@ -1886,7 +1887,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.mpi:
             # Calculate boresight quaternion in parallel.
             sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = np.divmod(chunk_size,
+            quot, remainder = divmod(chunk_size,
                                         self.mpi_size)
             sub_size += quot
 
@@ -2024,7 +2025,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # Calculate boresight quaternion in parallel
             chunk_size = nsamp
             sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = np.divmod(chunk_size,
+            quot, remainder = divmod(chunk_size,
                                         self.mpi_size)
             sub_size += quot
 
@@ -2869,12 +2870,13 @@ class ScanStrategy(Instrument, qp.QMap):
         # Solve map on root process.
         if self.mpi_rank == 0:
             # Suppress 1/0 warnings from numpy linalg.
-            with catch_warnings(RuntimeWarning):
-                simplefilter("ignore")
+            with catch_warnings(record=True) as w:
+                filterwarnings('ignore', category=RuntimeWarning)
 
                 maps = self.solve_map(vec=vec, proj=proj,
                                       copy=True, fill=fill)
-            cond = self.proj_cond(proj=proj)
+                
+                cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill
         else:
             maps = None

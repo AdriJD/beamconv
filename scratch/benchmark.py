@@ -13,12 +13,11 @@ def t_lmax():
     
     scan_opts = dict(duration=3600,
                      sample_rate=100)
-
+    mmax_range = np.array([0, 2, 5, 8], dtype=int)
     lmax_range = np.logspace(np.log10(500), np.log10(3000), 8, dtype=int)
     nsides = np.ones_like(lmax_range) * np.nan
     nside_range = 2 ** np.arange(15)
 
-    #mmax_range = np.array([2])
     timings = np.ones((mmax_range.size, lmax_range.size)) * np.nan
     timings_cpu = np.ones((mmax_range.size, lmax_range.size)) * np.nan
 
@@ -32,15 +31,15 @@ def t_lmax():
         nside = nside_range[np.digitize(0.5 * lmax, nside_range)]
         nsides[lidx] = nside
 
-        beam_opts = dict(az=0, el=0, polang=0,
-                             fwhm=40, btype='Gaussian', 
-                             lmax=lmax)
-
-        beam = Beam(**beam_opts)
-        beam.blm
-
         for midx, mmax in enumerate(mmax_range):
 
+            beam_opts = dict(az=0, el=0, polang=0,
+                            fwhm=40, btype='Gaussian', 
+                             lmax=lmax, symmetric=mmax==0)
+            
+            beam = Beam(**beam_opts)
+            beam.blm
+        
             t0 = time.time()
             t0c = time.clock()
             S.init_detpair(alm, beam, beam_b=None, nside_spin=nside, max_spin=mmax,
@@ -63,7 +62,7 @@ def t_lmax():
 def scan(lmax=500, nside=512, mmax=2):
     '''Time scanning single detector.'''
 
-    os.environ["OMP_NUM_THREADS"] = "1" 
+    os.environ["OMP_NUM_THREADS"] = "10" 
     import numpy as np
     import healpy as hp
     from beamconv import ScanStrategy
@@ -80,7 +79,7 @@ def scan(lmax=500, nside=512, mmax=2):
     S = ScanStrategy(duration=24*3600, sample_rate=freq)
     beam_opts = dict(az=1, el=1, polang=10.,
                      fwhm=40, btype='Gaussian', 
-                     lmax=lmax)
+                     lmax=lmax, symmetric=mmax==0)
 
     beam = Beam(**beam_opts)
     S.add_to_focal_plane(beam)
@@ -154,3 +153,4 @@ if __name__ == '__main__':
     #scan(lmax=3000, nside=2048, mmax=8)
     #scan(lmax=3000, nside=2048, mmax=2)
     scan(lmax=501, nside=256, mmax=2)
+    #scan(lmax=501, nside=256, mmax=0)

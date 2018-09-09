@@ -1,7 +1,7 @@
 import os
 import matplotlib
 import matplotlib.pyplot as plt
-from warnings import catch_warnings, simplefilter
+from warnings import catch_warnings, filterwarnings
 import numpy as np
 import healpy as hp
 
@@ -33,8 +33,9 @@ def plot_map(map_arr, write_dir, tag,
     filename = os.path.join(write_dir, tag)
 
     plt.figure()
-    with catch_warnings(RuntimeWarning):
-        simplefilter("ignore")
+    with catch_warnings():
+        filterwarnings('ignore', category=RuntimeWarning)
+
         plot_func(map_arr, **kwargs)
         plt.savefig(filename+'.png', bbox_inches=bbox_inches)
     plt.close()

@@ -24,7 +24,7 @@ class TestTools(unittest.TestCase):
             alm += 1j * np.random.randn(hp.Alm.getsize(lmax))
             return alm
         
-        cls.alm = tuple([rand_alm(lmax) for i in xrange(3)])
+        cls.alm = tuple([rand_alm(lmax) for i in range(3)])
         cls.lmax = lmax 
 
     def test_init(self):
@@ -46,8 +46,8 @@ class TestTools(unittest.TestCase):
         nsteps = int(np.ceil(scs.mlen / float(scs.step_dict['period'])))
         self.assertEqual(nsteps, 20)
 
-        for step in xrange(12):
-            el = scs.el_step_gen.next()
+        for step in range(12):
+            el = next(scs.el_step_gen)
             scs.step_dict['step'] = el
             self.assertEqual(el, step%5)
             
@@ -58,13 +58,13 @@ class TestTools(unittest.TestCase):
         self.assertEqual(scs.step_dict['step'], 0)
         self.assertEqual(scs.step_dict['remainder'], 0)
 
-        for step in xrange(nsteps):
-            el = scs.el_step_gen.next()
+        for step in range(nsteps):
+            el = next(scs.el_step_gen)
             self.assertEqual(el, step%5)
 
         scs.reset_el_steps()
-        self.assertEqual(scs.el_step_gen.next(), 0)
-        self.assertEqual(scs.el_step_gen.next(), 1)
+        self.assertEqual(next(scs.el_step_gen), 0)
+        self.assertEqual(next(scs.el_step_gen), 1)
 
     def test_init_detpair(self):
         '''
@@ -109,11 +109,11 @@ class TestTools(unittest.TestCase):
                                              func_c[mmax + 2], decimal=6)
 
         # Test if rest of maps are zero.
-        for i in xrange(1, mmax + 1):
+        for i in range(1, mmax + 1):
             np.testing.assert_array_almost_equal(zero_map,
                                                  func[i], decimal=6)
             
-        for i in xrange(1, 2 * mmax + 1):
+        for i in range(1, 2 * mmax + 1):
             if i == mmax + 2:
                 continue
             np.testing.assert_array_almost_equal(zero_map,
