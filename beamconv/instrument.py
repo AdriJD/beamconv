@@ -1579,6 +1579,9 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Assume no chunking is needed and use full mission length.
                 self.partition_mission()
 
+            # In case chunks have been added manually.
+            self._init_data()
+            
             for chunk in self.chunks:                
 
                 if verbose:
@@ -1872,13 +1875,6 @@ class ScanStrategy(Instrument, qp.QMap):
         el = el.ravel()
         el = el[:chunk_size]
 
-        flag = np.zeros((nchecks, check_len), dtype=bool)
-        flag += flag0[:, np.newaxis]
-        flag = flag.ravel().astype(bool)
-        flag = flag[:chunk_size]
-
-        self.flag = flag
-
         # do elevation stepping if necessary
         if self.step_dict.get('period', None):
             el = self.step_array(el, self.step_dict, self.el_step_gen)
@@ -2126,7 +2122,18 @@ class ScanStrategy(Instrument, qp.QMap):
             # update mod 2pi start angle for next chunk
             self.hwp_dict['angle'] = np.degrees(np.mod(hwp_ang[-1], 2*np.pi))
             self.hwp_ang = hwp_ang
-                             
+                      
+    def _init_data(self):
+        '''
+        Make sure data has a key for each chunk.
+        '''
+
+        for chunk in self.chunks:
+            
+            cidx = chunk['cidx']
+            if str(cidx) not in self._data:
+                self._data[str(cidx)] = {}
+       
     def _allocate_hwp_data(self, save_point=False, **chunk):
         '''
         Allocate inernal arrays for saving HWP angles for given 
@@ -2824,8 +2831,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         q_off = q_off[np.newaxis]
         tod = self.tod[np.newaxis]
-        flag = self.flag[self.qidx_start:self.qidx_end]
-        flag = flag[np.newaxis]
+
+        if hasattr(self, 'flag'):
+            flag = self.flag[self.qidx_start:self.qidx_end]
+            flag = flag[np.newaxis]
+        else:
+            flag = None
 
         self.from_tod(q_off, tod=tod, flag=flag)
 
