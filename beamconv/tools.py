@@ -595,3 +595,29 @@ def blm2bl(blm, m=0, copy=True):
     else:
         return bell
 
+def sawtooth_wave(num_samp, scan_speed, period):
+    '''
+    Return sawtooth wave.
+
+    Arguments
+    ---------
+    num_samp : int
+        Size of output in samples.
+    scan_speed : float
+        Degrees per sample.
+    period : float
+        Period of wave in degrees.
+        
+    Returns
+    -------
+    az : array-like
+         Azimuth value for each sample in degrees.
+    '''
+
+    tot_degrees = scan_speed * num_samp 
+    az = np.linspace(0, tot_degrees, num=num_samp, dtype=float,
+                     endpoint=False)
+    np.mod(az, period, out=az)
+
+    return az
+

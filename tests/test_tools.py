@@ -96,6 +96,14 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(blmm2_expd, blmm2)
         np.testing.assert_array_almost_equal(blmp2_expd, blmp2)
 
+    def test_sawtooth_wave(self):
+
+        az_truth = np.array([0, 2, 4, 6, 8, 10, 0, 2, 4, 6, 8, 10],
+                             dtype=float)
+        az = tools.sawtooth_wave(12, 2, 12)
+        
+        np.testing.assert_array_equal(az_truth, az)
+        
 if __name__ == '__main__':
     unittest.main()
         

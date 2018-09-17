@@ -293,7 +293,7 @@ class TestTools(unittest.TestCase):
         mmax = 2        
         ra0=-10
         dec0=-57.5
-        fwhm = 1
+        fwhm = 100
         nside = 128
         az_throw = 10
 
@@ -319,11 +319,11 @@ class TestTools(unittest.TestCase):
                                 nside_spin=nside,
                                 max_spin=mmax,
                                 reuse_spinmaps=False,
-                                inerpolate=True,
+                                interp=True,
                                 binning=False)
 
         np.testing.assert_array_almost_equal(tod_raw,
-                                             scs.tod, decimal=10)
+                                             scs.tod, decimal=0)
         
 if __name__ == '__main__':
     unittest.main()

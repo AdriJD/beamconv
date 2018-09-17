@@ -1716,7 +1716,7 @@ class ScanStrategy(Instrument, qp.QMap):
             return arr
 
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
-        scan_speed=1, vel_prf='triangle',
+        scan_speed=1, az_prf='triangle',
         check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,
@@ -1738,11 +1738,13 @@ class ScanStrategy(Instrument, qp.QMap):
         az_throw : float
             Scan width in azimuth (in degrees)
         scan_speed : float
-            Max scan speed in degrees per second
-        vel_prf : str
-            Velocity profile. Current options:
+            Scan speed in degrees per second
+        az_prf : str
+            Azimuthal profile. Current options:
                 triangle : (default) triangle wave with total
-                           width=az_throw
+                           width=az_throw.
+                sawtooth : sawtooth wave with period given by
+                           az_throw.
         check_interval : float
             Check whether elevation is not below `el_min`
             at this rate in seconds (default : 600)
@@ -1781,6 +1783,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
         start = kwargs.pop('start')
         end = kwargs.pop('end')
+
+        # Complain when non-chunk kwargs are given.
+        cidx = kwargs.pop('cidx', None)
+        cidx = kwargs.pop('hwpang', None)
+        
+        if kwargs:
+            raise TypeError("constant_el_scan() got unexpected "
+                                "arguments '{}'".format(list(kwargs)))
 
         if self.ext_point:
             # Use external pointing, so skip rest of function.
@@ -1849,33 +1859,45 @@ class ScanStrategy(Instrument, qp.QMap):
             n += 1
 
         # Scan boresight, note that it will slowly drift away from az0, el0.
-        if vel_prf is 'triangle':
-            if scan_speed == 0:
-                # Replace with small number to simulate staring.
-                scan_speed = 1e-12
-            scan_period = 2 * az_throw / float(scan_speed)
-            if scan_period == 0.:
-                az = np.zeros(chunk_size)
-            else:
-                az = np.arange(p_len, dtype=float)
-                az *= (2 * np.pi / scan_period / float(self.fsamp))
-                np.sin(az, out=az)
-                np.arcsin(az, out=az)
-                az *= (az_throw / np.pi)
+        if scan_speed == 0:
+            # Replace with small number to simulate staring.
+            scan_speed = 1e-12
 
-        # Slightly complicated way to multiply az with az0
+        if az_throw == 0:
+            az = np.zeros(chunk_size)
+            
+        # NOTE, put these in seperate functions
+
+        elif az_prf == 'triangle':
+
+            scan_period = 2 * az_throw / float(scan_speed)
+
+            az = np.arange(p_len, dtype=float)
+            az *= (2 * np.pi / scan_period / float(self.fsamp))
+            np.sin(az, out=az)
+            np.arcsin(az, out=az)
+            az *= (az_throw / np.pi)
+                
+        elif az_prf == 'sawtooth':
+
+            # deg / s / (samp / s)
+            deg_per_samp = scan_speed / float(self.fsamp) 
+            az = tools.sawtooth_wave(p_len, deg_per_samp, az_throw)
+            az -= az_throw / 2.
+            
+        # Slightly complicated way to add az to az0
         # while avoiding expanding az0 to p_len.
         az = az.reshape(nchecks, check_len)
         az += az0[:, np.newaxis]
         az = az.ravel()
-        az = az[:chunk_size] # discard extra entries
+        az = az[:chunk_size] # Discard extra entries.
 
         el = np.zeros((nchecks, check_len), dtype=float)
         el += el0[:, np.newaxis]
         el = el.ravel()
         el = el[:chunk_size]
 
-        # do elevation stepping if necessary
+        # Do elevation stepping if necessary.
         if self.step_dict.get('period', None):
             el = self.step_array(el, self.step_dict, self.el_step_gen)
 
@@ -1888,7 +1910,7 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_size += quot
 
             if remainder:
-                # give first ranks one extra quaternion
+                # Give first ranks one extra quaternion.
                 sub_size[:int(remainder)] += 1
 
             sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
@@ -1903,12 +1925,12 @@ class ScanStrategy(Instrument, qp.QMap):
                                     ctime[sub_start:sub_end])
             q_boresub = q_boresub.ravel()
 
-            sub_size *= 4 # for the flattened quat array
+            sub_size *= 4 # For the flattened quat array.
 
             offsets = np.zeros(self.mpi_size)
             offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
 
-            # combine all sections on all ranks
+            # Combine all sections on all ranks.
             self._comm.Allgatherv(q_boresub,
                             [q_bore, sub_size, offsets, self._mpi_double])
             self.q_bore = q_bore.reshape(chunk_size, 4)
@@ -1917,7 +1939,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, ctime)
 
-        # store boresight quat in memmap if needed
+        # Store boresight quat in memmap if needed.
         if hasattr(self, 'mmap'):
             if self.mpi_rank == 0:
                 self.mmap[start:end] = self.q_bore
