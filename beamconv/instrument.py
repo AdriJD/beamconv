@@ -213,7 +213,7 @@ class MPIBase(object):
 
         Arguments
         ---------
-        arr : array-like
+        arr : array-like, list
             Full-sized array present on every rank
 
         Returns
@@ -491,8 +491,10 @@ class Instrument(MPIBase):
                 beams.append([beam_a, beam_b])
                 idx += 2
                 
-        # If MPI, distribute beams over ranks.
         if scatter:
+            # If MPI, distribute beams over ranks.
+            # Distribute instead of scatter beacuse all ranks
+            # already have full list of beams.
             beams = self.distribute_array(beams)
 
         # Check for existing beams.
