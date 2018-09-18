@@ -2545,7 +2545,7 @@ class ScanStrategy(Instrument, qp.QMap):
         
         for n in s_vals:
 
-            # Equal to 0.5 ( func exp(n pa) + c.c) (pa: position angle).
+            # Equal to func exp(n pa) + c.c (pa: position angle).
             if n == 0:
                 if interp:
                     tod += np.real(hp.get_interp_val(func[n], dec, ra))
@@ -2556,10 +2556,10 @@ class ScanStrategy(Instrument, qp.QMap):
                 expipan *= expipa
 
                 if interp:
-                    tod += np.real(hp.get_interp_val(func[n], dec, ra) \
+                    tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
                                    * expipan)
                 else:
-                    tod += np.real(func[n,pix] * expipan)
+                    tod += 2 * np.real(func[n,pix] * expipan)
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
