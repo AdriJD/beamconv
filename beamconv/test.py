@@ -410,7 +410,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
         ra, dec, pa = ss.quat2radecpa(q_off)
 
         # convert between healpy and math angle conventions
-        phi = np.radians(ra - 180)
+        phi = np.radians(ra)
         theta = np.radians(90 - dec)
         psi = np.radians(-pa)
 
@@ -594,7 +594,7 @@ def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
         ra, dec, pa = ss.quat2radecpa(q_off)
 
         # convert between healpy and math angle conventions
-        phi = np.radians(ra - 180)
+        phi = np.radians(ra)
         theta = np.radians(90 - dec)
         psi = np.radians(-pa)
 

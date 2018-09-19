@@ -2498,6 +2498,9 @@ class ScanStrategy(Instrument, qp.QMap):
             self.pix = pix
 
         np.radians(pa, out=pa)
+
+        # NOTE
+        pa += np.pi
             
         # Expose pointing offset for mapmaking. Not for ghosts.
         if not beam.ghost:
