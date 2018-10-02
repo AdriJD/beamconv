@@ -6,7 +6,7 @@ import numpy as np
 import healpy as hp
 
 def plot_map(map_arr, write_dir, tag,
-             plot_func=hp.mollview, tight=False, **kwargs):
+             plot_func=hp.mollview, tight=False, dpi=150, **kwargs):
     '''
     Plot map using one of the healpy plotting
     functions and write to disk.
@@ -18,7 +18,7 @@ def plot_map(map_arr, write_dir, tag,
     write_dir : str
         Path to directory where map is saved
     tight : bool
-        call savefig with bbox_inches = 'tight'        
+        call savefig with bbox_inches = 'tight'
     tag : str
         Filename = <tag>.png
 
@@ -37,7 +37,7 @@ def plot_map(map_arr, write_dir, tag,
         filterwarnings('ignore', category=RuntimeWarning)
 
         plot_func(map_arr, **kwargs)
-        plt.savefig(filename+'.png', bbox_inches=bbox_inches)
+        plt.savefig(filename+'.png', bbox_inches=bbox_inches, dpi=dpi)
     plt.close()
 
 def round_sig(x, sig=1):
@@ -45,7 +45,7 @@ def round_sig(x, sig=1):
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
 def plot_iqu(maps, write_dir, tag,
-             sym_limits=None, mask=None, tight=False, **kwargs):
+             sym_limits=None, mask=None, tight=False, dpi=150, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each
     to disk.
@@ -84,7 +84,7 @@ def plot_iqu(maps, write_dir, tag,
             minn = maxx
 
         map2plot = np.copy(maps[pidx])
-        
+
         if minn is None:
             minn = round_sig(np.nanmin(map2plot), sig=1)
 
