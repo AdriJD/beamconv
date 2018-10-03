@@ -45,7 +45,7 @@ def round_sig(x, sig=1):
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
 def plot_iqu(maps, write_dir, tag,
-             sym_limits=None, mask=None, tight=False, dpi=150, **kwargs):
+             sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each
     to disk.
@@ -75,13 +75,19 @@ def plot_iqu(maps, write_dir, tag,
     if not hasattr(sym_limits, "__iter__"):
         sym_limits = [sym_limits] * 3
 
-    for pidx, pol in enumerate(['I', 'Q', 'U']):
+    if udicts is None:
+        udicts = [{}, {}, {}]
+
+    for pidx, (pol, udict) in enumerate(zip(['I', 'Q', 'U'], udicts)):
 
         maxx = kwargs.pop('max', sym_limits[pidx])
         try:
             minn = -maxx
         except TypeError:
             minn = maxx
+
+        zwargs = kwargs.copy()
+        zwargs.update(udict)
 
         map2plot = np.copy(maps[pidx])
 
@@ -95,4 +101,4 @@ def plot_iqu(maps, write_dir, tag,
             map2plot[~mask] = np.nan
 
         plot_map(map2plot, write_dir, tag+'_'+pol,
-                min=minn, max=maxx,  tight=tight, **kwargs)
+                min=minn, max=maxx,  tight=tight, **zwargs)
