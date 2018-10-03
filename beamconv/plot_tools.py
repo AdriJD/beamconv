@@ -62,6 +62,11 @@ def plot_iqu(maps, write_dir, tag,
         Path to directory where map is saved
     tag : str
         Filename = <tag>_I/Q/U.png
+    udicts : list
+        a list of three dictionaries that are passed to i, q, and u map plotting
+        tools respectively, these are combined with kwargs which are shared
+        for all three plots
+        default: None
 
     Keyword arguments
     -----------------
