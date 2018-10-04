@@ -961,7 +961,7 @@ class Instrument(MPIBase):
                 if incl_ghosts:
                     for ghost in beam.ghosts:
                         for key in prop:
-                            val = getattr(ghost, key) + np.random.normal(1)*prop[key]
+                            val = getattr(ghost, key) + np.random.normal() * prop[key]
                             setattr(ghost, key, val)
 
     def add_to_prop(self, prop, incl_ghosts=True,
