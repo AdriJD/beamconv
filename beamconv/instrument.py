@@ -552,8 +552,7 @@ class Instrument(MPIBase):
 
     def load_focal_plane(self, bdir, tag=None, no_pairs=False,
             combine=True, scatter=False, polang_A=0., polang_B=90.,
-            print_list=False, permit_list=None, polang_list=None,
-            pol_A=0.0, pol_B=90.0, **kwargs):
+            print_list=False, file_names=None, **kwargs):
 
         '''
         Create focal plane by loading up a collection
@@ -587,22 +586,9 @@ class Instrument(MPIBase):
         polang_B : float
             Polarization angle of b detector in pair [deg].
             Added to existing or provided polang. (default: 90.)
-        permit_list : list, None
-            List of file names that are allowed. Ignored if None.
-            (default: None)
-        polang_list : list
-            List of channel polarization angles (default: None)
-        pol_A : float
-            One of two polarization angles used in combination with permit_list
-            and polang_list
-        pol_B : float
-            Other polarization angle used in combination with permit_list
-            and polang_list
-
-
-        Together, permit_list and polang_list can be used to constrain the number
-        of detectors that are loaded up while assigning a pre-set polarization angle
-
+        file_names : list, None
+            List of file names in directory that are loaded. 
+            No .pkl extension needed. Ignored if None. (default: None)
         print_list : bool
             Print list of beam files loaded up (for debugging).
             (default : False)
@@ -660,139 +646,83 @@ class Instrument(MPIBase):
             opj = os.path.join
             tag = '' if tag is None else tag
 
-            file_list = glob.glob(opj(bdir, '*' + tag + '*.pkl'))
+            if file_names:
+                file_list = []
+                for fname in file_names:
+                    if not tag in fname:
+                        continue
+                    ffile = opj(bdir, fname, '.pkl')
+                    if not os.path.exists(ffile):
+                        raise IOError("No such file: {}".format(ffile))
+                    file_list.append(ffile)
 
-            if not file_list:
-                raise RuntimeError(
-                    'No files matching <*{}*.pkl> found in {}'.format(
-                                                             tag, bdir))
-            file_list.sort()
+            else:
+                file_list = glob.glob(opj(bdir, '*' + tag + '*.pkl'))
+                if not file_list:
+                    raise RuntimeError(
+                        'No files matching <*{}*.pkl> found in {}'.format(
+                                                                 tag, bdir))
+
+            file_list.sort() 
 
             if print_list:
                 print('Load focal plane beam file_list:')
                 for ii, fname in enumerate(file_list):
                     print('{}/{}: {}'.format(
                         ii+1, len(file_list), os.path.split(fname)[-1]))
-
                 print('tag = {}'.format(tag))
 
-            # Going through a list of permitted channels and loading from directory
-            if permit_list and polang_list:
+            for bfile in file_list:
 
-                for perm_bfile, polang in zip(permit_list, polang_list):
+                pkl_file = open(bfile, 'rb')
+                beam_opts = pickle.load(pkl_file)
+                pkl_file.close()
 
-                    if not any(perm_bfile in pl for pl in file_list):
-                        raise ValueError('Unable to find file in directory')
+                if isinstance(beam_opts, dict):
+                    # Single dict of opts: assume A, create A and B.
 
-                    try:
-                        bidx = [i for i, s in enumerate(file_list) if perm_bfile in s][0]
-                    except IndexError:
-                        print('This should have been caught by the previous check')
-                        raise
+                    beam_opts_a = beam_opts
+                    beam_opts_b = copy.deepcopy(beam_opts)
 
+                    if beam_opts.get('name'):
+                        beam_opts_a['name'] += 'A'
+                        beam_opts_b['name'] += 'B'
 
-                    pkl_file = open(file_list[bidx], 'rb')
-                    beam_opts = pickle.load(pkl_file)
+                elif isinstance(beam_opts, (list, tuple, np.ndarray)):
+                    # Assume list of dicts for A and B.
 
-                    pkl_file.close()
+                    if len(beam_opts) != 2:
+                        raise ValueError('Need two elements: A and B')
 
-                    if isinstance(beam_opts, dict):
+                    beam_opts_a = beam_opts[0]
+                    beam_opts_b = beam_opts[1]
 
-                        # Single dict of opts: assume A, create A and B.
-                        beam_opts_a = beam_opts
+                # Overrule options with given kwargs
+                beam_opts_a.update(kwargs)
+                beam_opts_b.update(kwargs)
 
-                        if beam_opts.get('name'):
-                            beam_opts_a['name'] += 'A'
+                beam_opts_a.update(dict(idx=idx))
+                beam_opts_b.update(dict(idx=idx+1))
 
-                    elif isinstance(beam_opts, (list, tuple, np.ndarray)):
-                        # Assume list of dicts for A and B.
+                idx += 2
 
-                        if len(beam_opts) != 2:
-                            raise ValueError('Need two elements: A and B')
+                # Add polang A and B (perhaps on top of provided or existing
+                # polang).
+                polang_Ai = beam_opts_a.setdefault('polang', 0)
+                polang_Bi = beam_opts_b.setdefault('polang', 0)
+                beam_opts_a['polang'] = polang_Ai + polang_A
+                beam_opts_b['polang'] = polang_Bi + polang_B
 
-                        beam_opts_a = beam_opts[0]
-                        if polang == pol_A:
-                            beam_opts_a['name'] += 'A'
-                        elif polang == pol_B:
-                            beam_opts_a['name'] += 'B'
-                        else:
-                            raise ValueError('polang should be either pol_A or pol_B')
-
-                    # Overrule options with given kwargs
-                    beam_opts_a.update(kwargs)
-                    beam_opts_a.update(dict(idx=idx))
-                    idx += 2
-
-                    # Add polang A and B (perhaps on top of provided or esisting
-                    # polang).
-
-                    beam_opts_a['polang'] = polang + polang_A
-
-                    beam_opts_b = copy.deepcopy(beam_opts_a)
+                if no_pairs:
                     beam_opts_b['dead'] = True
 
-                    beam_opts_a.pop('pol', None)
-                    beam_opts_b.pop('pol', None)
+                beam_opts_a.pop('pol', None)
+                beam_opts_b.pop('pol', None)
 
-                    beam_a = Beam(pol='A', **beam_opts_a)
-                    beam_b = Beam(pol='B', **beam_opts_b)
+                beam_a = Beam(pol='A', **beam_opts_a)
+                beam_b = Beam(pol='B', **beam_opts_b)
 
-                    beams.append([beam_a, beam_b])
-
-            # Loading all beam files in directory
-            else:
-
-                for bfile in file_list:
-
-                    pkl_file = open(bfile, 'rb')
-                    beam_opts = pickle.load(pkl_file)
-                    pkl_file.close()
-
-                    if isinstance(beam_opts, dict):
-                        # Single dict of opts: assume A, create A and B.
-
-                        beam_opts_a = beam_opts
-                        beam_opts_b = copy.deepcopy(beam_opts)
-
-                        if beam_opts.get('name'):
-                            beam_opts_a['name'] += 'A'
-                            beam_opts_b['name'] += 'B'
-
-                    elif isinstance(beam_opts, (list, tuple, np.ndarray)):
-                        # Assume list of dicts for A and B.
-
-                        if len(beam_opts) != 2:
-                            raise ValueError('Need two elements: A and B')
-
-                        beam_opts_a = beam_opts[0]
-                        beam_opts_b = beam_opts[1]
-
-                    # Overrule options with given kwargs
-                    beam_opts_a.update(kwargs)
-                    beam_opts_b.update(kwargs)
-
-                    beam_opts_a.update(dict(idx=idx))
-                    beam_opts_b.update(dict(idx=idx+1))
-
-                    idx += 2
-
-                    # Add polang A and B (perhaps on top of provided or existing
-                    # polang).
-                    polang_Ai = beam_opts_a.setdefault('polang', 0)
-                    polang_Bi = beam_opts_b.setdefault('polang', 0)
-                    beam_opts_a['polang'] = polang_Ai + polang_A
-                    beam_opts_b['polang'] = polang_Bi + polang_B
-
-                    if no_pairs:
-                        beam_opts_b['dead'] = True
-
-                    beam_opts_a.pop('pol', None)
-                    beam_opts_b.pop('pol', None)
-
-                    beam_a = Beam(pol='A', **beam_opts_a)
-                    beam_b = Beam(pol='B', **beam_opts_b)
-
-                    beams.append([beam_a, beam_b])
+                beams.append([beam_a, beam_b])
 
             ndet = len(beams) * 2
         else:
