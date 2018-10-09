@@ -126,6 +126,34 @@ class TestTools(unittest.TestCase):
             self.assertEqual(pair[0], beam)
             self.assertEqual(pair[1], beam)
 
+    def test_remove_from_focal_plane(self):
+
+        instr = instrument.Instrument()
+
+        beam1 = Beam()
+        beam2 = Beam()
+        beam3 = Beam()
+        beam4 = Beam()
+        
+        # Add single beam per pair.
+        instr.add_to_focal_plane([beam1, beam2, beam3, beam4],
+                                 combine=True)
+        self.assertEqual(instr.ndet, 4)
+        
+        instr.remove_from_focal_plane([beam1, beam2, beam3, beam4])
+
+        self.assertEqual(instr.ndet, 0)
+        self.assertEqual(instr.beams, [])
+
+        # Add pairs.
+        instr.add_to_focal_plane([[beam1, beam2], [beam3, beam4]],
+                                 combine=True)
+        self.assertEqual(instr.ndet, 4)
+        
+        instr.remove_from_focal_plane([beam1, beam2, beam3])
+
+        self.assertEqual(instr.ndet, 1)
+        self.assertEqual(instr.beams, [[None, beam4]])
 
     def test_load_focal_plane(self):
 

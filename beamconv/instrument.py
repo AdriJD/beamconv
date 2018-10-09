@@ -402,6 +402,53 @@ class Instrument(MPIBase):
         else:
             self.ndet += ndet2add
 
+    def remove_from_focal_plane(self, bad_beams):
+        '''
+        Remove beam(s) from focal plane.
+
+        Arguments
+        ---------
+        bad_beams : (list of) Beam instance(s)
+            If nested list: assumed to be list of beam pairs.
+        '''
+
+        # Check whether single beam, list of beams or list of pairs.
+        try:
+            bad_beams[0]
+            isseq = True
+        except TypeError:
+            isseq = False
+
+        if isseq:
+            try:
+                bad_beams[0][0]
+                isnestseq = True
+            except TypeError:
+                isnestseq = False
+        else:
+            isnestseq = False
+
+        # Flatten input.
+        if isnestseq:
+            bad_beams = [i for sublist in bad_beams for i in sublist]
+
+        # Set bad beams to None.
+        for pidx, pair in enumerate(self.beams):
+            for bidx, beam in enumerate(pair):
+                
+                if beam in bad_beams:
+                    self.beams[pidx][bidx] = None
+                    self.ndet -= 1
+
+        # Remove pairs where both beams are None.
+        new_beams = []
+        for pidx, pair in enumerate(self.beams):
+
+            if pair != [None, None]:
+                new_beams.append(pair)
+
+        self.beams = new_beams
+                        
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
                            scatter=False, **kwargs):
@@ -540,8 +587,9 @@ class Instrument(MPIBase):
         polang_B : float
             Polarization angle of b detector in pair [deg].
             Added to existing or provided polang. (default: 90.)
-        permit_list : list
-            List of channel names that are allowed (default: None)
+        permit_list : list, None
+            List of file names that are allowed. Ignored if None.
+            (default: None)
         polang_list : list
             List of channel polarization angles (default: None)
         pol_A : float
@@ -771,7 +819,7 @@ class Instrument(MPIBase):
             self.ndet = ndet
         else:
             self.ndet += ndet
-
+            
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 rand_stdev=0., **kwargs):
         '''
@@ -875,7 +923,8 @@ class Instrument(MPIBase):
                 quot, rem = divmod(kidx, 2)
                 self.beams[quot][rem].dead = True
 
-    def set_global_prop(self, prop, incl_ghosts=True):
+    def set_global_prop(self, prop, incl_ghosts=True, no_B=False,
+                        no_A=False):
         '''
         Set a property for all beams on the focal plane.
 
@@ -889,6 +938,11 @@ class Instrument(MPIBase):
         incl_ghosts : bool
             If set, also update attributes of ghosts.
             (default : True)
+        no_B : bool
+            Do not set value for B beams. (default : False)
+        no_A
+            Do not set value for B beams. (default : False)
+
 
         Examples
         --------
@@ -904,7 +958,13 @@ class Instrument(MPIBase):
         beams = np.atleast_2d(self.beams) #2D: we have pairs
 
         for pair in beams:
-            for beam in pair:
+            for bidx, beam in enumerate(pair):
+
+                # This assumes pairs are always [A, B].
+                if no_B and bidx == 1:
+                    continue
+                if no_A and bidx == 0:
+                    continue
 
                 if not beam:
                     continue
@@ -987,9 +1047,9 @@ class Instrument(MPIBase):
             If set, add same random number to both partners
             in pair. (default : False)
         no_B : bool
-            Do not add value to B beams.
+            Do not add value to B beams. (default : False)
         no_A
-            Do not add value to A beams.
+            Do not add value to A beams. (default : False)
         rnd_state : numpy.random.RandomState
             Numpy random state instance. If None, use
             global instance. (default : None)
@@ -1020,9 +1080,9 @@ class Instrument(MPIBase):
 
             for bidx, beam in enumerate(pair):
 
+                # This assumes pairs are always [A, B].
                 if no_B and bidx == 1:
                     continue
-
                 if no_A and bidx == 0:
                     continue
 
