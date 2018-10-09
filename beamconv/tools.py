@@ -621,3 +621,28 @@ def sawtooth_wave(num_samp, scan_speed, period):
 
     return az
 
+def cross_talk(tod_a, tod_b, ctalk=0.01):
+    '''
+    Add a fraction of data from one time-stream to
+    another and vice versa. In place modification.
+
+    Arguments
+    ---------
+    tod_a, tod_b : array-like
+        Equal-sized arrays that will cross-talk to each other.
+
+    Keyword arguments
+    -----------------
+    ctalk : float
+        Amount of cross-talk, i.e. fraction of each time-stream 
+        that is added to the other. (default : 0.01)
+    '''
+
+    tod_c = tod_a.copy()
+    tod_c += tod_b
+    tod_c *= ctalk
+    tod_a *= (1. - ctalk)
+    tod_b *= (1. - ctalk)
+    tod_a += tod_c
+    tod_b += tod_c
+

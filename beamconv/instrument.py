@@ -486,7 +486,7 @@ class Instrument(MPIBase):
                 beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'B', polang=polang+90.,
                               dead=dead or no_pairs, pol='B',
-                              idx=idx, **kwargs)
+                              idx=idx+1, **kwargs)
 
                 beams.append([beam_a, beam_b])
                 idx += 2
@@ -728,7 +728,7 @@ class Instrument(MPIBase):
 
                     idx += 2
 
-                    # Add polang A and B (perhaps on top of provided or esisting
+                    # Add polang A and B (perhaps on top of provided or existing
                     # polang).
                     polang_Ai = beam_opts_a.setdefault('polang', 0)
                     polang_Bi = beam_opts_b.setdefault('polang', 0)
@@ -1410,8 +1410,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - end)
 
         elif nchunks > 1:
-            # you can fit at most nstep - 1 full steps in chunk
-            # remainder is at most stepsize
+            # You can fit at most nstep - 1 full steps in chunk,
+            # remainder is at most stepsize.
             if self.rot_dict['remainder']:
 
                 end = self.rot_dict['remainder'] + start
@@ -1421,14 +1421,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 start = end
 
-            # loop over full-sized rotation chunks
+            # Loop over full-sized rotation chunks.
             for step in range(nchunks-1):
 
                 end = start + rot_chunk_size
                 subchunks.append(dict(start=start, end=end))
                 start = end
 
-            # fill last part and determine remainder
+            # Fill last part and determine remainder.
             subchunks.append(dict(start=start, end=chunk['end']))
             self.rot_dict['remainder'] = rot_chunk_size - (chunk['end'] - start)
 
@@ -1453,63 +1453,6 @@ class ScanStrategy(Instrument, qp.QMap):
         self.vec = np.zeros((3, 12*nside**2), dtype=float)
         self.proj = np.zeros((6, 12*nside**2), dtype=float)
         self.nside_out = nside
-
-    def scan_instrument(self, verbose=True, mapmaking=True,
-        **kwargs):
-        '''
-        Cycles through chunks, scans and calculates
-        detector tods for all detectors serially.
-        Optionally: also bin tods into maps.
-
-        Keyword arguments
-        ---------
-        verbose : bool [default True]
-            Prints status reports
-        mapmaking : bool, optional
-            If True, bin tods into vec and proj.
-        kwargs : {ces_opts}
-            Extra kwargs are assumed input to
-            `constant_el_scan()`
-        '''
-
-        if verbose:
-            print('  Scanning with {:d} detectors'.format(
-                self.ndet))
-
-        for cidx, chunk in enumerate(self.chunks):
-
-            if verbose:
-                print('  Working on chunk {:03}: samples {:d}-{:d}'.format(cidx,
-                    chunk['start'], chunk['end']))
-
-            # Make the boresight move
-            ces_opts = kwargs.copy()
-            ces_opts.update(chunk)
-            self.constant_el_scan(**ces_opts)
-
-            # if required, loop over boresight rotations
-            for subchunk in self.subpart_chunk(chunk):
-
-                # rotate instrument if needed
-                if self.rot_dict['period']:
-                    self.rot_dict['angle'] = next(self.rot_angle_gen)
-
-                # Cycling through detectors and scanning
-                for chnidx in range(self.ndet):
-
-                    az_off = self.azs[chnidx]
-                    el_off = self.els[chnidx]
-                    polang = self.polangs[chnidx]
-
-                    self.scan(az_off=az_off, el_off=el_off,
-                              polang=polang, **subchunk)
-
-                    if mapmaking:
-                        self.bin_tod(add_to_global=False)
-
-                        # Adding to global maps
-                        self.vec += self.depo['vec']
-                        self.proj += self.depo['proj']
 
     def init_detpair(self, alm, beam_a, beam_b=None, **kwargs):
         '''
@@ -1583,7 +1526,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
-            interp=False, save_tod=False, save_point=False,
+            interp=False, save_tod=False, save_point=False, ctalk=0.,
             **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
@@ -1626,6 +1569,9 @@ class ScanStrategy(Instrument, qp.QMap):
             If set, save boresight quaternions, hwp_angle(s) [deg] and
             (per beam) pixel numbers and position angles [deg])
             (default : False)
+        ctalk : float
+            Fraction of cross-talk between detectors in pair.
+            (default :  0)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
@@ -1650,7 +1596,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.ndet))
 
             sys.stdout.flush()
-        self.barrier() # just to have summary print statement on top
+        self.barrier() # Just to have summary print statement on top.
 
         # Init memmap on root.
         if create_memmap and not self.ext_point:
@@ -1669,7 +1615,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Let every core loop over max number of beams per core
         # this makes sure that cores still participate in
-        # calculating boresight quaternion.
+        # calculating boresight quaternions.
         nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
 
         for bidx in range(nmax):
@@ -1763,9 +1709,15 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             **subchunk)
+                        
+                        # Save memory by not copying if no pair.
+                        do_ctalk = ctalk * bool(beam_b) * (not beam_b.dead)
+                        do_ctalk = bool(do_ctalk)
 
-                        if binning:
-                            self.bin_tod(add_to_global=True)
+                        if do_ctalk:
+                            tod_a = self.tod.copy()
+                        elif binning:
+                            self.bin_tod(beam_a, add_to_global=True, **subchunk)
 
                     if beam_b and not beam_b.dead:
 
@@ -1774,8 +1726,89 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_point=save_point,
                                             **subchunk)
 
+                        if do_ctalk:
+                            tod_b = self.tod
+                        elif binning:
+                            self.bin_tod(beam_b, add_to_global=True, **subchunk)
+
+                    if do_ctalk:
+                        tools.cross_talk(tod_a, tod_b, ctalk=ctalk)
+
+                        if save_tod:
+                            # Update TOD with cross-talk leakage.
+                            self._update_tod(beam_a, tod_a, **subchunk)
+                            self._update_tod(beam_b, tod_b, **subchunk)
+
                         if binning:
-                            self.bin_tod(add_to_global=True)
+                            self.bin_tod(beam_a, tod=tod_a,
+                                         add_to_global=True, **subchunk)
+                            self.bin_tod(beam_b, tod=tod_b,
+                                         add_to_global=True, **subchunk)
+
+            # Reset for next beam.
+            do_ctalk = False
+
+    def _chunk2idx(self, **kwargs):
+        '''
+        Return slice indices to chunk-sized array.
+
+        Keyword arguments
+        -----------------
+        start : int
+            Starting index.
+        end : int
+            Stopping index.
+        cidx : int
+            Chunk index.
+
+        Returns
+        -------
+        qidx_start : int
+            Starting index.
+        qidx_end : int
+            Stopping index.
+        '''
+
+        start = kwargs.get('start', False)
+        end = kwargs.get('end', False)
+
+        if start is False:
+            raise ValueError('_chunk2idx called without start kwarg.')
+        if end is False:
+            raise ValueError('_chunk2idx called without end kwarg.')
+
+        # Find the indices to the pointing and ctime arrays.
+        if 'cidx' in kwargs:
+            cidx = kwargs['cidx']
+            qidx_start = start - self.chunks[cidx]['start']
+            qidx_end = end - self.chunks[cidx]['start']
+        else:
+            qidx_start = 0
+            qidx_end = end - start
+
+        return qidx_start, qidx_end
+
+    def _update_tod(self, beam, tod, **kwargs):
+        '''
+        Update the time-ordered data stored for given beam.
+        Returns error when no data is present.
+        
+        Arguments
+        ---------
+        beam : <detector.Beam> object
+            Main beam.
+        tod : array-like
+            Time-ordered data with size 
+
+        Keyword arguments
+        -----------------
+        kwargs : {chunk_opts}
+        '''
+
+        start, end = self._chunk2idx(**kwargs)
+        cidx = kwargs.get('cidx') # Chunk index.
+
+        self._data[str(cidx)][str(beam.idx)]['tod'][start:end] = tod
 
     def step_array(self, arr, step_dict, step_gen):
         '''
@@ -2427,29 +2460,30 @@ class ScanStrategy(Instrument, qp.QMap):
                         add_to_tod=tod_exists,
                         return_point=save_point, **kwargs)
 
-        # Use indices calculated by scan.
-        start = self.qidx_start
-        end = self.qidx_end
-
+        # Find indices to slice of chunk.
+        start = kwargs.get('start')
+        end = kwargs.get('end')
         cidx = kwargs.get('cidx')
+
+        q_start, q_end = self._chunk2idx(start=start, end=end, cidx=cidx)
 
         if save_tod and not save_point:
             # Only TOD is returned
             tod = ret
-            self._data[str(cidx)][str(beam.idx)]['tod'][start:end] = tod
+            self._data[str(cidx)][str(beam.idx)]['tod'][q_start:q_end] = tod
 
         elif not save_tod and save_point:
             ret_pix, ret_nside, ret_pa, ret_hwp = ret
-            self._data[str(cidx)][str(beam.idx)]['pix'][start:end] = ret_pix
-            self._data[str(cidx)][str(beam.idx)]['pa'][start:end] = ret_pa
-            self._data[str(cidx)]['hwp_ang'][start:end] = ret_hwp
+            self._data[str(cidx)][str(beam.idx)]['pix'][q_start:q_end] = ret_pix
+            self._data[str(cidx)][str(beam.idx)]['pa'][q_start:q_end] = ret_pa
+            self._data[str(cidx)]['hwp_ang'][q_start:q_end] = ret_hwp
 
         elif save_tod and save_point:
             tod, ret_pix, ret_nside, ret_pa, ret_hwp = ret
-            self._data[str(cidx)][str(beam.idx)]['tod'][start:end] = tod
-            self._data[str(cidx)][str(beam.idx)]['pix'][start:end] = ret_pix
-            self._data[str(cidx)][str(beam.idx)]['pa'][start:end] = ret_pa
-            self._data[str(cidx)]['hwp_ang'][start:end] = ret_hwp
+            self._data[str(cidx)][str(beam.idx)]['tod'][q_start:q_end] = tod
+            self._data[str(cidx)][str(beam.idx)]['pix'][q_start:q_end] = ret_pix
+            self._data[str(cidx)][str(beam.idx)]['pa'][q_start:q_end] = ret_pa
+            self._data[str(cidx)]['hwp_ang'][q_start:q_end] = ret_hwp
 
     def data(self, chunk, beam=None, data_type='tod'):
         '''
@@ -2530,6 +2564,14 @@ class ScanStrategy(Instrument, qp.QMap):
             If return_point=True: HWP angle(s) [deg] of
             length: end - start for continuously spinning HWP
             otherwise single angle.
+        
+        Notes
+        -----
+        Modifies the following attributes of the beam:
+
+        q_off : array-like
+            Unit quaternion with detector offset (az, el) 
+            and, possibly, instrument rotation.
         '''
 
         if beam.dead:
@@ -2540,10 +2582,6 @@ class ScanStrategy(Instrument, qp.QMap):
         end = kwargs.get('end')
         if start is None or end is None:
             raise ValueError("Scan() called without start and end.")
-
-        az_off = beam.az
-        el_off = beam.el
-        polang = beam.polang_truth # True polang for scanning.
 
         if not beam.ghost:
             func, func_c = self.spinmaps['main_beam']['maps']
@@ -2576,6 +2614,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # We use a offset quaternion without polang.
         # We apply polang at the beam level later.
+        az_off = beam.az
+        el_off = beam.el
+        polang = beam.polang_truth # True polang for scanning.
         q_off = self.det_offset(az_off, el_off, 0)
 
         # Rotate offset given rot_dict. We rotate the centroid
@@ -2587,17 +2628,22 @@ class ScanStrategy(Instrument, qp.QMap):
         tod_size = end - start  # size in samples
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
-        # Find the indices to the pointing and ctime arrays
-        if 'cidx' in kwargs:
-            cidx = kwargs['cidx']
-            qidx_start = start - self.chunks[cidx]['start']
-            qidx_end = end - self.chunks[cidx]['start']
-        else:
-            qidx_start = 0
-            qidx_end = end - start
+        # Find the indices to the pointing and ctime arrays.
+#        if 'cidx' in kwargs:
+#            cidx = kwargs['cidx']
+#            qidx_start = start - self.chunks[cidx]['start']
+#            qidx_end = end - self.chunks[cidx]['start']
+#        else:
+#            qidx_start = 0
+#            qidx_end = end - start
 
-        self.qidx_start = qidx_start
-        self.qidx_end = qidx_end
+#        self.qidx_start = qidx_start
+#        self.qidx_end = qidx_end
+
+#        cidx = kwargs.get('cidx')
+#        if cidx is not None:
+            
+        qidx_start, qidx_end = self._chunk2idx(**kwargs)
 
         if interp:
             ra = np.empty(tod_size, dtype=np.float64)
@@ -2632,8 +2678,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Expose pointing offset for mapmaking. Not for ghosts.
         if not beam.ghost:
-            self.q_off = q_off
-            self.polang = beam.polang # Possibly offset polang for binning.
+#            self.q_off = q_off
+            beam.q_off = q_off
+#            self.polang = beam.polang # Possibly offset polang for binning.
 
         # Fill complex array, i.e. the linearly polarized part
         # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
@@ -2952,32 +2999,58 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func, func_c, spin_values_unpol, spin_values_pol
 
-    def bin_tod(self, init=True, add_to_global=True):
+    def bin_tod(self, beam, tod=None, flag=None, init=True, 
+                add_to_global=True, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
         and bin into map and projection matrices.
-
+        
+        Arguments
+        ---------
+        beam : <detector.Beam> object
+            The main beam of the detector.
+        
         Keyword arguments
         -----------------
+        tod : array-like, None
+            Time-ordered data corresponding to beam, if None
+            tries to use `tod` attribute. (default : None)
+        flag : array-like, None, bool
+            Time-ordered flagging corresponding to beam, if None
+            tries to use `flag` attribute. Same size as `tod` 
+            If False, do not use flagging. (default : None)
         init : bool
-            Call `init_dest()` before binning (default : True)
+            Call `init_dest()` before binning. (default : True)
         add_to_global : bool
-            Add local maps to maps allocated by `allocate_maps`
+            Add local maps to maps allocated by `allocate_maps`.
             (default : True)
+        kwargs : {chunk_opts}
         '''
 
-        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)) #from qpoint
+        # HWP does not depend on particular detector.
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
-        self.init_point(q_bore=self.q_bore[self.qidx_start:self.qidx_end],
-                        ctime=self.ctime[self.qidx_start:self.qidx_end],
+        qidx_start, qidx_end = self._chunk2idx(**kwargs)
+
+        self.init_point(q_bore=self.q_bore[qidx_start:qidx_end],
+                        ctime=self.ctime[qidx_start:qidx_end],
                         q_hwp=q_hwp)
 
-        # use q_off quat with polang (and instr. ang) included.
-        q_off = self.q_off
+        # Use q_off quat with polang (and instr. ang) included.        
+#        az_off = beam.az
+#        el_off = beam.el
+        polang = beam.polang # Possibly offset polang for binning.
 
-        # Note minus sign. Also not true polang when polang_error != 0.
-        polang = -np.radians(self.polang)
+#        q_off = self.det_offset(az_off, el_off, 0)
+
+#        q_off = self.q_off
+
+        # Get detector offset quaternion that includes boresight rotation.
+        q_off = beam.q_off
+
+        # Add polang to q_off as first rotation. Note minus sign. 
+        polang = -np.radians(polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
 
@@ -2985,13 +3058,20 @@ class ScanStrategy(Instrument, qp.QMap):
             self.init_dest(nside=self.nside_out, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
-        tod = self.tod[np.newaxis]
 
-        if hasattr(self, 'flag'):
-            flag = self.flag[self.qidx_start:self.qidx_end]
-            flag = flag[np.newaxis]
+        # Note that qpoint wants (,nsamples) shaped tod array.
+        if tod is None:
+            tod = self.tod[np.newaxis]
         else:
-            flag = None
+            tod = tod[np.newaxis]
+
+        if flag is False:
+            flag  = None
+        elif flag is None and hasattr(self, 'flag'):
+            flag = self.flag[qidx_start:qidx_end]
+            flag = flag[np.newaxis]
+        elif flag:
+            flag = flag[np.newaxis]
 
         self.from_tod(q_off, tod=tod, flag=flag)
 

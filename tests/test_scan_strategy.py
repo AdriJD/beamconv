@@ -265,10 +265,10 @@ class TestTools(unittest.TestCase):
                                 nside_spin=nside,
                                 max_spin=mmax)
 
-        # Solve for the maps
+        # Solve for the maps.
         maps, cond = scs.solve_for_map(fill=np.nan)
 
-        hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.), 
+        alm = hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.), 
                      verbose=False)
         maps_raw = np.asarray(hp.alm2map(self.alm, nside, verbose=False))
 
@@ -282,6 +282,77 @@ class TestTools(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(maps_raw[2,cond<2.5],
                                              maps[2,cond<2.5], decimal=10)
+
+    def test_cross_talk(self):
+        '''Test if the cross-talk is performing as it should.'''
+
+        mlen = 10 * 60 
+        rot_period = 120
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 200
+        nside = 256
+        az_throw = 10
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Single pair.
+        scs.create_focal_plane(nrow=1, ncol=1, fov=0,
+                              lmax=self.lmax, fwhm=fwhm)
+        
+        # Allocate and assign parameters for mapmaking.
+        scs.allocate_maps(nside=nside)
+
+        # set instrument rotation.
+        scs.set_instr_rot(period=rot_period, angles=[12, 14, 248, 293])
+
+        # Set elevation stepping.
+        scs.set_el_steps(rot_period, steps=[0, 2, 4, 8, 10])
+        
+        # Set HWP rotation.
+        scs.set_hwp_mod(mode='stepped', freq=3.)
+
+        beam_a, beam_b = scs.beams[0]
+
+
+        scs.init_detpair(self.alm, beam_a, beam_b=beam_b, nside_spin=nside,
+                         verbose=False)
+        
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2.,
+                                max_spin=mmax,
+                                reuse_spinmaps=True, 
+                                save_tod=True,
+                                binning=False,
+                                ctalk=0.0)
+
+        tod_a = scs.data(scs.chunks[0], beam=beam_a, data_type='tod').copy()
+        tod_b = scs.data(scs.chunks[0], beam=beam_b, data_type='tod').copy()
+
+        # Redo with cross-talk
+        ctalk = 0.5
+
+        scs.reset_instr_rot()
+        scs.reset_hwp_mod()
+        scs.reset_el_steps()
+
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2.,
+                                max_spin=mmax,
+                                reuse_spinmaps=True, 
+                                save_tod=True,
+                                binning=False,
+                                ctalk=ctalk)
+
+        tod_ac = scs.data(scs.chunks[0], beam=beam_a, data_type='tod')
+        tod_bc = scs.data(scs.chunks[0], beam=beam_b, data_type='tod')
+
+        np.testing.assert_array_almost_equal(tod_ac, tod_a + ctalk * tod_b)
+        np.testing.assert_array_almost_equal(tod_bc, tod_b + ctalk * tod_a)
 
     def test_interpolate(self):
         '''
@@ -324,7 +395,48 @@ class TestTools(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(tod_raw,
                                              scs.tod, decimal=0)
+
+    def test_chunks(self):
+        '''Test the _chunk2idx function. '''
         
+        mlen = 100 # so 1000 samples
+        chunksize = 30
+        rot_period = 1.2 # Note, seconds.
+        scs = ScanStrategy(duration=mlen, sample_rate=10)
+
+        scs.partition_mission(chunksize=chunksize)
+
+        self.assertEqual(len(scs.chunks), 
+                         int(np.ceil(scs.nsamp / float(chunksize))))
+
+        # Take single chunk and subdivide it and check whether we 
+        # can correctly access a chunk-sized array.
+        scs.set_instr_rot(period=rot_period)
+
+        for chunk in scs.chunks:
+
+            scs.rotate_instr()
+            subchunks = scs.subpart_chunk(chunk)
+            
+            chunklen = chunk['end'] - chunk['start']
+
+            # Start with zero array, let every subchunk add ones
+            # to its slice, then test if resulting array is one
+            # everywhere.
+            arr = np.zeros(chunklen, dtype=int)
+            
+            for subchunk in subchunks:
+
+                self.assertEqual(subchunk['cidx'], chunk['cidx'])
+                self.assertTrue(subchunk['start'] >= chunk['start'])
+                self.assertTrue(subchunk['end'] <= chunk['end'])
+
+                qidx_start, qidx_end = scs._chunk2idx(**subchunk)
+
+                arr[qidx_start:qidx_end] += 1
+
+            np.testing.assert_array_equal(arr, np.ones_like(arr))
+
 if __name__ == '__main__':
     unittest.main()
 

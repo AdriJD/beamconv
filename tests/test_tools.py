@@ -103,7 +103,33 @@ class TestTools(unittest.TestCase):
         az = tools.sawtooth_wave(12, 2, 12)
         
         np.testing.assert_array_equal(az_truth, az)
+
+    def test_cross_talk(self):
+        '''Test the cross_talk function. '''
         
+        tod_a = np.ones(100, dtype=float)
+        tod_b = np.ones(100, dtype=float)
+        
+        tools.cross_talk(tod_a, tod_b, ctalk=1)
+
+        twos = np.ones(100, dtype=float) * 2
+
+        np.testing.assert_array_equal(tod_a, twos)
+        np.testing.assert_array_equal(tod_b, twos)
+
+        # With other ctalk.
+        ctalk = 0.2
+        tod_a = np.random.randn(100)
+        tod_b = np.random.randn(100)
+
+        expt_a = tod_a + ctalk * tod_b
+        expt_b = tod_b + ctalk * tod_a
+        
+        tools.cross_talk(tod_a, tod_b, ctalk=ctalk)        
+
+        np.testing.assert_array_almost_equal(tod_a, expt_a)
+        np.testing.assert_array_almost_equal(tod_b, expt_b)
+
 if __name__ == '__main__':
     unittest.main()
         
