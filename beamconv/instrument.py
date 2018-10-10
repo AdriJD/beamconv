@@ -651,7 +651,7 @@ class Instrument(MPIBase):
                 for fname in file_names:
                     if not tag in fname:
                         continue
-                    ffile = opj(bdir, fname, '.pkl')
+                    ffile = opj(bdir, fname + '.pkl')
                     if not os.path.exists(ffile):
                         raise IOError("No such file: {}".format(ffile))
                     file_list.append(ffile)
@@ -1577,14 +1577,13 @@ class ScanStrategy(Instrument, qp.QMap):
         nside_spin = kwargs.pop('nside_spin', None)
         spinmaps_opts = dict(verbose=(verbose==2))
         if max_spin:
-            spinmaps_opts.update({'max_spin':max_spin})
+            spinmaps_opts.update({'max_spin' : max_spin})
         if nside_spin:
-            spinmaps_opts.update({'nside_spin':nside_spin})
+            spinmaps_opts.update({'nside_spin' : nside_spin})
 
         if verbose and self.mpi_rank == 0:
             print('Scanning with {:d} detectors'.format(
                 self.ndet))
-
             sys.stdout.flush()
         self.barrier() # Just to have summary print statement on top.
 
@@ -1608,7 +1607,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # calculating boresight quaternions.
         nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
 
-        for bidx in range(nmax):
+        for bidx in range(nmax): # Loop over beams.
 
             if bidx > 0:
                 # reset instrument
