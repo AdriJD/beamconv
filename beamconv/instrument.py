@@ -1615,6 +1615,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.reset_hwp_mod()
                 self.reset_el_steps()
 
+            do_ctalk = False # Starts False, might become True later.
+
             try:
                 beampair = beams[bidx]
             except IndexError:
@@ -1733,9 +1735,6 @@ class ScanStrategy(Instrument, qp.QMap):
                                          add_to_global=True, **subchunk)
                             self.bin_tod(beam_b, tod=tod_b,
                                          add_to_global=True, **subchunk)
-
-            # Reset for next beam.
-            do_ctalk = False
 
     def _chunk2idx(self, **kwargs):
         '''
