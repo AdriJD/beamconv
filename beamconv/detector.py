@@ -99,7 +99,7 @@ class Beam(object):
         self.polang_error = polang_error
         self._idx = idx
         self.symmetric = symmetric
-        
+
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
         if not self.ghost:
@@ -107,7 +107,7 @@ class Beam(object):
             self.ghost_count = 0
 
     @property
-    def idx(self):        
+    def idx(self):
         return self._idx
 
     @property
@@ -247,12 +247,12 @@ class Beam(object):
 
     def __str__(self):
 
-        return "name   : {} \nbtype  : {} \nalive  : {} \nFWHM"\
-            "   : {} arcmin \naz     : {} deg \nel     : {} deg "\
-            "\npolang : {} deg\n".format(self.name, self.btype,
-                                         str(not self.dead), self.fwhm,
-                                         self.az, self.el,
-                                         self.polang_truth)
+        return "name    : {} \nbtype   : {} \nalive   : {} \nFWHM"\
+            "    : {} arcmin \naz      : {} deg \nel      : {} deg "\
+            "\npolang  : {} deg\npo_file : {} \n".\
+            format(self.name, self.btype,
+                str(not self.dead), self.fwhm, self.az, self.el,
+                self.polang_truth, self.po_file)
 
     def gen_gaussian_blm(self):
         '''
