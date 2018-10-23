@@ -1702,8 +1702,11 @@ class ScanStrategy(Instrument, qp.QMap):
                                             **subchunk)
                         
                         # Save memory by not copying if no pair.
-                        do_ctalk = ctalk * bool(beam_b) * (not beam_b.dead)
-                        do_ctalk = bool(do_ctalk)
+                        if beam_b is None:
+                            do_ctalk = False
+                        else:
+                            do_ctalk = ctalk * bool(beam_b) * (not beam_b.dead)
+                            do_ctalk = bool(do_ctalk)
 
                         if do_ctalk:
                             tod_a = self.tod.copy()
