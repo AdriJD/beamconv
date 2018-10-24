@@ -2021,7 +2021,6 @@ class ScanStrategy(Instrument, qp.QMap):
             az = np.zeros(chunk_size)
 
         # NOTE, put these in seperate functions
-
         elif az_prf == 'triangle':
 
             scan_period = 2 * az_throw / float(scan_speed)
@@ -2620,20 +2619,6 @@ class ScanStrategy(Instrument, qp.QMap):
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
         # Find the indices to the pointing and ctime arrays.
-#        if 'cidx' in kwargs:
-#            cidx = kwargs['cidx']
-#            qidx_start = start - self.chunks[cidx]['start']
-#            qidx_end = end - self.chunks[cidx]['start']
-#        else:
-#            qidx_start = 0
-#            qidx_end = end - start
-
-#        self.qidx_start = qidx_start
-#        self.qidx_end = qidx_end
-
-#        cidx = kwargs.get('cidx')
-#        if cidx is not None:
-            
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
 
         if interp:
@@ -2669,9 +2654,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Expose pointing offset for mapmaking. Not for ghosts.
         if not beam.ghost:
-#            self.q_off = q_off
             beam.q_off = q_off
-#            self.polang = beam.polang # Possibly offset polang for binning.
 
         # Fill complex array, i.e. the linearly polarized part
         # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
@@ -3029,13 +3012,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         q_hwp=q_hwp)
 
         # Use q_off quat with polang (and instr. ang) included.        
-#        az_off = beam.az
-#        el_off = beam.el
         polang = beam.polang # Possibly offset polang for binning.
-
-#        q_off = self.det_offset(az_off, el_off, 0)
-
-#        q_off = self.q_off
 
         # Get detector offset quaternion that includes boresight rotation.
         q_off = beam.q_off
