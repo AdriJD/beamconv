@@ -435,7 +435,7 @@ class Instrument(MPIBase):
         # Set bad beams to None.
         for pidx, pair in enumerate(self.beams):
             for bidx, beam in enumerate(pair):
-                
+
                 if beam in bad_beams:
                     self.beams[pidx][bidx] = None
                     self.ndet -= 1
@@ -448,7 +448,7 @@ class Instrument(MPIBase):
                 new_beams.append(pair)
 
         self.beams = new_beams
-                        
+
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
                            scatter=False, **kwargs):
@@ -587,7 +587,7 @@ class Instrument(MPIBase):
             Polarization angle of b detector in pair [deg].
             Added to existing or provided polang. (default: 90.)
         file_names : list, None
-            List of file names in directory that are loaded. 
+            List of file names in directory that are loaded.
             No .pkl extension needed. Ignored if None. (default: None)
         print_list : bool
             Print list of beam files loaded up (for debugging).
@@ -663,7 +663,7 @@ class Instrument(MPIBase):
                         'No files matching <*{}*.pkl> found in {}'.format(
                                                                  tag, bdir))
 
-            file_list.sort() 
+            file_list.sort()
 
             if print_list:
                 print('Load focal plane beam file_list:')
@@ -749,7 +749,65 @@ class Instrument(MPIBase):
             self.ndet = ndet
         else:
             self.ndet += ndet
-            
+
+    def create_crosstalk_ghosts(self, azs, els,
+            beams=None, ghost_tag='refl_ghost', rand_stdev=0., **kwargs):
+        '''
+        Create crosstalk ghosts based on supplied detector
+        offsets (azimuth and elevation).
+        Polarization angles are rotated 90 deg by deafult.
+        Ghosts are appended to `ghosts` attribute of beams.
+
+        Keyword arguments
+        -----------------
+        beams : Beam object, array-like
+            Single Beam object or array-like of Beam
+            objects. If None, use beams attribute.
+            (default : None)
+        ghost_tag : str
+            Tag to append to parents beam name, see
+            `Beam.create_ghost()` (default : refl_ghost)
+        rand_stdev : float
+            Standard deviation of Gaussian random variable
+            added to each ghost (default : 0.)
+        kwargs : {create_ghost_opts, beam_opts}
+
+        Notes
+        -----
+        Any keywords mentioned above accepted by the
+        `Beam.create_ghost` method will be set for
+        all created ghosts. E.g. set ghost level with
+        the `amplitude` keyword (see `Beam.__init__()`)
+
+        `az` and `el` kwargs are ignored.
+        '''
+
+        if not beams:
+            beams = self.beams
+
+        # tag overrules ghost_tag
+        kwargs.setdefault('tag', ghost_tag)
+
+        beams = np.atleast_2d(beams) #2D: we have pairs
+        for pair, az_pair, el_pair in zip(beams, azs, els):
+            for beam, az, el in zip(pair, az_pair, el_pair):
+                if not beam or not az:
+                    continue
+
+                # Note, in python integers are immutable
+                # so ghost offset is not updated when
+                # beam offset is updated.
+                crosstalk_ghost_opts = dict(az=az, el=el)
+                kwargs.update(crosstalk_ghost_opts)
+
+                if rand_stdev:
+                    # add perturbation to ghost amplitude
+                    amplitude = kwargs.get('amplitude', 1.)
+                    amplitude += np.random.normal(scale=rand_stdev)
+                    kwargs.update(dict(amplitude=amplitude))
+
+                beam.create_ghost(**kwargs)
+
     def create_reflected_ghosts(self, beams=None, ghost_tag='refl_ghost',
                                 rand_stdev=0., **kwargs):
         '''
@@ -1700,7 +1758,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             **subchunk)
-                        
+
                         # Save memory by not copying if no pair.
                         if beam_b is None:
                             do_ctalk = False
@@ -1783,13 +1841,13 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         Update the time-ordered data stored for given beam.
         Returns error when no data is present.
-        
+
         Arguments
         ---------
         beam : <detector.Beam> object
             Main beam.
         tod : array-like
-            Time-ordered data with size 
+            Time-ordered data with size
 
         Keyword arguments
         -----------------
@@ -2554,13 +2612,13 @@ class ScanStrategy(Instrument, qp.QMap):
             If return_point=True: HWP angle(s) [deg] of
             length: end - start for continuously spinning HWP
             otherwise single angle.
-        
+
         Notes
         -----
         Modifies the following attributes of the beam:
 
         q_off : array-like
-            Unit quaternion with detector offset (az, el) 
+            Unit quaternion with detector offset (az, el)
             and, possibly, instrument rotation.
         '''
 
@@ -2973,18 +3031,18 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func, func_c, spin_values_unpol, spin_values_pol
 
-    def bin_tod(self, beam, tod=None, flag=None, init=True, 
+    def bin_tod(self, beam, tod=None, flag=None, init=True,
                 add_to_global=True, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
         and bin into map and projection matrices.
-        
+
         Arguments
         ---------
         beam : <detector.Beam> object
             The main beam of the detector.
-        
+
         Keyword arguments
         -----------------
         tod : array-like, None
@@ -2992,7 +3050,7 @@ class ScanStrategy(Instrument, qp.QMap):
             tries to use `tod` attribute. (default : None)
         flag : array-like, None, bool
             Time-ordered flagging corresponding to beam, if None
-            tries to use `flag` attribute. Same size as `tod` 
+            tries to use `flag` attribute. Same size as `tod`
             If False, do not use flagging. (default : None)
         init : bool
             Call `init_dest()` before binning. (default : True)
@@ -3011,13 +3069,13 @@ class ScanStrategy(Instrument, qp.QMap):
                         ctime=self.ctime[qidx_start:qidx_end],
                         q_hwp=q_hwp)
 
-        # Use q_off quat with polang (and instr. ang) included.        
+        # Use q_off quat with polang (and instr. ang) included.
         polang = beam.polang # Possibly offset polang for binning.
 
         # Get detector offset quaternion that includes boresight rotation.
         q_off = beam.q_off
 
-        # Add polang to q_off as first rotation. Note minus sign. 
+        # Add polang to q_off as first rotation. Note minus sign.
         polang = -np.radians(polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
