@@ -751,7 +751,7 @@ class Instrument(MPIBase):
             self.ndet += ndet
 
     def create_crosstalk_ghosts(self, azs, els,
-            beams=None, ghost_tag='refl_ghost', rand_stdev=0., **kwargs):
+            beams=None, ghost_tag='crosstalk_ghost', rand_stdev=0., **kwargs):
         '''
         Create crosstalk ghosts based on supplied detector
         offsets (azimuth and elevation).
@@ -787,17 +787,21 @@ class Instrument(MPIBase):
 
         # tag overrules ghost_tag
         kwargs.setdefault('tag', ghost_tag)
-
         beams = np.atleast_2d(beams) #2D: we have pairs
         for pair, az_pair, el_pair in zip(beams, azs, els):
             for beam, az, el in zip(pair, az_pair, el_pair):
-                if not beam or not az:
-                    continue
+                # if not beam or beam.dead or not az:
+                # if not beam or not az:
+                #     dead_ghost = True
+
+                dead_ghost = True if not beam or not az else False
 
                 # Note, in python integers are immutable
                 # so ghost offset is not updated when
                 # beam offset is updated.
-                crosstalk_ghost_opts = dict(az=az, el=el)
+                crosstalk_ghost_opts = dict(az=az, el=el,
+                    polang=beam.polang+90, dead=dead_ghost)
+
                 kwargs.update(crosstalk_ghost_opts)
 
                 if rand_stdev:
