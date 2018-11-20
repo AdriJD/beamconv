@@ -415,17 +415,13 @@ class Instrument(MPIBase):
         # Check whether single beam, list of beams or list of pairs.
         try:
             bad_beams[0]
-            isseq = True
         except TypeError:
-            isseq = False
+            bad_beams = [bad_beams]
 
-        if isseq:
-            try:
-                bad_beams[0][0]
-                isnestseq = True
-            except TypeError:
-                isnestseq = False
-        else:
+        try:
+            bad_beams[0][0]
+            isnestseq = True
+        except TypeError:
             isnestseq = False
 
         # Flatten input.
@@ -1667,7 +1663,8 @@ class ScanStrategy(Instrument, qp.QMap):
         # Let every core loop over max number of beams per core
         # this makes sure that cores still participate in
         # calculating boresight quaternions.
-        nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
+        #nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
+        nmax = int(np.ceil(len(self.beams)/float(self.mpi_size)))
 
         for bidx in range(nmax): # Loop over beams.
 
@@ -2507,6 +2504,7 @@ class ScanStrategy(Instrument, qp.QMap):
                           **kwargs)
 
         tod_exists = True if n > 0 else False
+
         # Scan with main beam. Add to ghost TOD if present.
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
@@ -2782,7 +2780,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Handle returned values.
         if return_tod:
-            ret_tod = tod.copy()
+            ret_tod = self.tod.copy()
         if return_point:
             if interp:
                 # Note, dec and ra are already theta, phi.

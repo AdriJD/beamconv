@@ -283,6 +283,154 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(maps_raw[2,cond<2.5],
                                              maps[2,cond<2.5], decimal=10)
 
+    def test_scan_ghosts(self):
+        '''
+        Perform a (low resolution) scan with two detectors, 
+        compare to detector + ghost.
+        '''
+
+        mlen = 10 * 60 
+        rot_period = 120
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 200
+        nside = 256
+        az_throw = 10
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create two Gaussian (main) beams.
+        beam_opts = dict(az=0, el=0, polang=0, fwhm=fwhm, lmax=self.lmax, 
+                         symmetric=True)
+        ghost_opts = dict(az=-4, el=10, polang=34, fwhm=fwhm, lmax=self.lmax,
+                          symmetric=True, amplitude=0.1)
+
+        scs.add_to_focal_plane(Beam(**beam_opts))
+        scs.add_to_focal_plane(Beam(**ghost_opts))
+        
+        # Allocate and assign parameters for mapmaking.
+        scs.allocate_maps(nside=nside)
+
+        # Set HWP rotation.
+        scs.set_hwp_mod(mode='continuous', freq=3.)
+        
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2., binning=False,
+                                nside_spin=nside,
+                                max_spin=mmax, save_tod=True)
+
+        tod = scs.data(scs.chunks[0], beam=scs.beams[0][0], data_type='tod')
+        tod += scs.data(scs.chunks[0], beam=scs.beams[1][0], data_type='tod')
+        tod = tod.copy()
+
+        # Repeat with single beam + ghost.
+        scs.remove_from_focal_plane(scs.beams[1][0])
+        scs.beams[0][0].create_ghost(**ghost_opts)
+
+        scs.reset_hwp_mod()
+
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2., binning=False,
+                                nside_spin=nside,
+                                max_spin=mmax, save_tod=True)
+
+        tod_w_ghost = scs.data(scs.chunks[0], beam=scs.beams[0][0], 
+                               data_type='tod')
+
+        # Sum TOD of two beams must match TOD of single beam + ghost.
+        np.testing.assert_array_almost_equal(tod, tod_w_ghost, decimal=10)
+
+    def test_scan_ghosts_map(self):
+        '''
+        Perform a (low resolution) scan with two detectors, 
+        compare map to detector + ghost.
+        '''
+
+        mlen = 10 * 60 
+        rot_period = 120
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 200
+        nside = 256
+        az_throw = 10
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create two Gaussian (main) beams.
+        beam_opts = dict(az=0, el=0, polang=28, fwhm=fwhm, lmax=self.lmax, 
+                         symmetric=True)
+        ghost_opts = dict(az=0, el=0, polang=28, fwhm=fwhm, lmax=self.lmax,
+                          symmetric=True, amplitude=1)
+
+        scs.add_to_focal_plane(Beam(**beam_opts))
+        scs.add_to_focal_plane(Beam(**ghost_opts))
+        
+        # Allocate and assign parameters for mapmaking.
+        scs.allocate_maps(nside=nside)
+
+        # Set HWP rotation.
+        scs.set_hwp_mod(mode='continuous', freq=3.)
+        
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2., binning=False,
+                                nside_spin=nside,
+                                max_spin=mmax, save_tod=True)
+
+        tod = scs.data(scs.chunks[0], beam=scs.beams[0][0], data_type='tod')
+        tod += scs.data(scs.chunks[0], beam=scs.beams[1][0], data_type='tod')
+        tod = tod.copy()
+
+        # Solve for the maps.
+        maps, cond = scs.solve_for_map(fill=np.nan)
+
+        # To supress warnings
+        cond[~np.isfinite(cond)] = 10
+
+        # Repeat with single beam + ghost.
+        scs.remove_from_focal_plane(scs.beams[1][0])
+        scs.beams[0][0].create_ghost(**ghost_opts)
+
+        scs.reset_hwp_mod()
+
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2., binning=False,
+                                nside_spin=nside,
+                                max_spin=mmax, save_tod=True)
+
+        tod_w_ghost = scs.data(scs.chunks[0], beam=scs.beams[0][0], 
+                               data_type='tod')
+
+        # Sum TOD of two beams must match TOD of single beam + ghost.
+        np.testing.assert_array_almost_equal(tod, tod_w_ghost, decimal=10)
+
+        # Maps must match.
+        maps_w_ghost, cond_w_ghost = scs.solve_for_map(fill=np.nan)
+
+        # To supress warnings
+        cond_w_ghost[~np.isfinite(cond_w_ghost)] = 10
+
+
+        np.testing.assert_array_almost_equal(maps[0,cond<2.5],
+                                             maps_w_ghost[0,cond_w_ghost<2.5],
+                                             decimal=10)
+
+        np.testing.assert_array_almost_equal(maps[1,cond<2.5],
+                                             maps_w_ghost[1,cond_w_ghost<2.5],
+                                             decimal=10)
+
+        np.testing.assert_array_almost_equal(maps[2,cond<2.5],
+                                             maps_w_ghost[2,cond_w_ghost<2.5],
+                                             decimal=10)
+
+
     def test_cross_talk(self):
         '''Test if the cross-talk is performing as it should.'''
 
