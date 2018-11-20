@@ -354,6 +354,33 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(tod_ac, tod_a + ctalk * tod_b)
         np.testing.assert_array_almost_equal(tod_bc, tod_b + ctalk * tod_a)
 
+        # Redo with less cross-talk
+        ctalk = 0.000001
+
+        scs.reset_instr_rot()
+        scs.reset_hwp_mod()
+        scs.reset_el_steps()
+
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2.,
+                                max_spin=mmax,
+                                reuse_spinmaps=True, 
+                                save_tod=True,
+                                binning=False,
+                                ctalk=ctalk)
+
+        tod_acs = scs.data(scs.chunks[0], beam=beam_a, data_type='tod')
+        tod_bcs = scs.data(scs.chunks[0], beam=beam_b, data_type='tod')
+
+        np.testing.assert_array_almost_equal(tod_acs, tod_a + ctalk * tod_b)
+        np.testing.assert_array_almost_equal(tod_bcs, tod_b + ctalk * tod_a)
+
+        np.testing.assert_raises(AssertionError, np.testing.assert_array_equal,
+                                 tod_ac, tod_acs)
+        np.testing.assert_raises(AssertionError, np.testing.assert_array_equal,
+                                 tod_bc, tod_bcs)
+
     def test_interpolate(self):
         '''
         Compare interpoted TOD to raw for extremely bandlimited 
