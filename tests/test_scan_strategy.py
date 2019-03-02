@@ -34,13 +34,66 @@ class TestTools(unittest.TestCase):
         self.assertEqual(scs.fsamp, 10.)
         self.assertEqual(scs.nsamp, 2000)
 
+        # Test if we are unable to change scan parameters after init.
         self.assertRaises(AttributeError, setattr, scs, 'fsamp', 1)
         self.assertRaises(AttributeError, setattr, scs, 'mlen', 1)
         self.assertRaises(AttributeError, setattr, scs, 'nsamp', 1)
-    
+
+    def test_init_no_mlen(self):
+        
+        # Test if we can also init without specifying mlen.
+        scs = ScanStrategy(sample_rate=20, num_samples=100)
+
+        #  nsamp = mlen * sample_rate
+        self.assertEqual(scs.mlen, 5)
+        self.assertEqual(scs.fsamp, 20)
+        self.assertEqual(scs.nsamp, 100)
+
+    def test_init_no_sample_rate(self):
+        
+        # Test if we can also init without specifying mlen.
+        scs = ScanStrategy(duration=5, num_samples=100)
+
+        #  nsamp = mlen * sample_rate
+        self.assertEqual(scs.mlen, 5)
+        self.assertEqual(scs.fsamp, 20)
+        self.assertEqual(scs.nsamp, 100)
+
+    def test_init_zero_duration(self):
+        
+        # Sample rate should be zero
+        scs = ScanStrategy(duration=0, sample_rate=10)
+
+        #  nsamp = mlen * sample_rate
+        self.assertEqual(scs.mlen, 0)
+        self.assertEqual(scs.fsamp, 0)
+        self.assertEqual(scs.nsamp, 0)
+
+    def test_init_err(self):
+
+        # Test if init raises erorrs when user does not 
+        # provide enough info.
+        with self.assertRaises(ValueError):
+            ScanStrategy(duration=5)
+        with self.assertRaises(ValueError):
+            ScanStrategy(num_samples=5)
+        with self.assertRaises(ValueError):
+            ScanStrategy(sample_rate=5)
+
+        # Or if nsamp = mlen * sample_rate is not satisfied.
+        with self.assertRaises(ValueError):
+            ScanStrategy(duration=10, sample_rate=20, num_samples=100)
+
+        # Or when sample_rate is zero or negative.
+        with self.assertRaises(ValueError):
+            ScanStrategy(sample_rate=0, duration=10)
+
+        with self.assertRaises(ValueError):
+            ScanStrategy(sample_rate=-2, duration=10)
+        
     def test_el_steps(self):
         
-        scs = ScanStrategy(duration=200)
+        scs = ScanStrategy(duration=200, sample_rate=30)
         scs.set_el_steps(10, steps=np.arange(5)) 
 
         nsteps = int(np.ceil(scs.mlen / float(scs.step_dict['period'])))
@@ -73,7 +126,7 @@ class TestTools(unittest.TestCase):
         
         mmax = 3
         nside = 16
-        scs = ScanStrategy()
+        scs = ScanStrategy(duration=1, sample_rate=10)
         
         beam_a = Beam(fwhm=0., btype='Gaussian', mmax=mmax)
         beam_b = Beam(fwhm=0., btype='Gaussian', mmax=mmax)
@@ -126,7 +179,7 @@ class TestTools(unittest.TestCase):
         
         mmax = 3
         nside = 16
-        scs = ScanStrategy()
+        scs = ScanStrategy(duration=1, sample_rate=10)
         
         beam_a = Beam(fwhm=0., btype='Gaussian', mmax=mmax)
         beam_b = None

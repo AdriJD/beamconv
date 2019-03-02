@@ -1124,15 +1124,21 @@ class ScanStrategy(Instrument, qp.QMap):
 
     _qp_version = (1, 10, 0)
 
-    def __init__(self, duration=0, external_pointing=False,
-                 ctime0=None, sample_rate=30, **kwargs):
+    def __init__(self, duration=None, sample_rate=None, num_samples=None,
+                 external_pointing=False, ctime0=None, **kwargs):
         '''
-        Initialize scan parameters
+        Initialize scan parameters. 
 
         Keyword arguments
         -----------------
-        duration : float
+        duration : float, None
             Mission duration in seconds (default : 0)
+        sample_rate : float, None
+            Sample rate in Hz. If `external_pointing` is set,
+            make sure this matches the sample rate of the
+            external pointing. (default : None)
+        num_samples : int, None
+            Number of samples in mission (default : None)
         external_pointing : bool
             If set, `constant_el_scan` loads up boresight pointing
             and time timestreams instead of calculating them.
@@ -1141,18 +1147,57 @@ class ScanStrategy(Instrument, qp.QMap):
             Start time in unix time. If None, use
             current time. Ignored if `external_pointing` is set
             (default : None)
-        sample_rate : float
-             Sample rate in Hz. If `external_pointing` is set,
-             make sure this matches the sample rate of the
-             external pointing. (default : 30)
         kwargs : {mpi_opts, instr_opts, qmap_opts}
+
+        Notes
+        -----
+        Specify at least:
+        
+            duration, sample_rate
+        or
+            duration, nsamp
+        or
+            sample_rate, num_samples
+        
+        If duration, sample_rate and nsamp are given, they have to 
+        conform to num_samples = int(duration * sample_rate).        
         '''
 
+        if sample_rate is not None and sample_rate <= 0:
+            raise ValueError("Sample rate is not positive.")
+        if duration == 0:
+            # To avoid infinite samples.
+            sample_rate = 0
+
+        err_msg = ("Specify at least: duration and sample_rate or "
+        "duration and num_samples or sample_rate and num_samples.")
+
+        if duration is None:
+            if num_samples is None:
+                raise ValueError(err_msg)
+            if sample_rate is None:
+                raise ValueError(err_msg)
+            duration = num_samples / float(sample_rate)
+            
+        elif sample_rate is None:
+            if num_samples is None:
+                raise ValueError(err_msg)
+            sample_rate = num_samples / float(duration)
+
+        else:
+            # sample_rate and duration are not None.
+            nsamp = int(duration * sample_rate)
+            if num_samples is not None:
+                if nsamp != num_samples:
+                    raise ValueError(
+                        "num_samples != int(duration * sample_rate)")
+            num_samples = nsamp
+                    
         self.__fsamp = float(sample_rate)
+        self.__mlen = duration
+        self.__nsamp = int(num_samples)
 
         self.ctime0 = ctime0
-        self.__mlen = duration
-        self.__nsamp = int(self.mlen * self.fsamp)
 
         self.ext_point = external_pointing
 
