@@ -546,6 +546,69 @@ class Instrument(MPIBase):
         else:
             self.beams += beams
 
+    def input_focal_plane(self, azs, els, polangs, deads=None, fwhm,
+        combine=True, scatter=False, **kwargs):
+        '''
+        Create Beam objects for user-supplied pointing offsets and polangs
+
+        Keyword arguments
+        ---------
+        azs : array-like
+            Detector az-offsets as an (npair x 2 array)
+        els : array-like
+            Detector el-offsets as an npair x 2 array
+        polangs : array-like
+            Detector polarization angle offsets
+        deads : array-like (optional)
+            Detector dead/alive values as an npair x 2 array
+        combine : bool
+            If some beams already exist, combine these new
+            beams with them
+            (default : True)
+        scatter : bool
+            Scatter created pairs over ranks (default : False)
+        kwargs : {beam_opts}
+
+        Notes
+        -----
+        "B"-detector's polarization angle is A's angle + 90.
+
+        If a `beams` attribute already exists, this method
+        will append the beams to that list.
+
+        Any keywords accepted by the `Beam` class will be
+        assumed to hold for all beams created, with the
+        exception of (`az`, `el`, `pol`, `name`, `ghost`),
+        which are ignored. `polang` is used for A-detectors,
+        B-detectors get polang + 90.
+        '''
+
+        if deads is None:
+            deads = np.zeros_like(azs).astype(bool)
+
+        beams = []
+        for i, (az, el, polang, dead) in zip(azs, els, polangs, deads):
+
+            beam_a = Beam(az=az[0], el=el[0], name='det{}'.format(i),
+                polang=polang[0], dead=dead[0], pol='A', idx=i)
+            beam_b = Beam(az=az[1], el=el[1], name='det{}'.format(i),
+                polang=polang[1], dead=dead[1], pol='B', idx=i)
+
+            beams.append([beam_a, beam_b])
+            idx += 2
+
+        if scatter:
+            # If MPI, distribute beams over ranks.
+            # Distribute instead of scatter beacuse all ranks
+            # already have full list of beams.
+            beams = self.distribute_array(beams)
+
+        # Check for existing beams.
+        if not combine:
+            self.beams = beams
+        else:
+            self.beams += beams
+
     def load_focal_plane(self, bdir, tag=None, no_pairs=False,
             combine=True, scatter=False, polang_A=0., polang_B=90.,
             print_list=False, file_names=None, **kwargs):
