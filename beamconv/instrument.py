@@ -546,7 +546,7 @@ class Instrument(MPIBase):
         else:
             self.beams += beams
 
-    def input_focal_plane(self, azs, els, polangs, deads=None, fwhm,
+    def input_focal_plane(self, azs, els, polangs, fwhm, deads=None,
         combine=True, scatter=False, **kwargs):
         '''
         Create Beam objects for user-supplied pointing offsets and polangs
@@ -590,9 +590,9 @@ class Instrument(MPIBase):
         for i, (az, el, polang, dead) in zip(azs, els, polangs, deads):
 
             beam_a = Beam(az=az[0], el=el[0], name='det{}'.format(i),
-                polang=polang[0], dead=dead[0], pol='A', idx=i)
+                polang=polang[0], dead=dead[0], pol='A', idx=i, **kwargs)
             beam_b = Beam(az=az[1], el=el[1], name='det{}'.format(i),
-                polang=polang[1], dead=dead[1], pol='B', idx=i)
+                polang=polang[1], dead=dead[1], pol='B', idx=i, **kwargs)
 
             beams.append([beam_a, beam_b])
             idx += 2
@@ -1190,7 +1190,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def __init__(self, duration=None, sample_rate=None, num_samples=None,
                  external_pointing=False, ctime0=None, **kwargs):
         '''
-        Initialize scan parameters. 
+        Initialize scan parameters.
 
         Keyword arguments
         -----------------
@@ -1215,15 +1215,15 @@ class ScanStrategy(Instrument, qp.QMap):
         Notes
         -----
         Specify at least:
-        
+
             duration, sample_rate
         or
             duration, nsamp
         or
             sample_rate, num_samples
-        
-        If duration, sample_rate and nsamp are given, they have to 
-        conform to num_samples = int(duration * sample_rate).        
+
+        If duration, sample_rate and nsamp are given, they have to
+        conform to num_samples = int(duration * sample_rate).
         '''
 
         if sample_rate is not None and sample_rate <= 0:
@@ -1241,7 +1241,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if sample_rate is None:
                 raise ValueError(err_msg)
             duration = num_samples / float(sample_rate)
-            
+
         elif sample_rate is None:
             if num_samples is None:
                 raise ValueError(err_msg)
@@ -1255,7 +1255,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     raise ValueError(
                         "num_samples != int(duration * sample_rate)")
             num_samples = nsamp
-                    
+
         self.__fsamp = float(sample_rate)
         self.__mlen = duration
         self.__nsamp = int(num_samples)
@@ -2116,9 +2116,9 @@ class ScanStrategy(Instrument, qp.QMap):
         Notes
         -----
         Creates the following class attributes:
-        ctime : ndarray 
+        ctime : ndarray
             Unix time array. Size = (end - start)
-        q_bore : ndarray 
+        q_bore : ndarray
             Boresight quaternion array. Shape = (end - start, 4)
 
         When using `external_pointing` is set, this method just loads
@@ -2608,7 +2608,7 @@ class ScanStrategy(Instrument, qp.QMap):
             (per beam) pixel numbers and position angles [deg])
             (default : False)
         skip_scan : bool
-            If set, tod attribute is not populated by scanning 
+            If set, tod attribute is not populated by scanning
             over spinmaps but filled with zeros. Effectively
             skip whole method (default : False).
         kwargs : {chunk}
@@ -2647,7 +2647,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Scan with main beam. Add to ghost TOD if present.
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
-                        return_point=save_point, 
+                        return_point=save_point,
                         skip_scan=skip_scan, **kwargs)
 
         # Find indices to slice of chunk.
@@ -2756,7 +2756,7 @@ class ScanStrategy(Instrument, qp.QMap):
             length: end - start for continuously spinning HWP
             otherwise single angle.
         skip_scan : bool
-            If set, tod attribute is not populated by scanning 
+            If set, tod attribute is not populated by scanning
             over spinmaps but filled with zeros. Effectively
             skip whole method (default : False).
 
@@ -3012,7 +3012,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Populates following class attributes if beam_obj is provided:
 
         spinmaps : dict
-            Dictionary constaining all spinmaps for main beam and 
+            Dictionary constaining all spinmaps for main beam and
             possible ghosts.
 
         Uses minimum lmax value of beam and sky SWSH coefficients.
@@ -3117,7 +3117,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.
             func = np.zeros((N, 12*nside_spin**2), dtype=np.complex128)
             func_c = np.zeros((2*N-1, 12*nside_spin**2), dtype=np.complex128)
-            
+
         # Unpolarized sky and beam first.
         start = 0
         for sidx, s in enumerate(spin_values_unpol): # s are azimuthal modes in bls.
