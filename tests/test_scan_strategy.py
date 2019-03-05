@@ -665,6 +665,130 @@ class TestTools(unittest.TestCase):
 
             np.testing.assert_array_equal(arr, np.ones_like(arr))
 
+    def test_preview_pointing_input(self):
+        
+        # Test if scan_instrument_mpi works with preview_pointing
+        # option set.
+
+        scs = ScanStrategy(duration=1, sample_rate=10, location='spole')
+
+        # Should raise error if alm is None with preview_pointing not set.
+        alm = None
+        with self.assertRaises(TypeError):
+            scs.scan_instrument_mpi(alm, verbose=0, 
+                                    preview_pointing=False)
+
+        # Should not raise error if alm is provided and preview_pointing set.
+        alm = self.alm
+        scs.scan_instrument_mpi(alm, verbose=0,
+                                preview_pointing=True)
+
+    def test_preview_pointing(self):
+
+        # With preview_pointing set, expect correct proj matrix, 
+        # but vec vector should be zero.
+
+        mlen = 6 * 60 
+        rot_period = 30
+        step_period = rot_period * 2
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 10
+        nside_out = 32
+        az_throw = 10
+        scan_speed = 2 # deg / s.
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create a 1 x 2 square grid of Gaussian beams.
+        scs.create_focal_plane(nrow=1, ncol=2, fov=2,
+                              lmax=self.lmax, fwhm=fwhm)
+        
+        # Allocate and assign parameters for mapmaking.
+        scs.allocate_maps(nside=nside_out)
+
+        # set instrument rotation.
+        scs.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
+
+        # Set elevation stepping.
+        scs.set_el_steps(step_period, steps=[0, 1, 2])
+        
+        # Set HWP rotation.
+        scs.set_hwp_mod(mode='continuous', freq=3.)
+        
+        # First run with preview_pointing set
+        alm = None
+        preview_pointing = True
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=scan_speed,
+                                nside_spin=nside_out,
+                                max_spin=mmax,
+                                preview_pointing=preview_pointing)
+        
+        # Vec should be zero
+        np.testing.assert_array_equal(scs.vec, np.zeros((3, 12 * nside_out ** 2)))
+        # Save for comparison
+        vec_prev = scs.vec
+        proj_prev = scs.proj
+
+        # Now run again in default way.
+        # Create new dest arrays.
+        scs.allocate_maps(nside=nside_out)
+
+        scs.reset_instr_rot()
+        scs.reset_hwp_mod()
+        scs.reset_el_steps()
+
+        alm = self.alm
+        preview_pointing = False
+
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=scan_speed,
+                                nside_spin=nside_out,
+                                max_spin=mmax,
+                                preview_pointing=preview_pointing)
+        
+        # Vec should not be zero now.
+        np.testing.assert_equal(np.any(scs.vec), True)
+
+        # Proj should be identical.
+        np.testing.assert_array_almost_equal(scs.proj, proj_prev, decimal=9)
+
+        # Run one more time with a ghost. Ghost should not change proj.
+        # Create new dest arrays.
+        scs.allocate_maps(nside=nside_out)
+
+        alm = self.alm
+        preview_pointing = False
+
+        scs.reset_instr_rot()
+        scs.reset_hwp_mod()
+        scs.reset_el_steps()
+
+        ghost_opts = dict(az=10, el=10, polang=28, fwhm=fwhm, lmax=self.lmax,
+                          symmetric=True, amplitude=1)
+
+        scs.beams[0][0].create_ghost(**ghost_opts)
+
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=scan_speed,
+                                nside_spin=nside_out,
+                                max_spin=mmax,
+                                preview_pointing=preview_pointing)
+        
+        # Vec should not be zero now.
+        np.testing.assert_equal(np.any(scs.vec), True)
+
+        # Proj should be identical.
+        np.testing.assert_array_almost_equal(scs.proj, proj_prev, decimal=9)
+
 if __name__ == '__main__':
     unittest.main()
 

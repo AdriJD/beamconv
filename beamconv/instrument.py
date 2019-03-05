@@ -1535,7 +1535,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def allocate_maps(self, nside=256):
         '''
-        Allocate space in memory for healpy map-related numpy arrays.
+        Allocate space in memory for binned output.
 
         Keyword arguments
         -----------------
@@ -1547,7 +1547,8 @@ class ScanStrategy(Instrument, qp.QMap):
         self.proj = np.zeros((6, 12*nside**2), dtype=float)
         self.nside_out = nside
 
-    def init_detpair(self, alm, beam_a, beam_b=None, **kwargs):
+    def init_detpair(self, alm, beam_a, beam_b=None,
+                     **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
         for a detector pair and all its ghosts.
@@ -1620,7 +1621,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            **kwargs):
+            preview_pointing=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1629,9 +1630,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Arguments
         ---------
-        alm : tuple
-            Tuple containing (almI, almE, almB) as
-            Healpix-formatted complex numpy arrays
+        alm : tuple, None
+            Tuple containing (almI, almE, almB) as Healpix-formatted
+            complex numpy arrays. Can be None if preview_pointing is True.
 
         Keyword arguments
         ---------
@@ -1665,6 +1666,11 @@ class ScanStrategy(Instrument, qp.QMap):
         ctalk : float
             Fraction of cross-talk between detectors in pair.
             (default :  0)
+        preview_pointing : bool
+            If set, input alm is ignored, all SHT transforms are skipped,
+            and no scanning is done (tod are zero). All pointing and binning
+            steps are performed, so useful for quickly checking output hits-map
+            and condition number (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
@@ -1674,6 +1680,14 @@ class ScanStrategy(Instrument, qp.QMap):
         save_tod and save_point options are meant for display and debugging
         purposes only.
         '''
+
+        if alm is None and preview_pointing is False:
+            raise TypeError(
+                "input alm = None while `preview_pointing` != True")
+
+        if preview_pointing and (save_tod is True or save_point is True):
+            raise ValueError(
+             "Cannot have `skip_scan` and `save_tod` or `save_point`")
 
         # Pop init_spinmaps kwargs.
         max_spin = kwargs.pop('max_spin', None)
@@ -1740,6 +1754,9 @@ class ScanStrategy(Instrument, qp.QMap):
             # or already initialized with reuse_spinmaps.
             if not beam_a and not beam_b:
                 pass
+            elif preview_pointing is True:
+                # We can completely skip all SHT transforms.
+                pass
             elif hasattr(self, 'spinmaps') and reuse_spinmaps:
                 pass
             else:
@@ -1803,6 +1820,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         self._scan_detector(beam_a, interp=interp,
                                             save_tod=save_tod,
                                             save_point=save_point,
+                                            skip_scan=preview_pointing,
                                             **subchunk)
 
                         # Save memory by not copying if no pair.
@@ -1818,10 +1836,10 @@ class ScanStrategy(Instrument, qp.QMap):
                             self.bin_tod(beam_a, add_to_global=True, **subchunk)
 
                     if beam_b and not beam_b.dead:
-
                         self._scan_detector(beam_b, interp=interp,
                                             save_tod=save_tod,
                                             save_point=save_point,
+                                            skip_scan=preview_pointing,
                                             **subchunk)
 
                         if do_ctalk:
@@ -2034,6 +2052,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Notes
         -----
+        Creates the following class attributes:
+        ctime : ndarray 
+            Unix time array. Size = (end - start)
+        q_bore : ndarray 
+            Boresight quaternion array. Shape = (end - start, 4)
+
         When using `external_pointing` is set, this method just loads
         the external pointing using the provided functions and ignores
         every other kwarg except `start` and `end`.
@@ -2499,7 +2523,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-                       save_point=False, **kwargs):
+                       save_point=False, skip_scan=False, **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -2520,6 +2544,10 @@ class ScanStrategy(Instrument, qp.QMap):
             If set, save boresight quaternions, hwp_angle(s) [deg] and
             (per beam) pixel numbers and position angles [deg])
             (default : False)
+        skip_scan : bool
+            If set, tod attribute is not populated by scanning 
+            over spinmaps but filled with zeros. Effectively
+            skip whole method (default : False).
         kwargs : {chunk}
 
         Notes
@@ -2530,9 +2558,11 @@ class ScanStrategy(Instrument, qp.QMap):
         if beam.ghost:
             raise ValueError('_scan_detector() called with ghost.')
 
-        # Do ghosts first such that returned pointing is that of main
-        # beam.
-        n = 0 # Count alive ghosts
+        if skip_scan and (save_tod is True or save_point is True):
+            raise ValueError(
+             "Cannot have `skip_scan` and `save_tod` or `save_point`")
+
+        n = 0 # Count alive ghosts.
         if any(beam.ghosts):
             for gidx, ghost in enumerate(beam.ghosts):
 
@@ -2546,6 +2576,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.scan(ghost,
                           add_to_tod=add_to_tod,
                           interp=interp,
+                          skip_scan=skip_scan,
                           **kwargs)
 
         tod_exists = True if n > 0 else False
@@ -2553,7 +2584,8 @@ class ScanStrategy(Instrument, qp.QMap):
         # Scan with main beam. Add to ghost TOD if present.
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
-                        return_point=save_point, **kwargs)
+                        return_point=save_point, 
+                        skip_scan=skip_scan, **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
@@ -2611,7 +2643,8 @@ class ScanStrategy(Instrument, qp.QMap):
             return self._data[str(chunk['cidx'])][str(beam.idx)][data_type]
 
     def scan(self, beam, add_to_tod=False, interp=False,
-             return_tod=False, return_point=False, **kwargs):
+             return_tod=False, return_point=False, skip_scan=False,
+             **kwargs):
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
@@ -2659,12 +2692,24 @@ class ScanStrategy(Instrument, qp.QMap):
             If return_point=True: HWP angle(s) [deg] of
             length: end - start for continuously spinning HWP
             otherwise single angle.
+        skip_scan : bool
+            If set, tod attribute is not populated by scanning 
+            over spinmaps but filled with zeros. Effectively
+            skip whole method (default : False).
 
         Notes
         -----
+        Creates following class attributes:
+
+        tod : ndarray
+           Array of time-ordered data. Size = (end - start)
+        pix : ndarray
+            Array of HEALPix pixel numbers. Size = (end - start).
+            Only if interp = False and skip_scan = False.
+
         Modifies the following attributes of the beam:
 
-        q_off : array-like
+        q_off : ndarray
             Unit quaternion with detector offset (az, el)
             and, possibly, instrument rotation.
         '''
@@ -2673,10 +2718,43 @@ class ScanStrategy(Instrument, qp.QMap):
             raise ValueError('scan() called with dead beam: {}'.format(
                 beam.name))
 
+        if skip_scan and (return_tod is True or return_point is True):
+            raise ValueError(
+             "Cannot have `skip_scan` and `return_tod` or `return_point`")
+
         start = kwargs.get('start')
         end = kwargs.get('end')
         if start is None or end is None:
             raise ValueError("Scan() called without start and end.")
+        tod_size = end - start  # size in samples
+
+        # We use a offset quaternion without polang.
+        # We apply polang at the beam level later.
+        az_off = beam.az
+        el_off = beam.el
+        polang = beam.polang_truth # True polang for scanning.
+        q_off = self.det_offset(az_off, el_off, 0)
+
+        # Rotate offset given rot_dict. We rotate the centroid
+        # around the boresight. It's q_bore * q_rot * q_off.
+        ang = np.radians(self.rot_dict['angle'])
+        q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
+        q_off = tools.quat_left_mult(q_rot, q_off)
+
+        # Expose pointing offset for mapmaking. Not for ghosts.
+        if not beam.ghost:
+            beam.q_off = q_off
+
+        if skip_scan:
+            # Allocate a fake tod.
+            tod = np.zeros(tod_size, dtype=float)
+            if add_to_tod and hasattr(self, 'tod'):
+                self.tod += tod
+            else:
+                self.tod = tod
+
+            # Skip all other scanning.
+            return
 
         if not beam.ghost:
             func, func_c = self.spinmaps['main_beam']['maps']
@@ -2707,20 +2785,6 @@ class ScanStrategy(Instrument, qp.QMap):
         #assert 2*N-1 == N2, "func and func_c have different max_spin"
         assert npix == npix2, "func and func_c have different npix"
 
-        # We use a offset quaternion without polang.
-        # We apply polang at the beam level later.
-        az_off = beam.az
-        el_off = beam.el
-        polang = beam.polang_truth # True polang for scanning.
-        q_off = self.det_offset(az_off, el_off, 0)
-
-        # Rotate offset given rot_dict. We rotate the centroid
-        # around the boresight. It's q_bore * q_rot * q_off.
-        ang = np.radians(self.rot_dict['angle'])
-        q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
-        q_off = tools.quat_left_mult(q_rot, q_off)
-
-        tod_size = end - start  # size in samples
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
         # Find the indices to the pointing and ctime arrays.
@@ -2756,10 +2820,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # NOTE
         pa += np.pi
-
-        # Expose pointing offset for mapmaking. Not for ghosts.
-        if not beam.ghost:
-            beam.q_off = q_off
 
         # Fill complex array, i.e. the linearly polarized part
         # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
@@ -2886,13 +2946,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Notes
         -----
+        Populates following class attributes if beam_obj is provided:
+
+        spinmaps : dict
+            Dictionary constaining all spinmaps for main beam and 
+            possible ghosts.
+
         Uses minimum lmax value of beam and sky SWSH coefficients.
         Uses min value of max_spin and the mmax of beam object as azimuthal
         band-limit.
         '''
-
-        # NOTE it would be nice to have a symmetric beam option
-        # that only makes it run over n=0, -2 and 2.
 
         # This block iterates the function to create spinmaps for
         # the main beam and unique ghost beams (if present)
@@ -2991,7 +3054,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.
             func = np.zeros((N, 12*nside_spin**2), dtype=np.complex128)
             func_c = np.zeros((2*N-1, 12*nside_spin**2), dtype=np.complex128)
-
+            
         # Unpolarized sky and beam first.
         start = 0
         for sidx, s in enumerate(spin_values_unpol): # s are azimuthal modes in bls.
