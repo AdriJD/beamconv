@@ -546,7 +546,7 @@ class Instrument(MPIBase):
         else:
             self.beams += beams
 
-    def input_focal_plane(self, azs, els, polangs, fwhm, deads=None,
+    def input_focal_plane(self, azs, els, polangs, deads=None,
         combine=True, scatter=False, **kwargs):
         '''
         Create Beam objects for user-supplied pointing offsets and polangs
@@ -586,8 +586,21 @@ class Instrument(MPIBase):
         if deads is None:
             deads = np.zeros_like(azs).astype(bool)
 
+        if combine:
+            self.ndet += 2 * len(azs)
+            idxs = self.beams_idxs()
+            try:
+                idx= idxs.max() + 1
+            except ValueError:
+                # Empty list.
+                idx = 0
+        else:
+            self.ndet = 2 * nrow * ncol # A and B detectors.
+            idx = 0
+
+
         beams = []
-        for i, (az, el, polang, dead) in zip(azs, els, polangs, deads):
+        for i, (az, el, polang, dead) in enumerate(zip(azs, els, polangs, deads)):
 
             beam_a = Beam(az=az[0], el=el[0], name='det{}'.format(i),
                 polang=polang[0], dead=dead[0], pol='A', idx=i, **kwargs)
@@ -610,7 +623,7 @@ class Instrument(MPIBase):
             self.beams += beams
 
     def load_focal_plane(self, bdir, tag=None, no_pairs=False,
-            combine=True, scatter=False, polang_A=0., polang_B=90.,
+            combine=True, scatter=False, polang_A=0., polang_B=0.,
             print_list=False, file_names=None, **kwargs):
 
         '''
@@ -771,6 +784,11 @@ class Instrument(MPIBase):
                 polang_Bi = beam_opts_b.setdefault('polang', 0)
                 beam_opts_a['polang'] = polang_Ai + polang_A
                 beam_opts_b['polang'] = polang_Bi + polang_B
+
+                # if print_list:
+                #     print('{}, {}, {}, {}'.format(polang_Ai, polang_Bi, polang_A, polang_B))
+                #     print(beam_opts_a['polang'])
+                #     print(beam_opts_b['polang'])
 
                 if no_pairs:
                     beam_opts_b['dead'] = True
