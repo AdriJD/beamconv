@@ -2452,6 +2452,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             q_bore = self.azel2bore(az, el, None, None, lon,
                                          lat, self.ctime)
+
         self.flag = np.zeros_like(az, dtype=bool)
 
         if return_all:
@@ -2459,7 +2460,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def parse_scan_file(scan_file):
+    def parse_schedule_file(schedule_file):
         '''
 
         Read a text file with standard input and generate arrays that can be
@@ -2467,7 +2468,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         ---------
-        scan_file : file path (string)
+        schedule_file : file path (string)
 
 
         Returns
@@ -2521,7 +2522,7 @@ class ScanStrategy(Instrument, qp.QMap):
         chunknum = 0
         samplenum = 0
 
-        _, _, _, _, t0s, t1s = parse_scan_file(filename)
+        nces, az0s, az1s, els, t0s, t1s = parse_scan_file(filename)
 
         for i, (t0, t1) in enumerate(t0s, t1s):
 
@@ -2551,13 +2552,19 @@ class ScanStrategy(Instrument, qp.QMap):
         self.chunks = chunks
         self.ctime_starts = ctime_starts
 
-        return chunks
+        # Assigning attributes that will be used by schedule_ctime and
+        # schedule_scan
 
+        self.az0s = az0s
+        self.az1s = az1s
+        self.els = els
+        self.t0s = t0s
+        self.t1s = t1s
+
+        return chunks
 
     def schedule_ctime(self, **kwargs):
         '''
-        WORK IN PROGREES --- INCOMPLETE
-
         A function to produce unix time (ctime) for a given chunk
 
         Keyword arguments
@@ -2588,16 +2595,14 @@ class ScanStrategy(Instrument, qp.QMap):
             return_all=False, az_prf='triangle', **kwargs):
         '''
 
-        WORK IN PROGREES --- INCOMPLETE
-
         Reads in a schedule file following a certain format and procuces
         boresight quaternions.
 
         Keyword arguments
         -----------------
-        alpha : float
-            Angle between spin axis and precession axis in degree.
-            (default : 50.)
+        scan_speed : float [deg/s]
+            Scan speed in deg/s
+
 
 
         Returns
@@ -2605,74 +2610,102 @@ class ScanStrategy(Instrument, qp.QMap):
         (az, el, lon, lat,) q_bore : array-like
             Depending on return_all
 
-
         '''
 
-        nces, az0s, az1s, els, t0s, t1s = parse_scan_file(scan_file)
+        nsamp = self.ctime.size # ctime determines chunk size
 
-        lon_0 = self.lon
-        lat_0 = self.lat
-        ra0 = self.ra0
-        dec0 = self.dec0
+        # The idx to the last CES t0 before ctime[0]
+        idx_ces = next(x[0] for x in enumerate(self.t0s) if x[1] > self.ctime[0]) - 1
 
-        for i, (az0, az1, el, t0, t1) in enumerate(az0s, az1s, els, t0s, t1s):
+        # The last CES t0 before ctime[0]
+        t0_ces = self.t0s[idx_ces]
+        el0 = self.els[idx_ces]
+        dt = self.ctime[0] - t0_ces
+        idx = np.ceil(dt / self.fsamp)
 
-            chunk_size = t1 - t0
+        if self.az:
+            az0 = self.az0
 
-            ra0 = np.atleast_1d(ra0)
-            dec0 = np.atleast_1d(dec0)
+        flag0 = np.zeros(el0.size, dtype=bool)
 
-            # az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
-            #     self.lon, self.lat, ctime[::check_len])
+        az_throw = az1 - az0
 
-            flag0 = np.zeros(el0.size, dtype=bool)
+        # Scan boresight, note that it will slowly drift away from az0, el0.
+        if az_throw == 0:
+            az = np.zeros(chunk_size)
 
-            az_throw = az1 - az0
+        # NOTE, put these in seperate functions
+        elif az_prf == 'triangle':
 
-            # Scan boresight, note that it will slowly drift away from az0, el0.
-            if az_throw == 0:
-                az = np.zeros(chunk_size)
+            scan_half_period = az_throw / float(scan_speed)
+            nsamp_per_scan = int(scan_half_period / self.fsamp)
+            nsamp_per_period = 2*nsamp_per_scan-1
 
-            # NOTE, put these in seperate functions
-            elif az_prf == 'triangle':
+            phase = np.remainder(dt / float(self.fsamp), float(nsamp_per_period))
+            phase_idx = np.ceil(phase * nsamp_per_period)
 
-                scan_period = 2 * az_throw / float(scan_speed)
+            # Number of triangle scane in this chunk
+            nmult = np.ceil(nsamp / nsamp_per_period)
 
-                az = np.arange(p_len, dtype=float)
-                az *= (2 * np.pi / scan_period / float(self.fsamp))
-                np.sin(az, out=az)
-                np.arcsin(az, out=az)
-                az *= (az_throw / np.pi)
+            # One full triangle scan
+            az_single = np.hstack(np.linspace(az0, az1, nsamp_per_scan - 1, endpoint=Fales),
+                np.linspace(az1, az0, nsamp_per_scan), dtype=float)
 
-            elif az_prf == 'sawtooth':
+            az_full = np.roll(np.tile(az_single, nmult), phase_idx)
+            az = az_full[:nsamp]
 
-                # deg / s / (samp / s)
-                deg_per_samp = scan_speed / float(self.fsamp)
-                az = tools.sawtooth_wave(p_len, deg_per_samp, az_throw)
-                az -= az_throw / 2.
+        else:
+            raise ValueError('Other scan options currently not implemented')
 
-            # Slightly complicated way to add az to az0
-            # while avoiding expanding az0 to p_len.
-            az = az.reshape(nchecks, check_len)
-            az += az0[:, np.newaxis]
-            az = az.ravel()
-            az = az[:chunk_size] # Discard extra entries.
+        el = el0 * np.ones_like(az)
 
-            el = np.zeros((nchecks, check_len), dtype=float)
-            el += el0[:, np.newaxis]
-            el = el.ravel()
-            el = el[:chunk_size]
+        if self.mpi:
+            # Calculate boresight quaternion in parallel
+            chunk_size = nsamp
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = divmod(chunk_size,
+                                        self.mpi_size)
+            sub_size += quot
 
-            q_bore = self.azel2bore(az, el, None, None, lon, lat, self.ctime)
+            if remainder:
+                # give first ranks one extra quaternion
+                sub_size[:int(remainder)] += 1
+
+            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            sub_end = sub_start + sub_size[self.mpi_rank]
+
+            q_bore = np.empty(chunk_size * 4, dtype=float)
+
+            # calculate section of q_bore
+            q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                    el[sub_start:sub_end],
+                                    None, None,
+                                    self.lon,
+                                    self.lat,
+                                    self.ctime[sub_start:sub_end])
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # for the flattened quat array
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+
+            # combine all sections on all ranks
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            q_bore = q_bore.reshape(chunk_size, 4)
+
+        else:
+            q_bore = self.azel2bore(az, el, None, None, lon,
+                                         lat, self.ctime)
 
         self.flag = np.zeros_like(az, dtype=bool)
+
+
         if return_all:
             return az, el, lon, lat, q_bore
         else:
             return q_bore
-
-
-
 
     def rotate_hwp(self, **kwargs):
         '''
