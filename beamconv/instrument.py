@@ -2311,7 +2311,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def satellite_ctime(self, **kwargs):
         '''
-        Insert text
+        A function to produce unix time (ctime) for a given chunk
+
+        Keyword arguments
+        -----------------
+
+        kwargs : {chunk}
+
+
+        Returns
+        -------
+
+        ctime : ndarray
+            Unix time array. Size = (end - start)
         '''
 
         start = kwargs.pop('start')
@@ -2447,14 +2459,38 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def parse_scan_file(scan_file=''):
+    def parse_scan_file(scan_file):
         '''
 
-        WORK IN PROGREES --- INCOMPLETE
+        Read a text file with standard input and generate arrays that can be
+        circulated between
 
-        Code the parses a text file with standard scanning parameters and outputs
-        values that are used by schedule_scan
+        Keyword arguments
+        ---------
+        scan_file : file path (string)
 
+
+        Returns
+        -------
+
+        nces : ndarray (int)
+            A monotonically increasing array of integers corresponding
+            to scan number
+
+        az0s : ndarray (float)
+            Lower limit on azimuthal range
+
+        az1s : ndarray (float)
+            Upper limit on azimuthal range
+
+        els : ndarray (float)
+            Boresight elevation value for the scan
+
+        t0s : ndarray (float)
+            Start times for each scan (unix time)
+
+        t1s : ndarray (float)
+            End times for each scan (unix time)
 
         '''
 
@@ -2481,15 +2517,15 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         chunks = []
+        ctime_starts = []
         chunknum = 0
         samplenum = 0
 
-        nces, az0s, az1s, els, t0s, t1s = parse_scan_file(scan_file)
+        _, _, _, _, t0s, t1s = parse_scan_file(filename)
 
-        for i, (az0, az1, el, t0, t1) in enumerate(az0s, az1s, els, t0s, t1s):
+        for i, (t0, t1) in enumerate(t0s, t1s):
 
             nsamp = (t1 - t0) * self.fsamp
-
             if not chunksize or chunksize >= nsamp:
                 chunksize = int(nsamp)
 
@@ -2497,33 +2533,56 @@ class ScanStrategy(Instrument, qp.QMap):
             nchunks = int(np.ceil(nsamp / float(chunksize)))
 
             start = samplenum
+            tstart = t0
             for cidx, chunk in enumerate(range(nchunks)):
                 end = start + chunksize
-                end = nsamp if end >= (nsamp) else end
+                if cidx == nchunks-1:
+                    end =  start + nsamp
+
                 chunks.append(dict(start=start, end=end, cidx=chunknum + cidx))
+                ctime_starts.append(tstart)
+
                 start += chunksize
+                tstart += float(chunksize) / self.fsamp
 
             chunknum += nchunks
             samplenum = end
 
         self.chunks = chunks
+        self.ctime_starts = ctime_starts
+
         return chunks
+
 
     def schedule_ctime(self, **kwargs):
         '''
         WORK IN PROGREES --- INCOMPLETE
 
+        A function to produce unix time (ctime) for a given chunk
+
+        Keyword arguments
+        -----------------
+
+        kwargs : {chunk}
+
+        Returns
+        -------
+
+        ctime : ndarray
+            Unix time array. Size = (end - start)
+
         '''
+
+        if self.ctime_starts is None:
+            raise ValueError('Have to partition schedule file first')
 
         start = kwargs.pop('start')
         end = kwargs.pop('end')
+        cidx = kwargs.pop('cidx')
 
-        ctime = np.arange(start, end, dtype=float)
-        ctime /= float(self.fsamp)
-        ctime += self.ctime0
+        ctime = self.ctime_starts[cidx] + np.arange(end-start, dtype=float) / float(self.fsamp)
 
         return ctime
-
 
     def schedule_scan(self, scan_file=None, scan_speed=2.5,
             return_all=False, az_prf='triangle', **kwargs):
