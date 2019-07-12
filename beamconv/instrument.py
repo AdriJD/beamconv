@@ -2536,7 +2536,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         nces, az0s, az1s, els, t0s, t1s = self.parse_schedule_file(filename)
 
-        for i, (t0, t1) in enumerate(t0s, t1s):
+        for i, (t0, t1) in enumerate(zip(t0s, t1s)):
 
             nsamp = (t1 - t0) * self.fsamp
             if not chunksize or chunksize >= nsamp:
@@ -2552,7 +2552,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 if cidx == nchunks-1:
                     end =  start + nsamp
 
-                chunks.append(dict(start=start, end=end, cidx=chunknum + cidx))
+                chunks.append(dict(start=int(start), end=int(end), cidx=int(chunknum + cidx)))
                 ctime_starts.append(tstart)
 
                 start += chunksize
