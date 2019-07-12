@@ -2502,7 +2502,7 @@ class ScanStrategy(Instrument, qp.QMap):
         ### Placeholder while we debug the rest of the code
         az0s = np.array([214.98, 202.93, 215.67])
         az1s = np.array([250.28, 249.60, 250.24])
-        els = np.array(53.09, 59.63, 52.40)
+        els = np.array([53.09, 59.63, 52.40])
         t0s = mjd2ctime(np.array([58484.000694, 58484.056944, 58484.132639]))
         t1s = mjd2ctime(np.array([58484.055556, 58484.131250, 58484.186806]))
 
