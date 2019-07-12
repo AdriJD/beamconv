@@ -2447,6 +2447,174 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
+    def parse_scan_file(scan_file=''):
+        '''
+
+        WORK IN PROGREES --- INCOMPLETE
+
+        Code the parses a text file with standard scanning parameters and outputs
+        values that are used by schedule_scan
+
+
+        '''
+
+        pass
+
+
+    def partition_schedule_file(self, filename='', chunksize=None):
+        '''
+        Divide up the mission in equal-sized chunks
+        of nsample / chunksize (final chunk can be
+        smaller).
+
+        Keyword arguments
+        ---------
+        chunksize : int
+            Chunk size in samples. If left None, use
+            full mission length (default : None)
+
+        Returns
+        -------
+        chunks : list of dicts
+            Dictionary with start, end indices and index of each
+            chunk.
+        '''
+
+        chunks = []
+        chunknum = 0
+        samplenum = 0
+
+        nces, az0s, az1s, els, t0s, t1s = parse_scan_file(scan_file)
+
+        for i, (az0, az1, el, t0, t1) in enumerate(az0s, az1s, els, t0s, t1s):
+
+            nsamp = (t1 - t0) * self.fsamp
+
+            if not chunksize or chunksize >= nsamp:
+                chunksize = int(nsamp)
+
+            chunksize = int(chunksize)
+            nchunks = int(np.ceil(nsamp / float(chunksize)))
+
+            start = samplenum
+            for cidx, chunk in enumerate(range(nchunks)):
+                end = start + chunksize
+                end = nsamp if end >= (nsamp) else end
+                chunks.append(dict(start=start, end=end, cidx=chunknum + cidx))
+                start += chunksize
+
+            chunknum += nchunks
+            samplenum = end
+
+        self.chunks = chunks
+        return chunks
+
+    def schedule_ctime(self, **kwargs):
+        '''
+        WORK IN PROGREES --- INCOMPLETE
+
+        '''
+
+        start = kwargs.pop('start')
+        end = kwargs.pop('end')
+
+        ctime = np.arange(start, end, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
+
+        return ctime
+
+
+    def schedule_scan(self, scan_file=None, scan_speed=2.5,
+            return_all=False, az_prf='triangle', **kwargs):
+        '''
+
+        WORK IN PROGREES --- INCOMPLETE
+
+        Reads in a schedule file following a certain format and procuces
+        boresight quaternions.
+
+        Keyword arguments
+        -----------------
+        alpha : float
+            Angle between spin axis and precession axis in degree.
+            (default : 50.)
+
+
+        Returns
+        -------
+        (az, el, lon, lat,) q_bore : array-like
+            Depending on return_all
+
+
+        '''
+
+        nces, az0s, az1s, els, t0s, t1s = parse_scan_file(scan_file)
+
+        lon_0 = self.lon
+        lat_0 = self.lat
+        ra0 = self.ra0
+        dec0 = self.dec0
+
+        for i, (az0, az1, el, t0, t1) in enumerate(az0s, az1s, els, t0s, t1s):
+
+            chunk_size = t1 - t0
+
+            ra0 = np.atleast_1d(ra0)
+            dec0 = np.atleast_1d(dec0)
+
+            # az0, el0, _ = self.radec2azel(ra0[0], dec0[0], 0,
+            #     self.lon, self.lat, ctime[::check_len])
+
+            flag0 = np.zeros(el0.size, dtype=bool)
+
+            az_throw = az1 - az0
+
+            # Scan boresight, note that it will slowly drift away from az0, el0.
+            if az_throw == 0:
+                az = np.zeros(chunk_size)
+
+            # NOTE, put these in seperate functions
+            elif az_prf == 'triangle':
+
+                scan_period = 2 * az_throw / float(scan_speed)
+
+                az = np.arange(p_len, dtype=float)
+                az *= (2 * np.pi / scan_period / float(self.fsamp))
+                np.sin(az, out=az)
+                np.arcsin(az, out=az)
+                az *= (az_throw / np.pi)
+
+            elif az_prf == 'sawtooth':
+
+                # deg / s / (samp / s)
+                deg_per_samp = scan_speed / float(self.fsamp)
+                az = tools.sawtooth_wave(p_len, deg_per_samp, az_throw)
+                az -= az_throw / 2.
+
+            # Slightly complicated way to add az to az0
+            # while avoiding expanding az0 to p_len.
+            az = az.reshape(nchecks, check_len)
+            az += az0[:, np.newaxis]
+            az = az.ravel()
+            az = az[:chunk_size] # Discard extra entries.
+
+            el = np.zeros((nchecks, check_len), dtype=float)
+            el += el0[:, np.newaxis]
+            el = el.ravel()
+            el = el[:chunk_size]
+
+            q_bore = self.azel2bore(az, el, None, None, lon, lat, self.ctime)
+
+        self.flag = np.zeros_like(az, dtype=bool)
+        if return_all:
+            return az, el, lon, lat, q_bore
+        else:
+            return q_bore
+
+
+
+
     def rotate_hwp(self, **kwargs):
         '''
         Evolve the HWP forward by a number of samples
