@@ -2460,7 +2460,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def parse_schedule_file(schedule_file):
+    def parse_schedule_file(self, schedule_file):
         '''
 
         Read a text file with standard input and generate arrays that can be
