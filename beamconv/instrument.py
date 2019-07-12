@@ -2534,7 +2534,7 @@ class ScanStrategy(Instrument, qp.QMap):
         chunknum = 0
         samplenum = 0
 
-        nces, az0s, az1s, els, t0s, t1s = parse_scan_file(filename)
+        nces, az0s, az1s, els, t0s, t1s = parse_schedule_file(filename)
 
         for i, (t0, t1) in enumerate(t0s, t1s):
 
