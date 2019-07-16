@@ -11,7 +11,6 @@ import healpy as hp
 from . import tools
 from .detector import Beam
 
-
 class MPIBase(object):
     '''
     Parent class for MPI related stuff
@@ -2149,15 +2148,15 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
-        cidx = kwargs.pop('hwpang', None)
+        hwpang = kwargs.pop('hwpang', None)
 
         if kwargs:
             raise TypeError("constant_el_scan() got unexpected "
-                                "arguments '{}'".format(list(kwargs)))
+                "arguments '{}'".format(list(kwargs)))
 
         if self.ext_point:
             # Use external pointing, so skip rest of function.
-            self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
+            self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
             return
@@ -2460,7 +2459,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def parse_schedule_file(self, schedule_file):
+    def parse_schedule_file(self, schedule_file=None):
         '''
 
         Read a text file with standard input and generate arrays that can be
@@ -2499,12 +2498,23 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return (mjd - 40587.) * 86400.0
 
-        ### Placeholder while we debug the rest of the code
-        az0s = np.array([214.98, 202.93, 215.67])
-        az1s = np.array([250.28, 249.60, 250.24])
-        els = np.array([53.09, 59.63, 52.40])
-        t0s = mjd2ctime(np.array([58484.000694, 58484.056944, 58484.132639]))
-        t1s = mjd2ctime(np.array([58484.055556, 58484.131250, 58484.186806]))
+        if schedule_file is None:
+
+            ### Placeholder while we debug the rest of the code
+            t0s = mjd2ctime(np.array([58484.000694, 58484.056944, 58484.132639]))
+            t1s = mjd2ctime(np.array([58484.055556, 58484.131250, 58484.186806]))
+            az0s = np.array([214.98, 202.93, 215.67])
+            az1s = np.array([250.28, 249.60, 250.24])
+            els = np.array([53.09, 59.63, 52.40])
+
+        else:
+
+            data = np.loadtxt(schedule_file)
+            t0s  = mjd2ctime(data[:, 0])
+            t1s  = mjd2ctime(data[:, 1])
+            az0s = data[:, 2]
+            az1s = data[:, 3]
+            els  = data[:, 4]
 
         N = len(az0s)
 
@@ -2536,29 +2546,34 @@ class ScanStrategy(Instrument, qp.QMap):
 
         nces, az0s, az1s, els, t0s, t1s = self.parse_schedule_file(filename)
 
+        nsamp = self.nsamp
+
         for i, (t0, t1) in enumerate(zip(t0s, t1s)):
 
-            nsamp = (t1 - t0) * self.fsamp
-            if not chunksize or chunksize >= nsamp:
-                chunksize = int(nsamp)
+            nsamp4chunk = (t1 - t0) * self.fsamp
+            if not chunksize or chunksize >= nsamp4chunk:
+                chunksize = int(nsamp4chunk)
 
             chunksize = int(chunksize)
-            nchunks = int(np.ceil(nsamp / float(chunksize)))
+            nchunks = int(np.ceil(nsamp4chunk / float(chunksize)))
 
             start = samplenum
             tstart = t0
             for cidx, chunk in enumerate(range(nchunks)):
                 end = start + chunksize
                 if cidx == nchunks-1:
-                    end =  start + nsamp
+                    end =  start + nsamp4chunk
 
                 chunks.append(dict(start=int(start), end=int(end), cidx=int(chunknum + cidx)))
                 ctime_starts.append(tstart)
 
                 start += chunksize
                 tstart += float(chunksize) / self.fsamp
+                chunknum += 1
 
-            chunknum += nchunks
+                if start >= nsamp:
+                    break
+
             samplenum = end
 
         self.chunks = chunks
@@ -2567,11 +2582,11 @@ class ScanStrategy(Instrument, qp.QMap):
         # Assigning attributes that will be used by schedule_ctime and
         # schedule_scan
 
-        self.az0s = az0s
-        self.az1s = az1s
-        self.els = els
-        self.t0s = t0s
-        self.t1s = t1s
+        self.az0s = az0s[:chunknum]
+        self.az1s = az1s[:chunknum]
+        self.els = els[:chunknum]
+        self.t0s = t0s[:chunknum]
+        self.t1s = t1s[:chunknum]
 
         return chunks
 
@@ -2595,11 +2610,14 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.ctime_starts is None:
             raise ValueError('Have to partition schedule file first')
 
+        print(kwargs)
+        print(kwargs.keys())
         start = kwargs.pop('start')
         end = kwargs.pop('end')
         cidx = kwargs.pop('cidx')
 
-        ctime = self.ctime_starts[cidx] + np.arange(end-start, dtype=float) / float(self.fsamp)
+        ctime = self.ctime_starts[cidx] + \
+            np.arange(end-start, dtype=float) / float(self.fsamp)
 
         return ctime
 
@@ -2633,10 +2651,9 @@ class ScanStrategy(Instrument, qp.QMap):
         t0_ces = self.t0s[idx_ces]
         el0 = self.els[idx_ces]
         dt = self.ctime[0] - t0_ces
-        idx = np.ceil(dt / self.fsamp)
-
-        if self.az:
-            az0 = self.az0
+        # idx = np.ceil(dt / self.fsamp)
+        az0 = self.az0s[idx_ces]
+        az1 = self.az1s[idx_ces]
 
         flag0 = np.zeros(el0.size, dtype=bool)
 
@@ -2657,13 +2674,13 @@ class ScanStrategy(Instrument, qp.QMap):
             phase_idx = np.ceil(phase * nsamp_per_period)
 
             # Number of triangle scane in this chunk
-            nmult = np.ceil(nsamp / nsamp_per_period)
+            nmult = np.ceil(float(nsamp) / nsamp_per_period)
 
             # One full triangle scan
-            az_single = np.hstack(np.linspace(az0, az1, nsamp_per_scan - 1, endpoint=Fales),
-                np.linspace(az1, az0, nsamp_per_scan), dtype=float)
+            az_single = np.hstack((np.linspace(az0, az1, nsamp_per_scan - 1, endpoint=False),
+                np.linspace(az1, az0, nsamp_per_scan, dtype=float)))
 
-            az_full = np.roll(np.tile(az_single, nmult), phase_idx)
+            az_full = np.roll(np.tile(az_single, int(nmult)), int(phase_idx))
             az = az_full[:nsamp]
 
         else:
@@ -2708,8 +2725,8 @@ class ScanStrategy(Instrument, qp.QMap):
             q_bore = q_bore.reshape(chunk_size, 4)
 
         else:
-            q_bore = self.azel2bore(az, el, None, None, lon,
-                                         lat, self.ctime)
+            q_bore = self.azel2bore(az, el, None, None, self.lon,
+                                         self.lat, self.ctime)
 
         self.flag = np.zeros_like(az, dtype=bool)
 
@@ -3012,9 +3029,6 @@ class ScanStrategy(Instrument, qp.QMap):
             Add resulting TOD to existing tod attribute and do not
             internally store the detector offset pointing.
             (default: False)
-        cidx : int, None
-            Index to `chunks` attribute. Only needed when
-            scanning a subset of a chunk (default : None)
         interp : bool
             If set, use bi-linear interpolation to obtain TOD.
             (default : False)
@@ -3194,6 +3208,11 @@ class ScanStrategy(Instrument, qp.QMap):
                 tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
                          * expipan
             else:
+                print('here')
+                print(nidx)
+                print(pix)
+                print(np.shape(func_c[nidx,pix]))
+                print(np.shape(expipan))
                 tod_c += func_c[nidx,pix] * expipan
 
         # Check for HWP angle array.
