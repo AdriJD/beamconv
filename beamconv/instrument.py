@@ -784,11 +784,6 @@ class Instrument(MPIBase):
                 beam_opts_a['polang'] = polang_Ai + polang_A
                 beam_opts_b['polang'] = polang_Bi + polang_B
 
-                # if print_list:
-                #     print('{}, {}, {}, {}'.format(polang_Ai, polang_Bi, polang_A, polang_B))
-                #     print(beam_opts_a['polang'])
-                #     print(beam_opts_b['polang'])
-
                 if no_pairs:
                     beam_opts_b['dead'] = True
 
@@ -1865,6 +1860,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Note, not used if memmap is not initialized.
                 if bidx > 0:
                     ces_opts.update(dict(use_precomputed=True))
+
                 self.constant_el_scan(**ces_opts)
 
                 # If needed, allocate arrays for data.
@@ -1880,6 +1876,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
+
+                # print(subchunks)
                 for subchunk in subchunks:
 
                     if verbose == 2:
@@ -2543,12 +2541,15 @@ class ScanStrategy(Instrument, qp.QMap):
         ctime_starts = []
         chunknum = 0
         samplenum = 0
+        done_chunking = False
+        nsamp = self.nsamp
 
         nces, az0s, az1s, els, t0s, t1s = self.parse_schedule_file(filename)
 
-        nsamp = self.nsamp
-
         for i, (t0, t1) in enumerate(zip(t0s, t1s)):
+
+            if done_chunking:
+                break
 
             nsamp4chunk = (t1 - t0) * self.fsamp
             if not chunksize or chunksize >= nsamp4chunk:
@@ -2559,20 +2560,26 @@ class ScanStrategy(Instrument, qp.QMap):
 
             start = samplenum
             tstart = t0
-            for cidx, chunk in enumerate(range(nchunks)):
+            for cidx in range(nchunks): #, chunk in enumerate(range(nchunks)):
                 end = start + chunksize
                 if cidx == nchunks-1:
                     end =  start + nsamp4chunk
 
-                chunks.append(dict(start=int(start), end=int(end), cidx=int(chunknum + cidx)))
+                chunks.append(dict(start=int(start), end=int(end),
+                    cidx=int(chunknum + cidx)))
                 ctime_starts.append(tstart)
 
                 start += chunksize
                 tstart += float(chunksize) / self.fsamp
-                chunknum += 1
 
                 if start >= nsamp:
+                    done_chunking=True
                     break
+
+            if done_chunking:
+                chunknum += nchunks
+            else:
+                chunknum += cidx
 
             samplenum = end
 
@@ -2610,8 +2617,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.ctime_starts is None:
             raise ValueError('Have to partition schedule file first')
 
-        print(kwargs)
-        print(kwargs.keys())
         start = kwargs.pop('start')
         end = kwargs.pop('end')
         cidx = kwargs.pop('cidx')
@@ -2893,7 +2898,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-                       save_point=False, skip_scan=False, **kwargs):
+                           save_point=False, skip_scan=False, **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -3208,11 +3213,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
                          * expipan
             else:
-                print('here')
-                print(nidx)
-                print(pix)
-                print(np.shape(func_c[nidx,pix]))
-                print(np.shape(expipan))
                 tod_c += func_c[nidx,pix] * expipan
 
         # Check for HWP angle array.
