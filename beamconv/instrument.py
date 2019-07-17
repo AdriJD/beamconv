@@ -2155,7 +2155,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.ext_point:
             # Use external pointing, so skip rest of function.
             self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
-            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
+            self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, **q_bore_kwargs)
 
             return
 
@@ -2647,9 +2647,19 @@ class ScanStrategy(Instrument, qp.QMap):
         nsamp = self.ctime.size # ctime determines chunk size
 
         # The idx to the last CES t0 before ctime[0]
-        idx_ces = next(x[0] for x in enumerate(self.t0s) if x[1] > self.ctime[0]) - 1
+        idx_ces = kwargs.pop('cidx')
 
-        # The last CES t0 before ctime[0]
+        # print('DEBUG')
+        # print('idx_ces')
+        # print(idx_ces)
+        # print(kwargs)
+        # print(len(self.ctime))
+        # print('ctime')
+        # print(self.ctime)
+        # print('t0s')
+        # print(self.t0s)
+        # print('ctime_starts')
+        # print(self.ctime_starts)
         t0_ces = self.t0s[idx_ces]
         el0 = self.els[idx_ces]
         dt = self.ctime[0] - t0_ces
