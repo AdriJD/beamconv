@@ -2661,9 +2661,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         az_throw = az1 - az0
 
-        # print('[DEBUG] az_throw')
-        # print(az_throw)
-
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if az_throw == 0:
             az = np.zeros(chunk_size)
@@ -2673,10 +2670,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
             scan_half_period = az_throw / float(scan_speed)
             nsamp_per_scan = int(scan_half_period * self.fsamp)
-
-            # print('[DEBUG] scan_half_period')
-            # print(scan_half_period)
-            # print(nsamp_per_scan)
 
             nsamp_per_period = 2*nsamp_per_scan-1
 
@@ -2689,10 +2682,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # One full triangle scan
             az_single = np.hstack((np.linspace(az0, az1, nsamp_per_scan - 1, endpoint=False),
                 np.linspace(az1, az0, nsamp_per_scan, dtype=float)))
-
-            # print('[DEBUG] az_single')
-            # print(az_single)
-
 
             az_full = np.roll(np.tile(az_single, int(nmult)), int(phase_idx))
             az = az_full[:nsamp]
@@ -2743,12 +2732,6 @@ class ScanStrategy(Instrument, qp.QMap):
                                          self.lat, self.ctime)
 
         self.flag = np.zeros_like(az, dtype=bool)
-
-        # print('DEBUG:')
-        # print('az')
-        # print(az)
-        # print(el)
-        # print(q_bore)
 
         if return_all:
             return az, el, self.lon, self.lat, q_bore
