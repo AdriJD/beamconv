@@ -2604,13 +2604,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Assigning attributes that will be used by schedule_ctime and
         # schedule_scan
-
-        # self.az0s = az0s[:chunknum]
-        # self.az1s = az1s[:chunknum]
-        # self.els = els[:chunknum]
-        # self.t0s = t0s[:chunknum]
-        # self.t1s = t1s[:chunknum]
-
         self.az0s = az0i
         self.az1s = az1i
         self.els = eli
@@ -2673,17 +2666,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # The idx to the last CES t0 before ctime[0]
         idx_ces = kwargs.pop('cidx')
 
-        # print('DEBUG')
-        # print('idx_ces')
-        # print(idx_ces)
-        # print(kwargs)
-        # print(len(self.ctime))
-        # print('ctime')
-        # print(self.ctime)
-        # print('t0s')
-        # print(self.t0s)
-        # print('ctime_starts')
-        # print(self.ctime_starts)
+
         t0_ces = self.t0s[idx_ces]
         el0 = self.els[idx_ces]
         dt = self.ctime[0] - t0_ces
@@ -2698,23 +2681,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             az_throw = az1 - az0
 
-        if az_throw < 0.:
-
-            print('az0')
-            print(az0)
-            print('az1')
-            print(az1)
-            print('el0')
-            print(el0)
-            print('t0_ces')
-            print(t0_ces)
-            print('len(self.az0s)')
-            print(len(self.az0s))
-            print('idx_ces')
-            print(idx_ces)
-
-            raise ValueError('az_throw has to be positive')
-
+        assert az_throw > 0., 'az_throw should be positive'
 
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if az_throw == 0:
@@ -2726,11 +2693,7 @@ class ScanStrategy(Instrument, qp.QMap):
             scan_half_period = az_throw / float(scan_speed)
             nsamp_per_scan = int(scan_half_period * self.fsamp)
 
-            if nsamp_per_scan <= 0:
-                raise ValueError('nsamp_per_scan has to be positive')
-                print('az_throw')
-                print(az_throw)
-                print(scan_speed)
+            assert nsamp_per_scan > 0, 'number of samples per scan should be positive'
 
             nsamp_per_period = 2*nsamp_per_scan-1
 
