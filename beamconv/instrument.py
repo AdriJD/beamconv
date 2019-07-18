@@ -2517,6 +2517,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return np.arange(N), az0s, az1s, els, t0s, t1s
 
+
     def partition_schedule_file(self, filename='', chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
@@ -2525,7 +2526,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         ---------
-        chunksize : int
+        chunksize : interp
             Chunk size in samples. If left None, use
             full mission length (default : None)
 
@@ -2544,41 +2545,57 @@ class ScanStrategy(Instrument, qp.QMap):
         nsamp = self.nsamp
 
         nces, az0s, az1s, els, t0s, t1s = self.parse_schedule_file(filename)
+        az0i, az1i, eli, t0i, t1i = [], [], [], [], []
 
         for i, (t0, t1) in enumerate(zip(t0s, t1s)):
+            print('CES {}/{}'.format(i, len(t0s)))
+            print('Chunksize = {}'.format(chunksize))
 
             if done_chunking:
                 break
 
-            nsamp4chunk = (t1 - t0) * self.fsamp
-            if not chunksize or chunksize >= nsamp4chunk:
-                chunksize = int(nsamp4chunk)
-
-            chunksize = int(chunksize)
-            nchunks = int(np.ceil(nsamp4chunk / float(chunksize)))
+            nsamp_full_ces = (t1 - t0) * self.fsamp
+            if not chunksize or chunksize >= nsamp_full_ces:
+                print('Chunk larger than nsamp_full_ces')
+                chunksize2use = int(nsamp_full_ces)
+                nchunks = 1
+            else:
+                print('nsamp_full_ces | chunksize')
+                print('{} | {}'.format(nsamp_full_ces, chunksize))
+                chunksize2use = int(chunksize)
+                nchunks = int(np.ceil(nsamp_full_ces / float(chunksize2use)))
 
             start = samplenum
             tstart = t0
             for cidx in range(nchunks):
-                end = start + chunksize
+                end = start + chunksize2use
                 if cidx == nchunks-1:
-                    end =  start + nsamp4chunk
+                    end =  start + nsamp_full_ces
 
                 chunks.append(dict(start=int(start), end=int(end),
                     cidx=int(chunknum + cidx)))
+
+                az0i.append(az0s[i])
+                az1i.append(az1s[i])
+                eli.append(els[i])
+                t0i.append(t0s[i])
+                t1i.append(t1s[i])
+
                 ctime_starts.append(tstart)
 
-                start += chunksize
-                tstart += float(chunksize) / self.fsamp
+                start += chunksize2use
+                tstart += float(chunksize2use) / self.fsamp
 
                 if start >= nsamp:
                     done_chunking=True
                     break
 
             if done_chunking:
-                chunknum += nchunks
-            else:
+                # chunknum += nchunks
                 chunknum += cidx+1
+            else:
+                # chunknum += cidx+1
+                chunknum += nchunks
 
             samplenum = end
 
@@ -2588,11 +2605,18 @@ class ScanStrategy(Instrument, qp.QMap):
         # Assigning attributes that will be used by schedule_ctime and
         # schedule_scan
 
-        self.az0s = az0s[:chunknum]
-        self.az1s = az1s[:chunknum]
-        self.els = els[:chunknum]
-        self.t0s = t0s[:chunknum]
-        self.t1s = t1s[:chunknum]
+        # self.az0s = az0s[:chunknum]
+        # self.az1s = az1s[:chunknum]
+        # self.els = els[:chunknum]
+        # self.t0s = t0s[:chunknum]
+        # self.t1s = t1s[:chunknum]
+
+        self.az0s = az0i
+        self.az1s = az1i
+        self.els = eli
+        self.t0s = t0i
+        self.t1s = t1i
+
 
         return chunks
 
@@ -2669,7 +2693,28 @@ class ScanStrategy(Instrument, qp.QMap):
 
         flag0 = np.zeros(el0.size, dtype=bool)
 
-        az_throw = az1 - az0
+        if az0 > az1:
+            az_throw = (360-az0) + az1
+        else:
+            az_throw = az1 - az0
+
+        if az_throw < 0.:
+
+            print('az0')
+            print(az0)
+            print('az1')
+            print(az1)
+            print('el0')
+            print(el0)
+            print('t0_ces')
+            print(t0_ces)
+            print('len(self.az0s)')
+            print(len(self.az0s))
+            print('idx_ces')
+            print(idx_ces)
+
+            raise ValueError('az_throw has to be positive')
+
 
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if az_throw == 0:
@@ -2680,6 +2725,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
             scan_half_period = az_throw / float(scan_speed)
             nsamp_per_scan = int(scan_half_period * self.fsamp)
+
+            if nsamp_per_scan <= 0:
+                raise ValueError('nsamp_per_scan has to be positive')
+                print('az_throw')
+                print(az_throw)
+                print(scan_speed)
 
             nsamp_per_period = 2*nsamp_per_scan-1
 
