@@ -279,8 +279,8 @@ class Instrument(MPIBase):
             self.lon = 169.15
 
         elif location == 'atacama':
-            self.lat = -22.96
-            self.lon = -67.79
+            self.lat = -22.958
+            self.lon = -67.786
 
         elif location == 'space':
             self.lat = None
@@ -2559,7 +2559,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             start = samplenum
             tstart = t0
-            for cidx in range(nchunks): 
+            for cidx in range(nchunks):
                 end = start + chunksize
                 if cidx == nchunks-1:
                     end =  start + nsamp4chunk
