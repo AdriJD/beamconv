@@ -180,7 +180,7 @@ class TestTools(unittest.TestCase):
 
             self.assertEqual(pair[1].az, self.beam_opts['az'])
             self.assertEqual(pair[1].el, self.beam_opts['el'])
-            self.assertEqual(pair[1].polang, self.beam_opts['polang']+90)
+            self.assertEqual(pair[1].polang, self.beam_opts['polang'])
             self.assertEqual(pair[1].btype, self.beam_opts['btype'])
             self.assertEqual(pair[1].amplitude, self.beam_opts['amplitude'])
             self.assertEqual(pair[1].po_file, self.beam_opts['po_file'])
@@ -193,7 +193,7 @@ class TestTools(unittest.TestCase):
         self.assertEqual(instr.beams[2][0].az, 1)
         self.assertEqual(instr.beams[2][0].el, 1)
         self.assertEqual(instr.beams[2][0].polang, 1000)
-        self.assertEqual(instr.beams[2][1].polang, 1090)
+        self.assertEqual(instr.beams[2][1].polang, 1000)
 
         # Test whether you can change btype when loading up beam.
         instr.load_focal_plane(test_fpu_dir, btype='EG')
@@ -207,7 +207,7 @@ class TestTools(unittest.TestCase):
         instr.load_focal_plane(test_fpu_dir, combine=False,
                                polang=10)
         self.assertEqual(instr.beams[0][0].polang, 10)
-        self.assertEqual(instr.beams[0][1].polang, 100)
+        self.assertEqual(instr.beams[0][1].polang, 10)
 
         instr.load_focal_plane(test_fpu_dir, combine=False,
                                polang=10, polang_A=20,

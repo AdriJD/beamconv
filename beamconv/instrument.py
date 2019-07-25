@@ -656,7 +656,7 @@ class Instrument(MPIBase):
             Added to existing or provided polang. (default: 0.)
         polang_B : float
             Polarization angle of b detector in pair [deg].
-            Added to existing or provided polang. (default: 90.)
+            Added to existing or provided polang. (default: 0.)
         file_names : list, None
             List of file names in directory that are loaded.
             No .pkl extension needed. Ignored if None. (default: None)
