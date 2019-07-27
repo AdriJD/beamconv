@@ -14,7 +14,7 @@ binned on the sphere.
 
 ### Usage
 
-See example scripts [`beamconv/test.py`](../../tree/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../../tree/master/notebooks). In particular, we suggest that the user try running [`notebooks/introduction.ipynb`] followed by [`notebooks/simple_scan.ipynb`].
+See example scripts [`beamconv/test.py`](../../tree/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../../tree/master/notebooks). In particular, we suggest that the user try running [`notebooks/introduction.ipynb`](../../tree/master/notebooks/introduction.ipynb) followed by [`notebooks/simple_scan.ipynb`](../../tree/master/notebooks/simple_scan.ipynb).
 
 ### Dependencies
 Apart from the standard libraries, [NumPy](https://github.com/numpy/numpy), [Healpy](https://github.com/healpy/healpy), and [Matplotlib](https://github.com/matplotlib/matplotlib), this code makes use of [qpoint](https://github.com/arahlin/qpoint), a lightweight quaternion-based library for telescope pointing, written by Sasha Rahlin. The code has been tested with Python 2.7 and 3.6.
