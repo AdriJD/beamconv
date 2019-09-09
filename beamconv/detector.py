@@ -309,7 +309,7 @@ class Beam(object):
             if not ext:
                 # Assume .npy extension
                 ext = '.npy'
-            blm = np.load(os.path.join(pname+ext))
+            blm = np.load(os.path.join(pname+ext), allow_pickle=True)
 
         except IOError:
             if not ext:
