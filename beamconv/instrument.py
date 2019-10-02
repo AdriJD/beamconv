@@ -3242,7 +3242,15 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             hwp_ang = self.hwp_ang
 
-        # Modulate by HWP angle and polarization angle.
+        # Modulate by HWP angle and polarization angle. 
+        #-----------------------------------------------NEW--------------------
+        # NEW: Pseudo-code comments to account for HWP non-idealities
+        # ang_of_inci = np.interp(beam.el, Jon_physical_optics[elevation], Jon_physical_optics[incidence])
+        # frequencies = beam.sensitive_freq needs to be treated properly
+        # MuellerIQU = Muellerformalism(ang_of_inci, frequencies, hwp_ang)
+        #tod = np.real(MuellerIQU) ???
+        #
+        #---------------------------------------------END-NEW-------------------
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         tod = np.real(tod_c) # Note, shares memory with tod_c.
