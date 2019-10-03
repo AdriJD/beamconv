@@ -3243,46 +3243,13 @@ class ScanStrategy(Instrument, qp.QMap):
             hwp_ang = self.hwp_ang
 
         # Modulate by HWP angle and polarization angle. 
-        #-----------------------------------------------NEW--------------------
-        # NEW: Pseudo-code comments to account for HWP non-idealities
-        # ang_of_inci = np.interp(beam.el, Jon_physical_optics[elevation], Jon_physical_optics[incidence])
-        # frequencies = beam.sensitive_freq needs to be treated properly
-        # MuellerIQU = Muellerformalism(ang_of_inci, frequencies, hwp_ang)
-        #tod = np.real(MuellerIQU) ???
-        #
-        #---------------------------------------------END-NEW-------------------
-        expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-        tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        tod = np.real(tod_c) # Note, shares memory with tod_c.
-
-        # Add unpolarized tod.
-        # Reset starting point recursion.
-        # Note, if beam.symmetric=True, expipa is not initialized, so
-        # following will automatically crash if s_vals != [0]
-        expipan[:] = 1.
-
-        for n in s_vals:
-
-            # Equal to func exp(n pa) + c.c (pa: position angle).
-            if n == 0:
-                if interp:
-                    tod += np.real(hp.get_interp_val(func[n], dec, ra))
-                else:
-                    tod += np.real(func[n,pix])
-
-            if n > 0:
-                expipan *= expipa
-
-                if interp:
-                    tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
-                                   * expipan)
-                else:
-                    tod += 2 * np.real(func[n,pix] * expipan)
 
         if add_to_tod and hasattr(self, 'tod'):
-            self.tod += tod
+            self.tod += _HWP_modulation(self, HWP_type='ideal', ra, dec, az_off, el_off,
+                                        hwp_ang, polang, tod_c, s_vals)
         else:
-            self.tod = tod
+            self.tod =  _HWP_modulation(self, HWP_type='ideal', ra, dec, az_off, el_off,
+                                        hwp_ang, polang, tod_c, s_vals)
 
         # Handle returned values.
         if return_tod:
@@ -3306,6 +3273,50 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
+
+    def _HWP_modulation(self, HWP_type='ideal', ra, dec, az, el, hwp_ang, polang, tod_c, s_vals):
+        if (HWP_type =='ideal'):
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            tod = np.real(tod_c) # Note, shares memory with tod_c.
+
+        elif (HWP_type =='non-ideal'):
+        #---------------------------------Under-Construction--------------------
+        # NEW: Pseudo-code comments to account for HWP non-idealities
+        # ang_of_inci = np.interp(el, Jon_physical_optics[elevation], Jon_physical_optics[incidence])
+        # frequencies = beam.sensitive_freq needs to be treated properly
+        # MuellerIQU = Muellerformalism(ang_of_inci, frequencies, hwp_ang)
+        #tod = np.real(MuellerIQU) ???
+        #
+        #---------------------------------End-of-Construction-------------------
+        
+        # Add unpolarized tod.
+        # Reset starting point recursion.
+        # Note, if beam.symmetric=True, expipa is not initialized, so
+        # following will automatically crash if s_vals != [0]
+
+        expipan[:] = 1.
+
+        for n in s_vals:
+
+            # Equal to func exp(n pa) + c.c (pa: position angle).
+            if n == 0:
+                if interp:
+                    tod += np.real(hp.get_interp_val(func[n], dec, ra))
+                else:
+                    tod += np.real(func[n,pix])
+
+            if n > 0:
+                expipan *= expipa
+
+                if interp:
+                    tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
+                                   * expipan)
+                else:
+                    tod += 2 * np.real(func[n,pix] * expipan)
+
+        return tod
+
 
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                       verbose=True, beam_obj=None, symmetric=False):
