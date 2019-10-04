@@ -1191,6 +1191,22 @@ class Instrument(MPIBase):
 
                 beam.btype = btype
 
+    def _elev2ang(beam):
+        mm_inc = np.load('beam_angles.npy')#TO EDIT BEFORE PUSH YOU DOLT
+        fp_hwp_distance = 1600
+        return np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:])
+
+    def _muellerElements(beam):
+        frequencies = beam.sensitive_freq
+        incidences = _elev2ang(self, beam)
+        T = 1
+        rho = 0 
+        s = 0 
+        c = -1
+        return T, rho, s, c
+
+
+
 class ScanStrategy(Instrument, qp.QMap):
     '''
     Given an instrument, create a scanning pattern and
@@ -3299,7 +3315,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
-    def _HWP_modulation(self, hwp_ang, polang, el_off, tod_c, HWP_type='ideal'):
+    def _HWP_modulation(self, beam, hwp_ang, polang, el_off, tod_c, HWP_type='ideal'):
         #-----------------------------------------------NEW--------------------
         # NEW: Pseudo-code comments to account for HWP non-idealities
         # ang_of_inci = np.interp(beam.el, Jon_physical_optics[elevation], Jon_physical_optics[incidence])
@@ -3313,13 +3329,15 @@ class ScanStrategy(Instrument, qp.QMap):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         elif (HWP_type =="non-ideal"):
-            incidence = self._elev2ang(el_off, )
-            tod_c[:] =0
+
+            eta_detector = 1
+            delta_detector = 0
+            H = .5*(eta_detector**2+delta_detector**2)
+            gamma = .5*(eta_detector**2+delta_detector**2)/H
+            T, rho, s, c = self._muellerElements(beam)#TODO
+            tod_c[:] = H*(T +gamma*rho*np.cos(2*polang+2*hwp_ang)/T)#MII*I
 
         return tod_c
-
-    def _elev2ang(el, angle_sim_table):
-        return np.interp(el, angle_sim_table[0,:], angle_sim_table[1,:])
 
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                       verbose=True, beam_obj=None, symmetric=False):
