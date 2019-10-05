@@ -10,6 +10,7 @@ import healpy as hp
 
 from . import tools
 from .detector import Beam
+from . import transfer_matrix as tm
 
 class MPIBase(object):
     '''
@@ -1191,21 +1192,40 @@ class Instrument(MPIBase):
 
                 beam.btype = btype
 
-    def _elev2ang(beam):
-        mm_inc = np.load('beam_angles.npy')#TO EDIT BEFORE PUSH YOU DOLT
+    def _elev2ang(self, beam):
+        mm_inc = np.load('ancillary/beam_angles.npy')#TO EDIT BEFORE PUSH YOU DOLT
         fp_hwp_distance = 1600
         return np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:])
 
-    def _muellerElements(beam):
-        frequencies = beam.sensitive_freq
-        incidences = _elev2ang(self, beam)
-        T = 1
-        rho = 0 
-        s = 0 
-        c = -1
-        return T, rho, s, c
+    def _muellerMatrices(self, beam, hwp_ang):
+        frequency = beam.sensitive_freq
+        incidence = self._elev2ang(beam)
+        # Thanks Matteo and Hileman
+        sapphire = tm.material( 3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire', 
+                               materialType='uniaxial')
+        duroid   = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'RT Duroid',
+                               materialType='isotropic')
+        angles   = [0.0, 0.0, 0.0]
+        materials   = [duroid, sapphire, duroid]
+        thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
+        hwp_stack = tm.Stack( thicknesses, materials, angles)
+        if np.isscalar(hwp_ang):
+            muellers = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang, 
+                                  inputIndex=1.0, exitIndex=1.0, reflected=False)
+        else:
+            muellers = np.empty((hwp_ang.size,)+(4,4), dtype=float)
+            for i in range(hwp_ang.size):
+                muellers[i,:,:] = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
+                                             inputIndex=1.0, exitIndex=1.0, reflected=False)
 
+        return muellers
 
+    def _rot_matrix(self, psi):#Tinbergen, Astronomical Polarimetry
+        a = 1
+        b = 0
+        c = np.cos(2*psi)
+        d = np.sin(2*psi)
+        return np.array([[a,b,b,b],[b,c,d,b],[b,-d,c,b],[b,b,b,a]])
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -3262,7 +3282,7 @@ class ScanStrategy(Instrument, qp.QMap):
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         tod = np.real(tod_c) # Note, shares memory with tod_c.
-        #tod = np.real(self._HWP_modulation(self, tod_c, HWP_type='ideal'))
+        cappa = np.real(self._HWP_modulation(beam, hwp_ang, polang, np.zeros(tod_c.size), HWP_type='non-ideal'))
 
         # Add unpolarized tod.
         # Reset starting point recursion.
@@ -3315,27 +3335,27 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
-    def _HWP_modulation(self, beam, hwp_ang, polang, el_off, tod_c, HWP_type='ideal'):
+
+    def _HWP_modulation(self, beam, hwp_ang, polang, tod_c, HWP_type='ideal'):
         #-----------------------------------------------NEW--------------------
         # NEW: Pseudo-code comments to account for HWP non-idealities
-        # ang_of_inci = np.interp(beam.el, Jon_physical_optics[elevation], Jon_physical_optics[incidence])
-        # frequencies = beam.sensitive_freq needs to be treated properly
-        # MuellerIQU = Muellerformalism(ang_of_inci, frequencies, hwp_ang)
         #tod = np.real(MuellerIQU) ???
-        #
-        #---------------------------------------------END-NEW-------------------
+        
 
-        if (HWP_type =="ideal"):
+        if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        elif (HWP_type =="non-ideal"):
+        elif (HWP_type =='non-ideal'):
 
-            eta_detector = 1
-            delta_detector = 0
+            eta_detector = 1 ####To parametrize
+            delta_detector = 0 ####To parametrize
             H = .5*(eta_detector**2+delta_detector**2)
             gamma = .5*(eta_detector**2+delta_detector**2)/H
-            T, rho, s, c = self._muellerElements(beam)#TODO
-            tod_c[:] = H*(T +gamma*rho*np.cos(2*polang+2*hwp_ang)/T)#MII*I
+            HWP_muellers = self._muellerMatrices(beam, hwp_ang)
+            expxihwp = np.matmul(self._rot_matrix(2*polang), HWP_muellers)
+            ##tod_c[:] = H*(T +gamma*rho*np.cos(2*polang+2*hwp_ang)/T)#MII*I
+        #---------------------------------------------END-NEW-------------------
+
 
         return tod_c
 
