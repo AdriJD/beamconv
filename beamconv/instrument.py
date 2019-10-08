@@ -1198,7 +1198,7 @@ class Instrument(MPIBase):
         return np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:])
 
     def _muellerMatrices(self, beam, hwp_ang):
-        if beam.sensitive_freq==None
+        if (beam.sensitive_freq==None):
             raise ValueError('The beam does not have a defined frequency')
         frequency = beam.sensitive_freq
         incidence = self._elev2ang(beam)
@@ -3280,18 +3280,12 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             hwp_ang = self.hwp_ang
 
-        # Modulate by HWP angle and polarization angle. 
-        expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-        tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        tod = np.real(tod_c) # Note, shares memory with tod_c.
-        cappa = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
-
         # Add unpolarized tod.
         # Reset starting point recursion.
         # Note, if beam.symmetric=True, expipa is not initialized, so
         # following will automatically crash if s_vals != [0]
         expipan[:] = 1.
-
+        tod = np.zeros(tod_size, dtype=np.double)
         for n in s_vals:
 
             # Equal to func exp(n pa) + c.c (pa: position angle).
@@ -3310,6 +3304,9 @@ class ScanStrategy(Instrument, qp.QMap):
                 else:
                     tod += 2 * np.real(func[n,pix] * expipan)
 
+        # Modulate by HWP angle and polarization angle. 
+        tod = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
+        
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
         else:
@@ -3342,14 +3339,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            d = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            tod = np.real(tod_c)
         elif (HWP_type =='non-ideal'):
 
-            HWP_muellers = self._muellerMatrices(beam, hwp_ang)
-            HWP_muellers = tools.iquv2ippv(HWP_muellers)
-            d = HWP_muellers[:,0,0]*tod+HWP_muellers[:,0,1]*tod_c+HWP_muellers[:,0,2]*np.conj(tod_c)
-
-        return d
+            muellers = np.matmul(self._rot_matrix(polang),self._muellerMatrices(beam, hwp_ang))
+            muellers = tools.iquv2ippv(muellers)
+            if(np.isscalar(hwp_ang)):
+                tod = muellers[0,0]*tod+muellers[0,1]*tod_c+muellers[0,2]*np.conj(tod_c)
+            else:
+                tod = muellers[:,0,0]*tod+muellers[:,0,1]*tod_c+muellers[:,0,2]*np.conj(tod_c)
+        else:
+            raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
+        return tod
 
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                       verbose=True, beam_obj=None, symmetric=False):
