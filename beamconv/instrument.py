@@ -1194,10 +1194,12 @@ class Instrument(MPIBase):
 
     def _elev2ang(self, beam):
         mm_inc = np.load('ancillary/beam_angles.npy')#TO EDIT BEFORE PUSH YOU DOLT
-        fp_hwp_distance = 1600
+        fp_hwp_distance = 500
         return np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:])
 
     def _muellerMatrices(self, beam, hwp_ang):
+        if beam.sensitive_freq==None
+            raise ValueError('The beam does not have a defined frequency')
         frequency = beam.sensitive_freq
         incidence = self._elev2ang(beam)
         # Thanks Matteo and Hileman
@@ -3282,7 +3284,7 @@ class ScanStrategy(Instrument, qp.QMap):
         expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
         tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         tod = np.real(tod_c) # Note, shares memory with tod_c.
-        cappa = np.real(self._HWP_modulation(beam, hwp_ang, polang, np.zeros(tod_c.size), HWP_type='non-ideal'))
+        cappa = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
 
         # Add unpolarized tod.
         # Reset starting point recursion.
@@ -3336,28 +3338,18 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
-    def _HWP_modulation(self, beam, hwp_ang, polang, tod_c, HWP_type='ideal'):
-        #-----------------------------------------------NEW--------------------
-        # NEW: Pseudo-code comments to account for HWP non-idealities
-        #tod = np.real(MuellerIQU) ???
-        
+    def _HWP_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type='ideal'):
 
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            d = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
         elif (HWP_type =='non-ideal'):
 
-            eta_detector = 1 ####To parametrize
-            delta_detector = 0 ####To parametrize
-            H = .5*(eta_detector**2+delta_detector**2)
-            gamma = .5*(eta_detector**2+delta_detector**2)/H
             HWP_muellers = self._muellerMatrices(beam, hwp_ang)
-            expxihwp = np.matmul(self._rot_matrix(2*polang), HWP_muellers)
-            ##tod_c[:] = H*(T +gamma*rho*np.cos(2*polang+2*hwp_ang)/T)#MII*I
-        #---------------------------------------------END-NEW-------------------
+            HWP_muellers = tools.iquv2ippv(HWP_muellers)
+            d = HWP_muellers[:,0,0]*tod+HWP_muellers[:,0,1]*tod_c+HWP_muellers[:,0,2]*np.conj(tod_c)
 
-
-        return tod_c
+        return d
 
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                       verbose=True, beam_obj=None, symmetric=False):
