@@ -8,7 +8,7 @@ class Beam(object):
     A class representing detector and beam properties.
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = np.array([150e9]),
+                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = None,
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
