@@ -1195,7 +1195,7 @@ class Instrument(MPIBase):
     def _elev2ang(self, beam):
         mm_inc = np.load('ancillary/beam_angles.npy')#TO EDIT BEFORE PUSH YOU DOLT
         fp_hwp_distance = 500
-        return np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:])
+        return np.deg2rad(np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:]))
 
     def _muellerMatrices(self, beam, hwp_ang):
         if (beam.sensitive_freq==None):
@@ -1212,22 +1212,21 @@ class Instrument(MPIBase):
         thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
         hwp_stack = tm.Stack( thicknesses, materials, angles)
         if np.isscalar(hwp_ang):
-            muellers = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang, 
-                                  inputIndex=1.0, exitIndex=1.0, reflected=False)
+        #    muellers = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang, 
+        #                           inputIndex=1.0, exitIndex=1.0, reflected=False)
+                ###TEST1
+            muellers = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]])
         else:
             muellers = np.empty((hwp_ang.size,)+(4,4), dtype=float)
             for i in range(hwp_ang.size):
-                muellers[i,:,:] = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
-                                             inputIndex=1.0, exitIndex=1.0, reflected=False)
-
+                muellers[i,:,:] = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]]) # tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
+                                             # inputIndex=1.0, exitIndex=1.0, reflected=False)
         return muellers
 
     def _rot_matrix(self, psi):#Tinbergen, Astronomical Polarimetry
-        a = 1
-        b = 0
         c = np.cos(2*psi)
-        d = np.sin(2*psi)
-        return np.array([[a,b,b,b],[b,c,d,b],[b,-d,c,b],[b,b,b,a]])
+        s = np.sin(2*psi)
+        return np.array([[1,0,0,0],[0,c,s,0],[0,-s,c,0],[0,0,0,1]])
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -3306,7 +3305,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Modulate by HWP angle and polarization angle. 
         tod = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
-        
+
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
         else:
@@ -3340,15 +3339,17 @@ class ScanStrategy(Instrument, qp.QMap):
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-            tod = np.real(tod_c)
+            tod += np.real(tod_c)
         elif (HWP_type =='non-ideal'):
 
-            muellers = np.matmul(self._rot_matrix(polang),self._muellerMatrices(beam, hwp_ang))
+            muellers = np.matmul(self._rot_matrix(np.radians(polang)),self._muellerMatrices(beam, hwp_ang), dtype=np.complex128)
             muellers = tools.iquv2ippv(muellers)
             if(np.isscalar(hwp_ang)):
-                tod = muellers[0,0]*tod+muellers[0,1]*tod_c+muellers[0,2]*np.conj(tod_c)
+                tod = muellers[0,0]*tod + muellers[0,1]*tod_c + muellers[0,2]*np.conj(tod_c)
+                #tod = tod+np.real(muellers[0,1]*tod_c+muellers[0,2]*np.conj(tod_c))
             else:
-                tod = muellers[:,0,0]*tod+muellers[:,0,1]*tod_c+muellers[:,0,2]*np.conj(tod_c)
+                tod = muellers[:,0,0]*tod + muellers[:,0,1]*tod_c + muellers[:,0,2]*np.conj(tod_c)
+                #tod = tod+np.real(muellers[:,0,1]*tod_c+muellers[:,0,2]*np.conj(tod_c))
         else:
             raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
         return tod
