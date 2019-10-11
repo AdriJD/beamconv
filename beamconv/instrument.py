@@ -12,6 +12,9 @@ from . import tools
 from .detector import Beam
 from . import transfer_matrix as tm
 
+from . import coupling_mueller_matrix
+from . import transfer_matrix as tm
+
 class MPIBase(object):
     '''
     Parent class for MPI related stuff
@@ -1227,6 +1230,7 @@ class Instrument(MPIBase):
         c = np.cos(2*psi)
         s = np.sin(2*psi)
         return np.array([[1,0,0,0],[0,c,s,0],[0,-s,c,0],[0,0,0,1]])
+
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -3304,7 +3308,9 @@ class ScanStrategy(Instrument, qp.QMap):
                     tod += 2 * np.real(func[n,pix] * expipan)
 
         # Modulate by HWP angle and polarization angle. 
+        
         tod = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
+
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3334,12 +3340,15 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
+
     def _HWP_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type='ideal'):
+
 
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
             tod += np.real(tod_c)
+
         elif (HWP_type =='non-ideal'):
 
             muellers = np.matmul(self._rot_matrix(np.radians(polang)),self._muellerMatrices(beam, hwp_ang), dtype=np.complex128)
@@ -3350,6 +3359,7 @@ class ScanStrategy(Instrument, qp.QMap):
             else:
                 tod = muellers[:,0,0]*tod + muellers[:,0,1]*tod_c + muellers[:,0,2]*np.conj(tod_c)
                 #tod = tod+np.real(muellers[:,0,1]*tod_c+muellers[:,0,2]*np.conj(tod_c))
+
         else:
             raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
         return tod
