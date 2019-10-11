@@ -11,6 +11,9 @@ import healpy as hp
 from . import tools
 from .detector import Beam
 
+from . import coupling_mueller_matrix
+from . import transfer_matrix as tm
+
 class MPIBase(object):
     '''
     Parent class for MPI related stuff
@@ -1190,6 +1193,12 @@ class Instrument(MPIBase):
                     continue
 
                 beam.btype = btype
+
+    def _elev2ang(self, beam):
+        mm_inc = np.load('ancillary/beam_angles.npy')
+        fp_hwp_distance = 500
+        return np.deg2rad(np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:]))
+    
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -3242,11 +3251,6 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             hwp_ang = self.hwp_ang
 
-        # Modulate by HWP angle and polarization angle.
-        expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-        tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        tod = np.real(tod_c) # Note, shares memory with tod_c.
-
         # Add unpolarized tod.
         # Reset starting point recursion.
         # Note, if beam.symmetric=True, expipa is not initialized, so
@@ -3270,6 +3274,9 @@ class ScanStrategy(Instrument, qp.QMap):
                                    * expipan)
                 else:
                     tod += 2 * np.real(func[n,pix] * expipan)
+
+        # Modulate by HWP angle and polarization angle. 
+        tod = np.real(self.instr_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3298,6 +3305,27 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
+
+    def instr_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type='ideal'): 
+        #Thanks to Alex
+        if (HWP_type =='ideal'):
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            tod += np.real(tod_c)
+        elif (HWP_type =='real'):
+            if (beam.sensitive_freq==None):
+                raise ValueError('The beam does not have a defined frequency')
+            frequency = beam.sensitive_freq
+            incidence = self._elev2ang(beam)
+            psi = np.radians(0.)
+            #angles in rad, freq in Hz
+            M_II, M_IP,M_IPt =  coupling_system(hwp4, frequency, hwp_ang, incidence, np.radians(polang), psi) #angles in rad, freq in Hz
+            tod = M_TR[0]*tod + MIP*(tod_c) +  MIP*(np.conj(tod_c))
+        else:
+            raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
+        return tod
+
+
 
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                       verbose=True, beam_obj=None, symmetric=False):
