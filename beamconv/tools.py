@@ -646,3 +646,46 @@ def cross_talk(tod_a, tod_b, ctalk=0.01):
     tod_a += tod_c
     tod_b += tod_c
 
+def iquv2ippv(mueller_mat):
+    '''
+    Returns a 4x4 matrix in the (I, P, Pbar, V) base with P = Q+jU
+
+    Argument
+    ----------
+    mueller_mat : array-like, size (4,4)
+    '''
+
+    A = np.array([[1, 0,  0,  0],
+                  [0, 1,  1j, 0],
+                  [0, 1, -1j, 0],
+                  [0, 0,  0,  1]], dtype=complex)
+
+    Ainv = np.array([[1,  0.0,  0.0, 0],
+                     [0,  0.5,  0.5, 0],
+                     [0, -.5j, .5j,  0],
+                     [0,  0.0,  0.0, 1]], dtype=complex)
+
+    mueller_mat = np.matmul(Ainv,np.matmul(mueller_mat,A))
+    return mueller_mat
+
+def ippv2iquv(mueller_mat):
+    '''
+    Returns a 4x4 matrix in the (I, Q, U, V) base with Q = P+Pbar
+
+    Argument
+    ----------
+    mueller_mat : array-like, size (4,4)
+    '''
+
+    Ainv = np.array([[1, 0,  0,  0],
+                  [0, 1,  1j, 0],
+                  [0, 1, -1j, 0],
+                  [0, 0,  0,  1]], dtype=complex)
+
+    A = np.array([[1,  0.0,  0.0, 0],
+                     [0,  0.5,  0.5, 0],
+                     [0, -.5j, .5j,  0],
+                     [0,  0.0,  0.0, 1]], dtype=complex)
+
+    mueller_mat = np.matmul(Ainv,np.matmul(mueller_mat,A))
+    return mueller_mat
