@@ -3352,6 +3352,7 @@ class ScanStrategy(Instrument, qp.QMap):
             #Modulate by perfect vertical polarizer efficiency
             perfect_vertical_det = np.array([[.5, .5, 0,0],[.5, .5, 0,0],[0,0,0,0],[0,0,0,0]])
             muellers = np.matmul(perfect_vertical_det, muellers)
+            muellers = tools.iquv2ippv(muellers)
             if(np.isscalar(hwp_ang)):
                 tod = muellers[0,0]*tod + muellers[0,1]*tod_c + muellers[0,2]*np.conj(tod_c)
                 #tod = tod+np.real(muellers[0,1]*tod_c+muellers[0,2]*np.conj(tod_c))
