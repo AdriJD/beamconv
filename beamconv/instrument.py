@@ -12,7 +12,7 @@ from . import tools
 from .detector import Beam
 
 from . import coupling_mueller_matrix
-from . import transfer_matrix as tm
+#from . import transfer_matrix as tm
 
 class MPIBase(object):
     '''
@@ -1195,7 +1195,7 @@ class Instrument(MPIBase):
                 beam.btype = btype
 
     def _elev2ang(self, beam):
-        mm_inc = np.load('../ancillary/beam_angles.npy')
+        mm_inc = np.load('ancillary/beam_angles.npy')
         fp_hwp_distance = 500
         return np.deg2rad(np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:]))
     
@@ -3187,6 +3187,7 @@ class ScanStrategy(Instrument, qp.QMap):
         #assert 2*N-1 == N2, "func and func_c have different max_spin"
         assert npix == npix2, "func and func_c have different npix"
 
+        tod = np.zeros(tod_size, dtype=np.float64)
         tod_c = np.zeros(tod_size, dtype=np.complex128)
 
         # Find the indices to the pointing and ctime arrays.
@@ -3306,13 +3307,13 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
-    def instr_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type='real'): 
+    def instr_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type): 
         #Thanks to Alex
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
             tod += np.real(tod_c)
-        elif (HWP_type =='real'):
+        elif (HWP_type =='non-ideal'):
             if (beam.sensitive_freq==None):
                 raise ValueError('The beam does not have a defined frequency')
             frequency = beam.sensitive_freq
