@@ -1193,7 +1193,7 @@ class Instrument(MPIBase):
                 beam.btype = btype
 
     def _elev2ang(self, beam):
-        mm_inc = np.load('ancillary/beam_angles.npy')#TO EDIT BEFORE PUSH YOU DOLT
+        mm_inc = np.load('ancillary/beam_angles.npy')
         fp_hwp_distance = 500
         return np.deg2rad(np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:]))
 
