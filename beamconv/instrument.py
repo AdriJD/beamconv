@@ -1216,11 +1216,15 @@ class Instrument(MPIBase):
         #                           inputIndex=1.0, exitIndex=1.0, reflected=False)
                 ###TEST1
             muellers = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]])
+            muellers = np.matmul(np.matmul(self._rot_matrix(-hwp_ang),muellers), self._rot_matrix(hwp_ang))
         else:
             muellers = np.empty((hwp_ang.size,)+(4,4), dtype=float)
             for i in range(hwp_ang.size):
-                muellers[i,:,:] = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]]) # tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
-                                             # inputIndex=1.0, exitIndex=1.0, reflected=False)
+                #muellers[i,:,:] = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
+                #                              inputIndex=1.0, exitIndex=1.0, reflected=False)
+                muellers[i,:,:] = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]]) 
+                muellers[i,:,:] = np.matmul(np.matmul(self._rot_matrix(-hwp_ang[i]),muellers[i,:,:]), self._rot_matrix(hwp_ang[i]))
+
         return muellers
 
     def _rot_matrix(self, psi):#Tinbergen, Astronomical Polarimetry
@@ -3344,7 +3348,7 @@ class ScanStrategy(Instrument, qp.QMap):
             #Compute the Mueller matrix
             muellers = self._muellerMatrices(beam, hwp_ang)
             #Modulate by detector angle
-            muellers = np.matmul(self._rot_matrix(np.radians(polang)),muellers)
+            muellers = np.matmul(self._rot_matrix(np.radians(-polang)),muellers)
             #Modulate by perfect vertical polarizer efficiency
             perfect_vertical_det = np.array([[.5, .5, 0,0],[.5, .5, 0,0],[0,0,0,0],[0,0,0,0]])
             muellers = np.matmul(perfect_vertical_det, muellers)
