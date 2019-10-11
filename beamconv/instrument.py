@@ -12,7 +12,7 @@ from . import tools
 from .detector import Beam
 
 from . import coupling_mueller_matrix
-#from . import transfer_matrix as tm
+from . import transfer_matrix as tm
 
 class MPIBase(object):
     '''
