@@ -3080,7 +3080,7 @@ class ScanStrategy(Instrument, qp.QMap):
             return self._data[str(chunk['cidx'])][str(beam.idx)][data_type]
 
     def scan(self, beam, add_to_tod=False, interp=False,
-             return_tod=False, return_point=False, skip_scan=False,
+             return_tod=False, return_point=False, skip_scan=False, hwp_type='ideal',
              **kwargs):
         '''
         Update boresight pointing with detector offset, and
@@ -3308,7 +3308,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     tod += 2 * np.real(func[n,pix] * expipan)
 
         # Modulate by HWP angle and polarization angle. 
-        tod = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type='non-ideal'))
+        tod = np.real(self._HWP_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type=hwp_type))
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3338,7 +3338,7 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
-    def _HWP_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type='ideal'):
+    def _HWP_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type):
 
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
