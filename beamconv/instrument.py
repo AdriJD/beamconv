@@ -3341,9 +3341,13 @@ class ScanStrategy(Instrument, qp.QMap):
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
             tod += np.real(tod_c)
         elif (HWP_type =='non-ideal'):
-
-            muellers = np.matmul(self._rot_matrix(np.radians(polang)),self._muellerMatrices(beam, hwp_ang), dtype=np.complex128)
-            muellers = tools.iquv2ippv(muellers)
+            #Compute the Mueller matrix
+            muellers = self._muellerMatrices(beam, hwp_ang)
+            #Modulate by detector angle
+            muellers = np.matmul(self._rot_matrix(np.radians(polang)),muellers)
+            #Modulate by perfect vertical polarizer efficiency
+            perfect_vertical_det = np.array([[.5, .5, 0,0],[.5, .5, 0,0],[0,0,0,0],[0,0,0,0]])
+            muellers = np.matmul(perfect_vertical_det, muellers)
             if(np.isscalar(hwp_ang)):
                 tod = muellers[0,0]*tod + muellers[0,1]*tod_c + muellers[0,2]*np.conj(tod_c)
                 #tod = tod+np.real(muellers[0,1]*tod_c+muellers[0,2]*np.conj(tod_c))
