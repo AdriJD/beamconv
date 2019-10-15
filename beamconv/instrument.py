@@ -1737,7 +1737,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, **kwargs):
+            preview_pointing=False, hwp_status='ideal', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1940,6 +1940,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
+                                            hwp_kind=hwp_status,
                                             **subchunk)
 
                         # Save memory by not copying if no pair.
@@ -1959,6 +1960,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
+                                            hwp_kind=hwp_status,
                                             **subchunk)
 
                         if do_ctalk:
@@ -2960,7 +2962,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-                           save_point=False, skip_scan=False, **kwargs):
+                           save_point=False, skip_scan=False, hwp_kind='ideal', **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -3022,7 +3024,7 @@ class ScanStrategy(Instrument, qp.QMap):
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
                         return_point=save_point,
-                        skip_scan=skip_scan, **kwargs)
+                        skip_scan=skip_scan, hwp_type=hwp_kind, **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
