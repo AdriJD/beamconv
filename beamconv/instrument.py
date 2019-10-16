@@ -3350,16 +3350,18 @@ class ScanStrategy(Instrument, qp.QMap):
             #Compute the Mueller matrix
             muellers = self._muellerMatrices(beam, hwp_ang)
             #Modulate by detector angle
-            muellers = np.matmul(self._rot_matrix(np.radians(-polang)),muellers)
+            muellers = np.matmul(self._rot_matrix(np.radians(polang)),muellers)
             #Modulate by perfect vertical polarizer efficiency
             perfect_vertical_det = np.array([[1, 1, 0,0],[1, 1, 0,0],[0,0,0,0],[0,0,0,0]])
             muellers = np.matmul(perfect_vertical_det, muellers)
-            muellers = tools.iquv2ippv(muellers)
+            #Fine, i'll the base change
+            #muellers = tools.ippv2iquv(muellers)
+            #And dumb does it, decomposing tod_c in Q and U 
             if(np.isscalar(hwp_ang)):
-                tod = muellers[0,0]*tod + muellers[0,1]*tod_c + muellers[0,2]*np.conj(tod_c)
+                tod = muellers[0,0]*tod + muellers[0,1]*np.real(tod_c) - muellers[0,2]*np.imag(tod_c)
                 #tod = tod+np.real(muellers[0,1]*tod_c+muellers[0,2]*np.conj(tod_c))
             else:
-                tod = muellers[:,0,0]*tod + muellers[:,0,1]*tod_c + muellers[:,0,2]*np.conj(tod_c)
+                tod = muellers[:,0,0]*tod + muellers[:,0,1]*np.real(tod_c) - muellers[:,0,2]*np.imag(tod_c)
                 #tod = tod+np.real(muellers[:,0,1]*tod_c+muellers[:,0,2]*np.conj(tod_c))
         else:
             raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
