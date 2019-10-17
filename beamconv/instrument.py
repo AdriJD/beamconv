@@ -1212,16 +1212,16 @@ class Instrument(MPIBase):
         thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
         hwp_stack = tm.Stack( thicknesses, materials, angles)
         if np.isscalar(hwp_ang):
-        #    muellers = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang, 
-        #                           inputIndex=1.0, exitIndex=1.0, reflected=False)
+            #muellers = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang, 
+            #                       inputIndex=1.0, exitIndex=1.0, reflected=False)
                 ###TEST1
             muellers = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]])
             muellers = np.matmul(np.matmul(self._rot_matrix(-hwp_ang),muellers), self._rot_matrix(hwp_ang))
         else:
             muellers = np.empty((hwp_ang.size,)+(4,4), dtype=float)
             for i in range(hwp_ang.size):
-                #muellers[i,:,:] = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
-                #                              inputIndex=1.0, exitIndex=1.0, reflected=False)
+            #    muellers[i,:,:] = tm.Mueller( hwp_stack, frequency, incidence, hwp_ang[i], 
+            #                                  inputIndex=1.0, exitIndex=1.0, reflected=False)
                 muellers[i,:,:] = np.array([[1,0,0,0],[0,1,0,0],[0,0,-1,0],[0,0,0,-1]]) 
                 muellers[i,:,:] = np.matmul(np.matmul(self._rot_matrix(-hwp_ang[i]),muellers[i,:,:]), self._rot_matrix(hwp_ang[i]))
 
@@ -1737,7 +1737,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, hwp_status='ideal', **kwargs):
+            preview_pointing=False, hwp_status='non-ideal', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -3350,7 +3350,7 @@ class ScanStrategy(Instrument, qp.QMap):
             #Compute the Mueller matrix
             muellers = self._muellerMatrices(beam, hwp_ang)
             #Modulate by detector angle
-            muellers = np.matmul(self._rot_matrix(np.radians(polang)),muellers)
+            muellers = np.matmul(self._rot_matrix(np.radians(-polang)),muellers)
             #Modulate by perfect vertical polarizer efficiency
             perfect_vertical_det = np.array([[1, 1, 0,0],[1, 1, 0,0],[0,0,0,0],[0,0,0,0]])
             muellers = np.matmul(perfect_vertical_det, muellers)
