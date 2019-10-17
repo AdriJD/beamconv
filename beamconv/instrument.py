@@ -1199,7 +1199,7 @@ class Instrument(MPIBase):
         fp_hwp_distance = 500
         #return np.radians(mm_inc[1,:])
         return np.deg2rad(np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:]))
-    
+
 class ScanStrategy(Instrument, qp.QMap):
     '''
     Given an instrument, create a scanning pattern and
@@ -1705,7 +1705,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, **kwargs):
+            preview_pointing=False, hwp_status='non-ideal', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1908,6 +1908,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
+                                            hwp_kind=hwp_status,
                                             **subchunk)
 
                         # Save memory by not copying if no pair.
@@ -1927,6 +1928,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
+                                            hwp_kind=hwp_status,
                                             **subchunk)
 
                         if do_ctalk:
@@ -2928,7 +2930,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-                           save_point=False, skip_scan=False, **kwargs):
+                           save_point=False, skip_scan=False, hwp_kind='ideal', **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -2990,7 +2992,7 @@ class ScanStrategy(Instrument, qp.QMap):
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
                         return_point=save_point,
-                        skip_scan=skip_scan, **kwargs)
+                        skip_scan=skip_scan, hwp_type=hwp_kind, **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
@@ -3048,7 +3050,7 @@ class ScanStrategy(Instrument, qp.QMap):
             return self._data[str(chunk['cidx'])][str(beam.idx)][data_type]
 
     def scan(self, beam, add_to_tod=False, interp=False,
-             return_tod=False, return_point=False, skip_scan=False, hwp_type = 'non-ideal', 
+             return_tod=False, return_point=False, skip_scan=False, hwp_type='ideal',
              **kwargs):
         '''
         Update boresight pointing with detector offset, and
@@ -3285,7 +3287,9 @@ class ScanStrategy(Instrument, qp.QMap):
                     tod += 2 * np.real(func[n,pix] * expipan)
 
         # Modulate by HWP angle and polarization angle. 
+
         tod = np.real(self.instr_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type=hwp_type))
+
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3315,39 +3319,24 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
+
     def instr_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type): 
         #Thanks to Alex
+
         if (HWP_type =='ideal'):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
             tod += np.real(tod_c)
         elif (HWP_type =='non-ideal'):
+
             if (beam.sensitive_freq==None):
                 raise ValueError('The beam does not have a defined frequency')
 
-            print('hwp_angle')
-            print(type(hwp_ang))
-            print(np.shape(hwp_ang))
-            print('\n')
-            print('detector angle')
-            print(polang)
-            print(type(polang))
-            print(np.shape(polang))
 
             frequency = beam.sensitive_freq.item(0)
-            print('\n')
-            print('frequency')
-            print(frequency)
-            print(type(frequency))
-            print(np.shape(frequency))
-            
+
             incidence = beam.el
             #incidence = self._elev2ang(beam)
-            print('\n')
-            print('incidence')
-            print(incidence)
-            print(type(incidence))
-            print(np.shape(incidence))
 
             psi = np.radians(0.)
             #angles in rad, freq in Hz
@@ -3361,34 +3350,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # BASE IPPV
             tod = 2*(M_II*tod + M_IPt*tod_c +  M_IP*np.conj(tod_c))
-            # tod += np.real(M_II*tod + M_IP*tod_c +  M_IPt*np.conj(tod_c))
 
             ## BASE IQUV
             # tod = 2*(M_II*tod + M_IQ*np.real(tod_c) - M_IU*np.imag(tod_c))
 
-            '''
-            TOOLS FOR DEBUGGING 
-            print('\n')
-            print('tod')
-            print(type(tod))
-            print(np.shape(tod))
-            print('\n')
-            print('tod_c')
-            print(type(tod_c))	
-            print(np.shape(tod_c))
-            print('\n')
-            print('M_II')
-            print(type(M_II))
-            print(np.shape(M_II))
-            print('\n')
-            print('M_IP')
-            print(type(M_IQ))	
-            print(np.shape(M_IQ))
-            print('\n')
-            print('end loop')
-            print('\n')
-            print('\n')
-            ''' 
         else:
             raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
         return tod
