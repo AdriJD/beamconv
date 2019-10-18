@@ -4,9 +4,11 @@ from . import transfer_matrix as tm
 from matplotlib.pylab import *
 import matplotlib.gridspec as gridspec
 
+from .detector import Beam
+
 class Half_Wave_plate(Beam)
 
-    def __init__(self, alpha=0.0, theta=0.0, freq=1.5e9, xi=0.0, psi=0.0, hwp=None, model_name=None):
+    def __init__(self, alpha=0.0, theta=0.0, freq=Beam.sensitive_freq, xi=0.0, psi=0.0, hwp=None, model_name=None):
         self.alpha = alpha 
         self.theta = theta
         self.freq = freq
@@ -49,7 +51,7 @@ class Half_Wave_plate(Beam)
         hwp = tm.Stack( thicknesses, materials, angles)
         return hwp
 
-    def _topRowMuellerMatrix(hwp, alpha, theta, freq, xi, psi):
+    def _topRowMuellerMatrix(self):
         eta = 1. ## co-polar quantity (FREEZE) 
         delta = 0. ## cross-polar quantity (FREEZE) 
         gamma = (eta**2-delta**2)/(eta**2+delta**2) ## polarization efficienty (FREEZE)
@@ -58,8 +60,8 @@ class Half_Wave_plate(Beam)
 
         #########################
         ## REAL HWP
-        # Mueller( stack, frequency, incidenceAngle, rotation, inputIndex=1.0, exitIndex=1.0, reflected=False): 
-        Mueller = tm.Mueller(hwp, freq, alpha, 0., reflected=False)
+        #           Mueller( stack, frequency, incidenceAngle, rotation, inputIndex=1.0, exitIndex=1.0, reflected=False): 
+        Mueller = tm.Mueller(self.hwp, self.freq, self.alpha, 0., reflected=False)
         T = Mueller[0,0]
         rho= Mueller[0,1]/ Mueller[0,0]
         c =  Mueller[2,2]/ Mueller[0,0]
