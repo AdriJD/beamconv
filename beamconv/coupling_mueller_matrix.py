@@ -6,9 +6,9 @@ import matplotlib.gridspec as gridspec
 
 from .detector import Beam
 
-class Half_Wave_plate(Beam)
+class Half_Wave_plate(Beam):
 
-    def __init__(self, alpha=0.0, theta=0.0, freq=Beam.sensitive_freq, xi=0.0, psi=0.0, hwp=None, model_name=None):
+    def __init__(self, alpha=0.0, theta=0.0, freq=1.5e9, xi=0.0, psi=0.0, hwp=None, model_name=None):
         self.alpha = alpha 
         self.theta = theta
         self.freq = freq
@@ -16,6 +16,7 @@ class Half_Wave_plate(Beam)
         self.psi = psi
         self.hwp = hwp
         self.model_name = model_name
+        self.freq = Beam.sensitive_freq
 
     def _choose_HWP_model(model_name):
         sapphire = tm.material( 3.07, 3.41, 2.3e-4, 1.25e-4, 'Sapphire', materialType='uniaxial')
@@ -90,7 +91,7 @@ class Half_Wave_plate(Beam)
             raise ValueError('Asked to modulate by a half wave plate, but none specified or given')
 
         if np.isscalar (self.theta):
-            M_tr = TopRowMuellerMatrix(self.hwp, self.alpha, self.theta, self.freq, self.xi, self.psi)
+            M_tr = TopRowMuellerMatrix(self.hwp, self.alpha, self.theta, self.freq, self.xi, -self.psi)
             ### IQUV base
             MII = M_tr[0]
             MIQ = M_tr[1] 
@@ -102,7 +103,7 @@ class Half_Wave_plate(Beam)
         else:
             M_tr = np.zeros((4,len(theta)))
             for i in range (len(theta)):
-                M_tr[:,i]= TopRowMuellerMatrix(self.hwp, self.alpha, self.theta[i], self.freq, self.xi, self.psi)
+                M_tr[:,i]= TopRowMuellerMatrix(self.hwp, self.alpha, self.theta[i], self.freq, self.xi, -self.psi[i])
             ### IQUV base
             MII = M_tr[0,:]
             MIQ = M_tr[1,:] 
@@ -117,7 +118,7 @@ class Half_Wave_plate(Beam)
 
 
 
-
+#############END CLASS
 
     
 
@@ -260,7 +261,7 @@ def coupling_system(hwp, freq, theta, alpha, xi, psi):
     else:
         M_tr = np.zeros((4,len(theta)))
         for i in range (len(theta)):
-            M_tr[:,i]= TopRowMuellerMatrix(hwp, alpha, theta[i], freq, xi, psi)
+            M_tr[:,i]= TopRowMuellerMatrix(hwp, alpha, theta[i], freq, xi, psi[i])
         ### IQUV base
         MII = M_tr[0,:]
         MIQ = M_tr[1,:] 
