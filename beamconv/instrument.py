@@ -1705,7 +1705,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, hwp_status='ideal', **kwargs):
+            preview_pointing=False, hwp_status='non-ideal', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -3226,69 +3226,89 @@ class ScanStrategy(Instrument, qp.QMap):
         # NOTE
         pa += np.pi
 
-        # Fill complex array, i.e. the linearly polarized part
-        # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
-        # to avoid doing triginometry at each n.
 
-        # If beam.symmetric is True, we can be sure to only have s=2.
-        if beam.symmetric:
-            expipan = np.exp(1j * pa * 2)
-        else:
-            expipa = np.exp(1j * pa) # used for recursion
-            expipan = np.exp(1j * pa * (-N + 1)) # starting point (n = -N+1)
+        if (hwp_type=='ideal'):
+            # Fill complex array, i.e. the linearly polarized part
+            # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
+            # to avoid doing triginometry at each n.
 
-        for nidx, n in enumerate(s_vals_c):
-
-            if nidx != 0: # expipan is already initialized for nidx=0
-                expipan *= expipa
-
-            if interp:
-                tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
-                         * expipan
+            # If beam.symmetric is True, we can be sure to only have s=2.
+            if beam.symmetric:
+                expipan = np.exp(1j * pa * 2)
             else:
-                tod_c += func_c[nidx,pix] * expipan
+                expipa = np.exp(1j * pa) # used for recursion
+                expipan = np.exp(1j * pa * (-N + 1)) # starting point (n = -N+1)
 
-        # Check for HWP angle array.
-        if not hasattr(self, 'hwp_ang'):
-            hwp_ang = 0
-        else:
-            hwp_ang = self.hwp_ang
+            for nidx, n in enumerate(s_vals_c):
 
-        '''
-        ORIGINAL ADRI'S CODE
-        # # Modulate by HWP angle and polarization angle.
-        # expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-        # tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        # tod = np.real(tod_c) # Note, shares memory with tod_c.
-        '''
+                if nidx != 0: # expipan is already initialized for nidx=0
+                    expipan *= expipa
 
-        # Add unpolarized tod.
-        # Reset starting point recursion.
-        # Note, if beam.symmetric=True, expipa is not initialized, so
-        # following will automatically crash if s_vals != [0]
-        expipan[:] = 1.
+                if interp:
+                    tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
+                             * expipan
+                else:
+                    tod_c += func_c[nidx,pix] * expipan
 
-        for n in s_vals:
+            # Check for HWP angle array.
+            if not hasattr(self, 'hwp_ang'):
+                hwp_ang = 0
+            else:
+                hwp_ang = self.hwp_ang
 
-            # Equal to func exp(n pa) + c.c (pa: position angle).
-            if n == 0:
+            # Modulate by HWP angle and polarization angle.
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            tod = np.real(tod_c) # Note, shares memory with tod_c.
+            
+
+            # Add unpolarized tod.
+            # Reset starting point recursion.
+            # Note, if beam.symmetric=True, expipa is not initialized, so
+            # following will automatically crash if s_vals != [0]
+            expipan[:] = 1.
+
+            for n in s_vals:
+
+                # Equal to func exp(n pa) + c.c (pa: position angle).
+                if n == 0:
+                    if interp:
+                        tod += np.real(hp.get_interp_val(func[n], dec, ra))
+                    else:
+                        tod += np.real(func[n,pix])
+
+                if n > 0:
+                    expipan *= expipa
+
+                    if interp:
+                        tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
+                                       * expipan)
+                    else:
+                        tod += 2 * np.real(func[n,pix] * expipan)
+
+        elif(hwp_type=='non-ideal'):
+            for nidx, n in enumerate(s_vals_c):
+                if interp:
+                    tod_c += hp.get_interp_val(func_c[nidx], dec, ra)
+                else:
+                    tod_c += func_c[nidx,pix] 
+            for n in s_vals:
                 if interp:
                     tod += np.real(hp.get_interp_val(func[n], dec, ra))
                 else:
                     tod += np.real(func[n,pix])
+            
+            if not hasattr(self, 'hwp_ang'):
+                hwp_ang = 0
+            else:
+                hwp_ang = self.hwp_ang
 
-            if n > 0:
-                expipan *= expipa
+            # Modulate by HWP angle and polarization angle. 
+            tod = np.real(self.instr_modulation(beam, hwp_ang=hwp_ang, 
+                pa=pa, polang=polang, tod=tod, tod_c=tod_c))
 
-                if interp:
-                    tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
-                                   * expipan)
-                else:
-                    tod += 2 * np.real(func[n,pix] * expipan)
-
-        # Modulate by HWP angle and polarization angle. 
-
-        tod = np.real(self.instr_modulation(beam, hwp_ang, polang, tod, tod_c, HWP_type=hwp_type))
+        else:
+            raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
 
 
         if add_to_tod and hasattr(self, 'tod'):
@@ -3320,42 +3340,33 @@ class ScanStrategy(Instrument, qp.QMap):
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
 
-    def instr_modulation(self, beam, hwp_ang, polang, tod, tod_c, HWP_type): 
+    def instr_modulation(self, beam, hwp_ang, pa, polang, tod, tod_c): 
         #Thanks to Alex
 
-        if (HWP_type =='ideal'):
-            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-            tod += np.real(tod_c)
-        elif (HWP_type =='non-ideal'):
-
-            if (beam.sensitive_freq==None):
-                raise ValueError('The beam does not have a defined frequency')
+        if (beam.sensitive_freq==None):
+            raise ValueError('The beam does not have a defined frequency')
 
 
-            frequency = beam.sensitive_freq.item(0)
+        frequency = beam.sensitive_freq.item(0)
 
-            incidence = beam.el
-            #incidence = self._elev2ang(beam)
+        incidence = beam.el
+        #incidence = self._elev2ang(beam)
 
-            psi = np.radians(0.)
-            #angles in rad, freq in Hz
-            ## BASE IPPV
-            M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
-             	np.radians(incidence), np.radians(polang), psi)#angles in rad, freq in Hz
+        #angles in rad, freq in Hz
+        ## BASE IPPV
+        M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
+         	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
 
-            ## BASE IQUV
-            # M_II, M_IQ, M_IU = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
-            #    np.radians(incidence), np.radians(polang), psi)#angles in rad, freq in Hz
+        ## BASE IQUV
+        # M_II, M_IQ, M_IU = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
+        #    np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
 
-            # BASE IPPV
-            tod = 2*(M_II*tod + M_IPt*tod_c +  M_IP*np.conj(tod_c))
+        # BASE IPPV
+        tod = 2*(M_II*tod + M_IPt*tod_c +  M_IP*np.conj(tod_c))
 
-            ## BASE IQUV
-            # tod = 2*(M_II*tod + M_IQ*np.real(tod_c) - M_IU*np.imag(tod_c))
+        ## BASE IQUV
+        # tod = 2*(M_II*tod + M_IQ*np.real(tod_c) - M_IU*np.imag(tod_c))
 
-        else:
-            raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
         return tod
 
 
