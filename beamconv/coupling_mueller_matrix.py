@@ -45,6 +45,8 @@ class Half_Wave_plate(Beam):
             thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
             materials = [duroid_d, sapphire, duroid_d]
             angles = [0.0, 0.0, 0.0]
+        elif (model_name=='ideal'):
+            return 0 #get rid of our manula toggles this way
 
         else:
             raise ValueError('Unknown tyoe of HWP entered')
@@ -59,23 +61,22 @@ class Half_Wave_plate(Beam):
         H = 0.5*(eta**2+delta**2)
         ## Ideal case: H = 0.5
 
-        #########################
-        ## REAL HWP
-        #           Mueller( stack, frequency, incidenceAngle, rotation, inputIndex=1.0, exitIndex=1.0, reflected=False): 
-        Mueller = tm.Mueller(self.hwp, self.freq, self.alpha, 0., reflected=False)
-        T = Mueller[0,0]
-        rho= Mueller[0,1]/ Mueller[0,0]
-        c =  Mueller[2,2]/ Mueller[0,0]
-        s =  Mueller[3,2]/ Mueller[0,0]
-        #########################
+        # IDEAL HWP
+        if (self.hwp==0):
+            T = 1.
+            c = -1.
+            rho = 0.
+            s = 0.
 
-        #########################
-        # IDEAL HWP 
-        #T = 1.
-        #c = -1.
-        #rho = 0.
-        #s = 0.
-        #########################
+        #  REAL HWP
+        #  Mueller( stack, frequency, incidenceAngle, rotation, inputIndex=1.0, exitIndex=1.0, reflected=False):
+        else:
+            Mueller = tm.Mueller(self.hwp, self.freq, self.alpha, 0., reflected=False)
+            T = Mueller[0,0]
+            rho= Mueller[0,1]/ Mueller[0,0]
+            c =  Mueller[2,2]/ Mueller[0,0]
+            s =  Mueller[3,2]/ Mueller[0,0]
+
 
         MII = H*T*(1+(gamma*rho*np.cos((2*theta)+(2*xi))))
         MIQ = H*T*(rho*np.cos((2*theta)+(2*psi)) + (0.5*(1+c)*gamma*np.cos((2*psi)-(2*xi))) + (0.5*(1-c)*gamma*np.cos((4*theta)+(2*xi)+(2*psi))))
@@ -91,7 +92,7 @@ class Half_Wave_plate(Beam):
             raise ValueError('Asked to modulate by a half wave plate, but none specified or given')
 
         if np.isscalar (self.theta):
-            M_tr = TopRowMuellerMatrix(self.hwp, self.alpha, self.theta, self.freq, self.xi, -self.psi)
+            M_tr = TopRowMuellerMatrix(self.hwp, self.alpha, self.theta, self.freq, self.xi, self.psi)
             ### IQUV base
             MII = M_tr[0]
             MIQ = M_tr[1] 
@@ -103,7 +104,7 @@ class Half_Wave_plate(Beam):
         else:
             M_tr = np.zeros((4,len(theta)))
             for i in range (len(theta)):
-                M_tr[:,i]= TopRowMuellerMatrix(self.hwp, self.alpha, self.theta[i], self.freq, self.xi, -self.psi[i])
+                M_tr[:,i]= TopRowMuellerMatrix(self.hwp, self.alpha, self.theta[i], self.freq, self.xi, self.psi[i])
             ### IQUV base
             MII = M_tr[0,:]
             MIQ = M_tr[1,:] 
