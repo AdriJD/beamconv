@@ -52,7 +52,7 @@ class HWP(object):
         if (model_name=='Ar+HWP+Ar'):
             thicknesses = [0.305*tm.mm, 3.15*tm.mm, 0.305*tm.mm]
             angles   = [0.0, 0.0, 0.0]
-            materials   = [duroidb, sapphire, duroidb]
+            materials   = [duroid_b, sapphire, duroid_b]
         
         elif (model_name=='HWP_only'):
             thicknesses = [3.15*tm.mm]
