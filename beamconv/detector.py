@@ -3,16 +3,135 @@ import numpy as np
 import healpy as hp
 from beamconv import tools
 
+class HWP(object):
+    '''
+    A class representing the half wave plate, as a transfermatrix stack on which operations are done
+    '''
+    def __init__(self, stack=None):
+        #needs a fix before deployment.
+        self.stack = stack
+
+    def _stack_builder(self, thicknesses, indices, losses, angles):
+
+        """
+        Creates a stack of materials, as defined in transfer_matrix.py
+        Inputs are:
+        thicknesses   - (float) thicknesses in mm
+        indices       - ordinary and extraordinary index
+        losses        - ratios of the imaginary part of the dielectric constant to the real part.
+        angles        - (float) radian angle between (extraordinary) axis and stack axis. 
+        """
+
+        if (thicknesses.size != angles.size or 2*thicknesses.size!=indices.size or 2*thicknesses.size!=losses.size):
+            raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
+
+        #Make a list of materials, with a name that corresponds to their position in the stack
+        material_stack=np.ndarray((thicknesses.size,), dtype=tm.material)
+        for i in range(thicknesses.size):
+
+            material_stack[i].ordinaryIndex = indices[i,0]
+            material_stack[i].extraIndex    = indices[i,1]
+            material_stack[i].ordinaryLoss  = losses[i,0]
+            material_stack[i].extraLoss     = losses[i,1]
+            material_stack[i].name          = str(i)
+            if (indices[i,0]==indices[i,1] and losses[i,0]==losses[i,1]):
+                material_stack[i].materialType = 'isotropic'
+            else:
+                material_stack[i].materialType = 'uniaxial'
+
+        self.stack = tm.Stack( thicknesses, material_stack, angles)
+
+    def _choose_HWP_model(self, model_name):
+        '''
+        Set a particlar stack from a few predefined models
+        '''
+        sapphire = tm.material( 3.07, 3.41, 2.3e-4, 1.25e-4, 'Sapphire', materialType='uniaxial')
+        duroid_a = tm.material( 1.55, 1.55, 0.5e-4, 0.5e-4, 'RT Duroid', materialType='isotropic')
+        duroid_b = tm.material( 1.715, 1.715, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
+        duroid_c = tm.material( 2.52, 2.52, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
+        duroid_d = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
+        if (model_name=='HWP_only'):
+            thicknesses = [305e-6, 3.15*tm.mm, 305e-6]
+            angles   = [0.0, 0.0, 0.0]
+            materials   = [duroidb, sapphire, duroidb]
+        
+        elif (model_name=='Ar+HWP+Ar'):
+            thicknesses = [3.15*tm.mm]
+            materials = [sapphire]
+            angles = [0.0]
+
+        elif (model_name=='Ar1+Ar2+HWP+Ar2+Ar1'):
+            
+            thicknesses = [0.38*tm.mm, 0.27*tm.mm, 3.75*tm.mm, 0.27*tm.mm,0.38*tm.mm]
+            materials = [duroid_a, duroid_c, sapphire, duroid_c, duroid_a]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name=='SPIDER'):
+            
+            thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
+            materials = [duroid_d, sapphire, duroid_d]
+            angles = [0.0, 0.0, 0.0]
+        elif (model_name=='ideal'):
+            return np.array([1.0,0.0,-1.0,0.0]) #get rid of our manual toggles this way
+
+        else:
+            raise ValueError('Unknown type of HWP entered')
+
+        self.stack = tm.Stack( thicknesses, materials, angles)
+
+    def _compute4params(self, freq, alpha):
+        '''
+        Compute the parameters for the unrotated Mueller Matrix
+        '''
+        Mueller = tm.Mueller(self.stack, freq, alpha, 0., reflected=False)
+        T = Mueller[0,0]
+        rho= Mueller[0,1]/ Mueller[0,0]
+        c =  Mueller[2,2]/ Mueller[0,0]
+        s =  Mueller[3,2]/ Mueller[0,0]
+
+        return np.array([T,rho,c,s])
+
+    def _topRowMuellerMatrix(self, freq=None, alpha=0.0, psi=0.0, xi=0.0, theta=0.0, 
+                             hwp_params=np.array([1. ,0. ,-1. ,0.])):
+        '''
+        Compute the top row of the full HWP+polang+boresight Mueller Matrix
+        '''
+        eta = 1. ## co-polar quantity (FREEZE) 
+        delta = 0. ## cross-polar quantity (FREEZE) 
+        gamma = (eta**2-delta**2)/(eta**2+delta**2) ## polarization efficienty (FREEZE)
+        H = 0.5*(eta**2+delta**2)
+        ## Ideal case: H = 0.5
+
+        T = hwp_params[0]
+        rho = hwp_params[1]
+        c = hwp_params[2]
+        s = hwp_params[3]
+        #print T, rho, c, s
+        MII = H*T*(1+(gamma*rho*np.cos(2*(theta+xi))))
+        MIQ = H*T*(rho*np.cos(2*(theta+psi)) + (0.5*(1+c)*gamma*np.cos(2*(psi-xi))) 
+            + (0.5*(1-c)*gamma*np.cos(2*(2*theta+xi+psi))))
+        MIU = H*T*(rho*np.sin(2*(theta+psi)) + (0.5*(1+c)*gamma*np.sin(2*(psi-xi))) 
+            + (0.5*(1-c)*gamma*np.sin(2*(2*theta+xi+psi))))
+        MIV = H*T*(s*gamma*np.sin(2*(theta+xi)))
+
+        # IPPV base
+        MIP = 0.5*(MIQ-1j*MIU) 
+        MIP_t = 0.5*(MIQ+1j*MIU) 
+
+        #return MII, MIQ, MIU 
+        return MII, MIP, MIP_t 
+
+
 class Beam(object):
     '''
     A class representing detector and beam properties.
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = np.array([1.5e9]),
+                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = 150e9,
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
-                 symmetric=False):
+                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=np.array([1.,0.,-1.,0.])):
         '''
         Initialize a detector beam.
 
@@ -100,6 +219,8 @@ class Beam(object):
         self.polang_error = polang_error
         self._idx = idx
         self.symmetric = symmetric
+        self.hwp = hwp
+        self.hwp_precomp_mueller=hwp_precomp_mueller
 
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
@@ -523,3 +644,11 @@ class Beam(object):
         '''
 
         return self.az, self.el, self.polang_truth
+
+    def _get_Mueller_top_row(self, xi=0.0, psi=np.array([0.0]), theta=np.array([0.0])):
+        if (self.hwp_precomp_mueller is None):
+            self.hwp_precomp_mueller = self.hwp._compute4params(self.hwp)
+        return self.hwp._topRowMuellerMatrix(freq=self.sensitive_freq, alpha=np.radians(self.el),
+                            xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
+
+
