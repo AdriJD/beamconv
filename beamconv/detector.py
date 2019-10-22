@@ -2,6 +2,7 @@ import os
 import numpy as np
 import healpy as hp
 from beamconv import tools
+from . import transfer_matrix as tm
 
 class HWP(object):
     '''
@@ -26,20 +27,18 @@ class HWP(object):
             raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
 
         #Make a list of materials, with a name that corresponds to their position in the stack
-        material_stack=np.ndarray((thicknesses.size,), dtype=tm.material)
+        material_stack=[]
         for i in range(thicknesses.size):
-
-            material_stack[i].ordinaryIndex = indices[i,0]
-            material_stack[i].extraIndex    = indices[i,1]
-            material_stack[i].ordinaryLoss  = losses[i,0]
-            material_stack[i].extraLoss     = losses[i,1]
-            material_stack[i].name          = str(i)
+            
             if (indices[i,0]==indices[i,1] and losses[i,0]==losses[i,1]):
-                material_stack[i].materialType = 'isotropic'
+                isotro_str = 'isotropic'
             else:
-                material_stack[i].materialType = 'uniaxial'
+                isotro_str = 'uniaxial'
 
-        self.stack = tm.Stack( thicknesses, material_stack, angles)
+            material_stack.append(tm.material(indices[i,0], indices[i,1], 
+                losses[i,0], losses[i,1], str(i), materialType=isotro_str))
+
+        self.stack = tm.Stack( thicknesses*tm.mm, material_stack, angles)
 
     def _choose_HWP_model(self, model_name):
         '''
@@ -50,12 +49,12 @@ class HWP(object):
         duroid_b = tm.material( 1.715, 1.715, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
         duroid_c = tm.material( 2.52, 2.52, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
         duroid_d = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
-        if (model_name=='HWP_only'):
-            thicknesses = [305e-6, 3.15*tm.mm, 305e-6]
+        if (model_name=='Ar+HWP+Ar'):
+            thicknesses = [0.305*tm.mm, 3.15*tm.mm, 0.305*tm.mm]
             angles   = [0.0, 0.0, 0.0]
             materials   = [duroidb, sapphire, duroidb]
         
-        elif (model_name=='Ar+HWP+Ar'):
+        elif (model_name=='HWP_only'):
             thicknesses = [3.15*tm.mm]
             materials = [sapphire]
             angles = [0.0]
@@ -92,7 +91,7 @@ class HWP(object):
         return np.array([T,rho,c,s])
 
     def _topRowMuellerMatrix(self, freq=None, alpha=0.0, psi=0.0, xi=0.0, theta=0.0, 
-                             hwp_params=np.array([1. ,0. ,-1. ,0.])):
+                             hwp_params=None):
         '''
         Compute the top row of the full HWP+polang+boresight Mueller Matrix
         '''
@@ -131,7 +130,7 @@ class Beam(object):
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
-                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=np.array([1.,0.,-1.,0.])):
+                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=None):
         '''
         Initialize a detector beam.
 
@@ -645,9 +644,10 @@ class Beam(object):
 
         return self.az, self.el, self.polang_truth
 
-    def _get_Mueller_top_row(self, xi=0.0, psi=np.array([0.0]), theta=np.array([0.0])):
+    def _get_Mueller_top_row(self, xi, psi, theta):
         if (self.hwp_precomp_mueller is None):
-            self.hwp_precomp_mueller = self.hwp._compute4params(self.hwp)
+            self.hwp_precomp_mueller = self.hwp._compute4params(freq=self.sensitive_freq,
+                alpha=np.radians(self.el))
         return self.hwp._topRowMuellerMatrix(freq=self.sensitive_freq, alpha=np.radians(self.el),
                             xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
 
