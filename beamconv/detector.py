@@ -644,6 +644,18 @@ class Beam(object):
 
         return self.az, self.el, self.polang_truth
 
+    def _set_HWP_values(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
+        if(model_name is None and ((thicknesses is None) or (indices is None) or (losses is None) or (angles is None))):
+            raise ValueError('You must give either a model or parameters for a stack !')
+        if (model_name !=None):
+            self.hwp._choose_HWP_model(model_name=model_name)
+        else:
+            self.hwp._stack_builder(self, thicknesses=thicknesses, 
+                indices=indices, losses=losses, angles=angles)
+
+        self.hwp_precomp_mueller = self.hwp._compute4params(freq=self.sensitive_freq,
+                alpha=np.radians(self.el))
+
     def _get_Mueller_top_row(self, xi, psi, theta):
         if (self.hwp_precomp_mueller is None):
             self.hwp_precomp_mueller = self.hwp._compute4params(freq=self.sensitive_freq,
