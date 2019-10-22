@@ -3347,16 +3347,17 @@ class ScanStrategy(Instrument, qp.QMap):
             raise ValueError('The beam does not have a defined frequency')
 
 
-        frequency = beam.sensitive_freq.item(0)
+        frequency = beam.sensitive_freq
 
         incidence = beam.el
         #incidence = self._elev2ang(beam)
 
         #angles in rad, freq in Hz
         ## BASE IPPV
-        M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
-         	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
-
+        M_II, M_IP, M_IPt = beam._get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+        #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
+        # 	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
+        #print np.amax(M_II-M_Il), np.amax(M_IP-M_Pl), np.amax(M_lt-M_IPt)
         ## BASE IQUV
         # M_II, M_IQ, M_IU = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
         #    np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
