@@ -3346,14 +3346,18 @@ class ScanStrategy(Instrument, qp.QMap):
         if (beam.sensitive_freq==None):
             raise ValueError('The beam does not have a defined frequency')
 
+        #frequency = beam.sensitive_freq
 
-        frequency = beam.sensitive_freq
-
-        incidence = beam.el
+        #incidence = beam.el
         #incidence = self._elev2ang(beam)
 
-        #angles in rad, freq in Hz
-        ## BASE IPPV
+        #If wanted, set your own Mueller params 
+        #WARNING, _choose_HWP_model returns that only if the keyword is ideal.
+        #Otherwise, it returns a HWP stack
+        #beam.hwp._choose_HWP_model('HWP_only')
+        beam.hwp_precomp_mueller = beam.hwp._choose_HWP_model('ideal')
+
+        #angles in rad, freq in Hz, base IPPV
         M_II, M_IP, M_IPt = beam._get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
         #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
         # 	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
