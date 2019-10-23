@@ -90,7 +90,7 @@ class HWP(object):
 
         return np.array([T,rho,c,s])
 
-    def _topRowMuellerMatrix(self, freq=None, alpha=0.0, psi=0.0, xi=0.0, theta=0.0, 
+    def _topRowMuellerMatrix(self, psi=0.0, xi=0.0, theta=0.0, 
                              hwp_params=None):
         '''
         Compute the top row of the full HWP+polang+boresight Mueller Matrix
@@ -660,7 +660,6 @@ class Beam(object):
         if (self.hwp_precomp_mueller is None):
             self.hwp_precomp_mueller = self.hwp._compute4params(freq=self.sensitive_freq,
                 alpha=np.radians(self.el))
-        return self.hwp._topRowMuellerMatrix(freq=self.sensitive_freq, alpha=np.radians(self.el),
-                            xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
+        return self.hwp._topRowMuellerMatrix(xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
 
 
