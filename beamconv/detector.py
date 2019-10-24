@@ -12,6 +12,9 @@ class HWP(object):
         #needs a fix before deployment.
         self.stack = stack
 
+    def __call__(self):
+        return self
+
     def _stack_builder(self, thicknesses, indices, losses, angles):
 
         """
@@ -70,8 +73,6 @@ class HWP(object):
             thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
             materials = [duroid_d, sapphire, duroid_d]
             angles = [0.0, 0.0, 0.0]
-        elif (model_name=='ideal'):
-            return np.array([1.0,0.0,-1.0,0.0]) #get rid of our manual toggles this way
 
         else:
             raise ValueError('Unknown type of HWP entered')
