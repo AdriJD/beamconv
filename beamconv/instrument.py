@@ -3355,7 +3355,7 @@ class ScanStrategy(Instrument, qp.QMap):
         #WARNING, _choose_HWP_model returns that only if the keyword is ideal.
         #Otherwise, it returns a HWP stack
         #beam.hwp._choose_HWP_model('HWP_only')
-        beam.hwp._choose_HWP_model('ideal')
+        #beam.hwp_precomp_mueller=np.array([1.,0.,-1.,0.])
         #beam._set_HWP_values(model_name='SPIDER')
         #angles in rad, freq in Hz, base IPPV
         M_II, M_IP, M_IPt = beam._get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
