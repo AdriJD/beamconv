@@ -15,7 +15,7 @@ class HWP(object):
     def __call__(self):
         return self
 
-    def _stack_builder(self, thicknesses, indices, losses, angles):
+    def stack_builder(self, thicknesses, indices, losses, angles):
 
         """
         Creates a stack of materials, as defined in transfer_matrix.py
@@ -43,7 +43,7 @@ class HWP(object):
 
         self.stack = tm.Stack( thicknesses*tm.mm, material_stack, angles)
 
-    def _choose_HWP_model(self, model_name):
+    def choose_HWP_model(self, model_name):
         '''
         Set a particlar stack from a few predefined models
         '''
@@ -79,7 +79,7 @@ class HWP(object):
 
         self.stack = tm.Stack( thicknesses, materials, angles)
 
-    def _compute4params(self, freq, alpha):
+    def compute4params(self, freq, alpha):
         '''
         Compute the parameters for the unrotated Mueller Matrix
         '''
@@ -91,7 +91,7 @@ class HWP(object):
 
         return np.array([T,rho,c,s])
 
-    def _topRowMuellerMatrix(self, psi=0.0, xi=0.0, theta=0.0, 
+    def topRowMuellerMatrix(self, psi=0.0, xi=0.0, theta=0.0, 
                              hwp_params=None):
         '''
         Compute the top row of the full HWP+polang+boresight Mueller Matrix
@@ -645,22 +645,22 @@ class Beam(object):
 
         return self.az, self.el, self.polang_truth
 
-    def _set_HWP_values(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
-        if(model_name is None and ((thicknesses is None) or (indices is None) or (losses is None) or (angles is None))):
+    def set_HWP_values(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
+        if(model_name is None and None in [thicknesses, indices, losses, angles]):
             raise ValueError('You must give either a model or parameters for a stack !')
         if (model_name !=None):
-            self.hwp._choose_HWP_model(model_name=model_name)
+            self.hwp.choose_HWP_model(model_name=model_name)
         else:
-            self.hwp._stack_builder(self, thicknesses=thicknesses, 
+            self.hwp.stack_builder(self, thicknesses=thicknesses, 
                 indices=indices, losses=losses, angles=angles)
 
-        self.hwp_precomp_mueller = self.hwp._compute4params(freq=self.sensitive_freq,
+        self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
                 alpha=np.radians(self.el))
 
-    def _get_Mueller_top_row(self, xi, psi, theta):
+    def get_Mueller_top_row(self, xi, psi, theta):
         if (self.hwp_precomp_mueller is None):
-            self.hwp_precomp_mueller = self.hwp._compute4params(freq=self.sensitive_freq,
+            self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
                 alpha=np.radians(self.el))
-        return self.hwp._topRowMuellerMatrix(xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
+        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
 
 
