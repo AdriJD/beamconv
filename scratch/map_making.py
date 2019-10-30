@@ -303,7 +303,7 @@ def Scan_maps(nside,alms, lmax,Freq, ideal_hwp=False):
         	ss.scan_instrument_mpi(alm, verbose=1, ra0=ra0, dec0=dec0,
         		az_throw=az_throw,nside_spin=nside_spin, max_spin=mmax, binning=True)
 
-        tods = ss.tod
+        tod = ss.tod
         maps, cond = ss.solve_for_map()
         blm = np.asarray(beam.blm).copy()
 
