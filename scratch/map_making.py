@@ -3,7 +3,7 @@ import pysm
 import pickle
 from pysm.nominal import models
 from beamconv import Beam, ScanStrategy, tools
-# pysm.nominal contains all the pre-defined models for foregrounds and cmb.
+# pysm.nominal contains all the pre defined models for foregrounds and cmb.
 # models [d0,..,d8] correspond to dust polarization, [s0,..s3]
 # to synchrotron emission and c1 to CMB.
 
