@@ -48,10 +48,14 @@ class HWP(object):
         Set a particlar stack from a few predefined models
         '''
         sapphire = tm.material( 3.07, 3.41, 2.3e-4, 1.25e-4, 'Sapphire', materialType='uniaxial')
+        spider_sapphire = tm.material( 3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
         duroid_a = tm.material( 1.55, 1.55, 0.5e-4, 0.5e-4, 'RT Duroid', materialType='isotropic')
         duroid_b = tm.material( 1.715, 1.715, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
         duroid_c = tm.material( 2.52, 2.52, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
-        duroid_d = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
+        quartz = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
+        circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
+        hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
+        
         if (model_name=='Ar+HWP+Ar'):
             thicknesses = [0.305*tm.mm, 3.15*tm.mm, 0.305*tm.mm]
             angles   = [0.0, 0.0, 0.0]
@@ -68,11 +72,17 @@ class HWP(object):
             materials = [duroid_a, duroid_c, sapphire, duroid_c, duroid_a]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-        elif (model_name=='SPIDER'):
+        elif (model_name=='SPIDER_95'):
             
             thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
-            materials = [duroid_d, sapphire, duroid_d]
+            materials = [quartz, spider_sapphire, quartz]
             angles = [0.0, 0.0, 0.0]
+
+        elif(model_name=='SPIDER_150'):
+
+            thicknesses = [0.254*tm.mm, 0.006*tm.mm, 3.16*tm.mm, 0.006*tm.mm, 0.254*tm.mm]
+            materials = [circlex, hdpe, spider_sapphire, hdpe, circlex]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
 
         else:
             raise ValueError('Unknown type of HWP entered')
