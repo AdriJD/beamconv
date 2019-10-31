@@ -251,7 +251,7 @@ def Scan_maps(nside,alms, lmax,Freq, ideal_hwp=False):
                      btype='PO',
                      fwhm=32.2,
                      lmax=lmax,
-                     mmax=50,
+                     mmax=4,
                      amplitude=1.,
                      po_file=po_file,
                      #eg_file=eg_file,
@@ -266,11 +266,11 @@ def Scan_maps(nside,alms, lmax,Freq, ideal_hwp=False):
 
     ### SCAN OPTIONS
     # duration = nsamp/sample_rate
-    nsamp      = 10000
-    fsamp      = 100
+    nsamp      = 864000
+    fsamp      = 10
     mlen       = nsamp/fsamp
     lmax       = lmax
-    mmax       = 50
+    mmax       = 4
     ra0        = -10
     dec0       = -57.5
     az_throw   = 50
@@ -346,14 +346,14 @@ def view_maps(output_maps,conds):
         cond[cond == np.inf] = hp.UNSEEN
         cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
         hp.cartview(cond, **cart_opts)
-        #hp.cartview(maps[0], min=-250, max=250, **cart_opts)
-        #hp.cartview(maps[1], min=-5, max=5, **cart_opts)
-        #hp.cartview(maps[2], min=-5, max=5, **cart_opts)
+        hp.cartview(maps[0], min=-250, max=250, **cart_opts)
+        hp.cartview(maps[1], min=-5, max=5, **cart_opts)
+        hp.cartview(maps[2], min=-5, max=5, **cart_opts)
         plt.show()
 
 
 
-def residual(nside,alms, lmax, blms, View_diffMap = False, Plot = True, Ratio=True):
+def residual(nside,alms, lmax, blms, View_diffMap = False, Plot = False):
 
     '''
     Compute the APS of the residual maps which are the differnce maps between
@@ -377,26 +377,30 @@ def residual(nside,alms, lmax, blms, View_diffMap = False, Plot = True, Ratio=Tr
         (default : False)
     Plot : bool
         if True: shows the residual APS and store them in the output folder 
-        (default : True)
-    Ratio : bool
-        if True: shows the ratio in percentage between the residual and the input APS
-        (default : True)
+        (default : False)
     '''
 
     Freq=[90, 95, 100, 105, 110]
     for freq, alm, blm in zip(Freq, alms, blms):
         O_maps = hp.read_map(opj(dir_out, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'), field=(0,1,2), verbose = False)
+        In_maps= hp.read_map(opj(dir_inp, 'pysm_maps/CMB_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
+
         blmax= hp.Alm.getlmax(alm[0].size)
         blm = trunc_alm(blm, blmax)
         alm =alm*blm
-        I_maps = hp.alm2map(alm, nside= hp.get_nside(O_maps),  pol = True, verbose = False)
-        #I_maps_not_smooth = hp.read_map(opj(dir_inp, 'pysm_maps/CMB_'+str(freq)+'GHz.fits'), field=(0,1,2), verbose = False)a
-        res_maps_ring = O_maps - I_maps
+        # In_maps_sm = hp.alm2map(alm, nside= hp.get_nside(O_maps),  pol = True, verbose = False)
+        # hp.write_map(opj(dir_out, 'Smoot_IM/In_map_smoot_'+str(freq)+'GHz.fits'), In_maps_sm, overwrite=True)
+
+        In_maps_gauss= hp.smoothing(In_map, fwhm=np.radians(32.2/60))
+        hp.write_map(opj(dir_out, 'Gauss_IM/In_map_gauss_'+str(freq)+'GHz.fits'), In_maps_gauss, overwrite=True)
+        
+        res_maps_ring = O_maps - In_maps_gauss
+        hp.write_map(opj(dir_out, 'Res_Maps/res_maps_'+str(freq)+'GHz.fits'), res_maps_ring, overwrite=True)
         
         cl_res = hp.anafast(res_maps_ring,lmax=lmax-1) ## TT,EE,BB,TE,EB,TB 
         np.save(os.path.join(dir_out+'residual_spectra/Cell_'+str(freq)+'GHz.npy'), cl_res)
 
-        cl_in = hp.anafast(I_maps,lmax=lmax-1)
+        cl_in = hp.anafast(In_maps_gauss,lmax=lmax-1)
         ratio_cl_res=np.zeros((6,lmax))
         ratio_cl_res[:,2:] = (cl_res[:,2:]/cl_in[:,2:])*100 ### the first two multipoles in cl_in are zeros, so we will have a numerical problem..
         np.save(os.path.join(dir_out+'residual_spectra/perc_Cell_'+str(freq)+'GHz.npy'), ratio_cl_res)
@@ -409,12 +413,8 @@ def residual(nside,alms, lmax, blms, View_diffMap = False, Plot = True, Ratio=Tr
             plt.show()
 
         if Plot:
-            if Ratio:
-                plot_APS_residual(ratio_cl_res[0],ratio_cl_res[1],ratio_cl_res[2],dir_out+'residual_spectra/plots/Cell'+str(freq)+'GHz.pdf', r'$\nu = $'+str(freq)+'GHz')
-            else:
-                plot_APS_residual(cl_res[0],cl_res[1],cl_res[2],dir_out+'residual_spectra/plots/Cell'+str(freq)+'GHz.pdf', r'$\nu = $'+str(freq)+'GHz')
-
-
+            plot_APS_residual(ratio_cl_res[0],ratio_cl_res[1],ratio_cl_res[2],dir_out+'residual_spectra/plots/Cell'+str(freq)+'GHz.pdf', r'$\nu = $'+str(freq)+'GHz')
+            
 
 def plot_APS_residual(cell1,cell2,cell3, file, name):
     plt.rcParams['axes.labelsize'] = 20
@@ -435,7 +435,7 @@ def plot_APS_residual(cell1,cell2,cell3, file, name):
     plt.show()
 
 
-def run(genmaps=True, calc_alm=True, scan_maps=True, comparison_test=False, Residual = True, See_Maps= True,
+def run(genmaps=True, calc_alm=True, scan_maps=True, comparison_test=False, Residual = True, See_Maps= False,
         nside=512, lmax = 700, Freq=[90, 95, 100, 105, 110]):
 
     '''
@@ -467,7 +467,7 @@ def run(genmaps=True, calc_alm=True, scan_maps=True, comparison_test=False, Resi
         (default : True)
     See_maps : 
         if True: display the output maps and the relative condition number.
-        (default : True)
+        (default : False)
     '''
 
     if genmaps:
