@@ -381,13 +381,13 @@ def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_c
         (default : False)
     '''
 
-        Freq=[90, 95, 100, 105, 110]
+    Freq=[90, 95, 100, 105, 110]
     for freq, alm, blm in zip(Freq, alms, blms):
         O_maps = hp.read_map(opj(dir_out, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'), field=(0,1,2), verbose = False)
         In_maps= hp.read_map(opj(dir_inp, 'pysm_maps/CMB_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
 
         # ## COMPARISON wrt IDEAL CASE
-        elif Ideal_comp:
+        if Ideal_comp:
             Ideal_maps= hp.read_map(opj(dir_ideal, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
             cl_in = hp.anafast(Ideal_maps, lmax=lmax-1, mmax=4)
             res_maps_ring = O_maps - Ideal_maps
