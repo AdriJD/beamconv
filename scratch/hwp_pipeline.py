@@ -216,7 +216,7 @@ def calc_alms(lmax,Freq):
         np.save(os.path.join(filefolder2, 'alm_'+str(freq)+'GHz.npy'),T)
          
 
-def Scan_maps(nside,alms, lmax,Freq, ideal_hwp=False):
+def Scan_maps(nside,alms, lmax,Freq, Own_Stack = True, ideal_hwp=False):
 
     '''
     Scanning simulation, store the output map, the blm, the tod, and the 
@@ -245,7 +245,16 @@ def Scan_maps(nside,alms, lmax,Freq, ideal_hwp=False):
     beam_file = 'pix0000_90_hwpproj_v5_f1p6_6p0mm_mfreq_lineard_hdpe.pkl'
     
     hwp = Beam().hwp()
-    hwp.choose_HWP_model('SPIDER_95')
+
+    if Own_Stack:
+    	thicknesses=np.array([0.427, 4.930, 0.427])
+    	indices = np.array([[1.,1.],[1.02,1.02],[1.,1.]])
+    	losses = np.array([[0.,0.],[1e-4,1e-4],[0.,0.]])
+    	angles = np.array([0.,0.,0.])
+    	hwp.stack_builder(thicknesses=thicknesses, indices=indices, losses=losses, angles=angles)
+    else:    
+    	hwp.choose_HWP_model('SPIDER_95')
+        
     beam_opts = dict(az=0,
                      el=0,
                      polang=0.,
