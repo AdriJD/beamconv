@@ -15,6 +15,7 @@ opj = os.path.join
 
 dir_out = '../output/'
 dir_inp = '../input_maps/'
+dir_ideal = '../ideal_case/output/'
 blm_dir = '../beams_jon/'
 
 
@@ -244,7 +245,7 @@ def Scan_maps(nside,alms, lmax,Freq, ideal_hwp=False):
     beam_file = 'pix0000_90_hwpproj_v5_f1p6_6p0mm_mfreq_lineard_hdpe.pkl'
     
     hwp = Beam().hwp()
-    hwp.choose_HWP_model('SPIDER')
+    hwp.choose_HWP_model('SPIDER_95')
     beam_opts = dict(az=0,
                      el=0,
                      polang=0.,
@@ -353,7 +354,7 @@ def view_maps(output_maps,conds):
 
 
 
-def residual(nside,alms, lmax, blms, View_diffMap = False, Plot = False):
+def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_comp=False, View_diffMap = False, Plot = False):
 
     '''
     Compute the APS of the residual maps which are the differnce maps between
@@ -380,31 +381,42 @@ def residual(nside,alms, lmax, blms, View_diffMap = False, Plot = False):
         (default : False)
     '''
 
-    Freq=[90, 95, 100, 105, 110]
+        Freq=[90, 95, 100, 105, 110]
     for freq, alm, blm in zip(Freq, alms, blms):
         O_maps = hp.read_map(opj(dir_out, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'), field=(0,1,2), verbose = False)
         In_maps= hp.read_map(opj(dir_inp, 'pysm_maps/CMB_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
 
-        blmax= hp.Alm.getlmax(alm[0].size)
-        blm = trunc_alm(blm, blmax)
-        alm =alm*blm
-        # In_maps_sm = hp.alm2map(alm, nside= hp.get_nside(O_maps),  pol = True, verbose = False)
-        # hp.write_map(opj(dir_out, 'Smoot_IM/In_map_smoot_'+str(freq)+'GHz.fits'), In_maps_sm, overwrite=True)
+        # ## COMPARISON wrt IDEAL CASE
+        elif Ideal_comp:
+            Ideal_maps= hp.read_map(opj(dir_ideal, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
+            cl_in = hp.anafast(Ideal_maps, lmax=lmax-1, mmax=4)
+            res_maps_ring = O_maps - Ideal_maps
 
-        In_maps_gauss= hp.smoothing(In_map, fwhm=np.radians(32.2/60))
-        hp.write_map(opj(dir_out, 'Gauss_IM/In_map_gauss_'+str(freq)+'GHz.fits'), In_maps_gauss, overwrite=True)
-        
-        res_maps_ring = O_maps - In_maps_gauss
+        # ## COMPARISON wrt PYSM MAP CONVOLVED WITH OPTICAL BEAM
+        elif Conv_comp:
+            blmax= hp.Alm.getlmax(alm[0].size)
+            blm = trunc_alm(blm, blmax)
+            alm =alm*blm
+            In_maps_sm = hp.alm2map(alm, nside= hp.get_nside(O_maps),  pol = True, verbose = False)
+            cl_in = hp.anafast(In_maps_sm, lmax=lmax-1, mmax=4)
+            hp.write_map(opj(dir_out, 'Smoot_IM/In_map_smoot_'+str(freq)+'GHz.fits'), In_maps_sm, overwrite=True)
+            res_maps_ring = O_maps - In_maps_sm
+
+        # ## COMPARISON wrt PYSM MAP SMOOTHED WITH GAUSSIAN BEAM
+        elif Smooth_comp:
+            In_maps_gauss= hp.smoothing(In_maps, fwhm=np.radians(32.2/60), verbose=False)
+            cl_in = hp.anafast(In_maps_gauss, lmax=lmax-1, mmax=4)
+            hp.write_map(opj(dir_out, 'Gauss_IM/In_map_gauss_'+str(freq)+'GHz.fits'), In_maps_gauss, overwrite=True)
+            res_maps_ring = O_maps - In_maps_gauss
+
         hp.write_map(opj(dir_out, 'Res_Maps/res_maps_'+str(freq)+'GHz.fits'), res_maps_ring, overwrite=True)
         
-        cl_res = hp.anafast(res_maps_ring,lmax=lmax-1) ## TT,EE,BB,TE,EB,TB 
+        cl_res = hp.anafast(res_maps_ring, lmax=lmax-1, mmax=4) ## TT,EE,BB,TE,EB,TB 
         np.save(os.path.join(dir_out+'residual_spectra/Cell_'+str(freq)+'GHz.npy'), cl_res)
 
-        cl_in = hp.anafast(In_maps_gauss,lmax=lmax-1)
         ratio_cl_res=np.zeros((6,lmax))
-        ratio_cl_res[:,2:] = (cl_res[:,2:]/cl_in[:,2:])*100 ### the first two multipoles in cl_in are zeros, so we will have a numerical problem..
+        ratio_cl_res[:,2:] = (cl_res[:,2:lmax]/cl_in[:,2:lmax])*100 ### the first two multipoles in cl_in are zeros, so we will have a numerical problem..
         np.save(os.path.join(dir_out+'residual_spectra/perc_Cell_'+str(freq)+'GHz.npy'), ratio_cl_res)
-
         if View_diffMap:
             cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
             hp.cartview(res_maps_ring[0], min=-250, max=250, **cart_opts)
