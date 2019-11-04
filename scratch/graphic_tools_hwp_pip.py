@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 opj = os.path.join
 
-dir_out = '../test7/output/'
+dir_out = '../output/'
 dir_ideal = '../ideal_case/output/'
-dir_inp = '../test7/input_maps/'
+dir_inp = '../input_maps/'
 blm_dir = '../beams_jon/'
 
 
