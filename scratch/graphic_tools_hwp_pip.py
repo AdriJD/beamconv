@@ -1,13 +1,4 @@
 import os
-import pysm
-import pickle
-# from pysm.nominal import models
-# from beamconv import Beam, ScanStrategy, tools
-
-# pysm.nominal contains all the pre-defined models for foregrounds and cmb.
-# models [d0,..,d8] correspond to dust polarization, [s0,..s3]
-# to synchrotron emission and c1 to CMB.
-
 import numpy as np
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -127,46 +118,3 @@ def _main_():
     tods_plots(tods, Freq)
 
 _main_()
-
-
-######################################################################################################
-# def view_maps(Freq):
-    
-#     '''
-#     Display output maps and the relative condition number.
-#     ---------
-#     '''
-
-#     for freq in Freq:
-
-#         cond = hp.read_map(opj(dir_out, 'Output_maps/Cond_Numb_'+str(freq)+'GHz.fits'), verbose = False)
-#         maps = hp.read_map(opj(dir_out, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
-
-#         cond[cond == np.inf] = hp.UNSEEN
-#         cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]',lonra=[60, 180], latra=[-90, -30])
-#         hp.cartview(cond, **cart_opts)
-#         plt.savefig(dir_out+'Output_maps/view/cond_numb'+str(freq)+'GHz.pdf')
-#         hp.cartview(maps[0], **cart_opts)
-#         plt.savefig(dir_out+'Output_maps/view/Tmap'+str(freq)+'GHz.pdf')
-#         hp.cartview(maps[1], **cart_opts)
-#         plt.savefig(dir_out+'Output_maps/view/Qmap'+str(freq)+'GHz.pdf')
-#         hp.cartview(maps[2], **cart_opts)
-#         plt.savefig(dir_out+'Output_maps/view/Umap'+str(freq)+'GHz.pdf')
-#         #plt.show()
-
-# def view_diff_maps(Freq):
-#     '''
-#     Display diff maps and the relative condition number.
-#     ---------
-#     '''
-    
-#     for freq in Freq:
-#         maps = hp.read_map(opj(dir_out, 'Res_Maps/res_maps_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
-#         cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]',lonra=[60, 180], latra=[-90, -30])
-#         hp.cartview(maps[0], **cart_opts)
-#         plt.savefig(dir_out+'Res_Maps/view/Tmap'+str(freq)+'GHz.pdf')
-#         hp.cartview(maps[1], **cart_opts)
-#         plt.savefig(dir_out+'Res_Maps/view/Qmap'+str(freq)+'GHz.pdf')
-#         hp.cartview(maps[2], **cart_opts)
-#         plt.savefig(dir_out+'Res_Maps/view/Umap'+str(freq)+'GHz.pdf')
-#         #plt.show()
