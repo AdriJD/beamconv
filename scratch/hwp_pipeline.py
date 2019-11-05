@@ -18,7 +18,6 @@ dir_inp = '../input_maps/'
 dir_ideal = '../ideal_case/output/'
 blm_dir = '../beams_jon/'
 
-
 opj=os.path.join
 
 def generate_maps(nside, Freq):
@@ -314,7 +313,7 @@ def Scan_maps(nside,alms, lmax,Freq, Own_Stack = True, ideal_hwp=False):
         		az_throw=az_throw,nside_spin=nside_spin, max_spin=mmax, binning=True)
 
         tod = ss.tod
-        maps, cond = ss.solve_for_map()
+        maps, cond = ss.solve_for_map(fill = np.nan)
         blm = np.asarray(beam.blm).copy()
 
         # We need to divide out sqrt(4pi / (2 ell + 1)) to get 
@@ -343,8 +342,6 @@ def view_maps(output_maps,conds):
     '''
     Display the output maps and the relative condition number.
     ---------
-    nside: int
-        the nside of the map
     output_maps : array-like
         healpy maps array
     conds: array-like
@@ -394,12 +391,17 @@ def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_c
     for freq, alm, blm in zip(Freq, alms, blms):
         O_maps = hp.read_map(opj(dir_out, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'), field=(0,1,2), verbose = False)
         In_maps= hp.read_map(opj(dir_inp, 'pysm_maps/CMB_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
+        
+        O_maps[np.isnan(O_maps)] = 0.
+        In_maps[np.isnan(In_maps)] = 0.
 
         # ## COMPARISON wrt IDEAL CASE
         if Ideal_comp:
             Ideal_maps= hp.read_map(opj(dir_ideal, 'Output_maps/Bconv_'+str(freq)+'GHz.fits'),field=(0,1,2), verbose = False)
+            Ideal_maps[np.isnan(Ideal_maps)] = 0.
             cl_in = hp.anafast(Ideal_maps, lmax=lmax-1, mmax=4)
             res_maps_ring = O_maps - Ideal_maps
+            res_maps_ring[np.isnan(res_maps_ring)] = 0.
 
         # ## COMPARISON wrt PYSM MAP CONVOLVED WITH OPTICAL BEAM
         elif Conv_comp:
@@ -410,6 +412,7 @@ def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_c
             cl_in = hp.anafast(In_maps_sm, lmax=lmax-1, mmax=4)
             hp.write_map(opj(dir_out, 'Smoot_IM/In_map_smoot_'+str(freq)+'GHz.fits'), In_maps_sm, overwrite=True)
             res_maps_ring = O_maps - In_maps_sm
+            res_maps_ring[np.isnan(res_maps_ring)] = 0.
 
         # ## COMPARISON wrt PYSM MAP SMOOTHED WITH GAUSSIAN BEAM
         elif Smooth_comp:
@@ -417,6 +420,7 @@ def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_c
             cl_in = hp.anafast(In_maps_gauss, lmax=lmax-1, mmax=4)
             hp.write_map(opj(dir_out, 'Gauss_IM/In_map_gauss_'+str(freq)+'GHz.fits'), In_maps_gauss, overwrite=True)
             res_maps_ring = O_maps - In_maps_gauss
+            res_maps_ring[np.isnan(res_maps_ring)] = 0.
 
         hp.write_map(opj(dir_out, 'Res_Maps/res_maps_'+str(freq)+'GHz.fits'), res_maps_ring, overwrite=True)
         
@@ -426,6 +430,8 @@ def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_c
         ratio_cl_res=np.zeros((6,lmax))
         ratio_cl_res[:,2:] = (cl_res[:,2:lmax]/cl_in[:,2:lmax])*100 ### the first two multipoles in cl_in are zeros, so we will have a numerical problem..
         np.save(os.path.join(dir_out+'residual_spectra/perc_Cell_'+str(freq)+'GHz.npy'), ratio_cl_res)
+        
+        
         if View_diffMap:
             cart_opts = dict(unit=r'[$\mu K_{\mathrm{CMB}}$]')
             hp.cartview(res_maps_ring[0], min=-250, max=250, **cart_opts)
@@ -438,7 +444,7 @@ def residual(nside,alms, lmax, blms, Ideal_comp=True, Conv_comp= False, Smooth_c
             
 
 def plot_APS_residual(cell1,cell2,cell3, file, name):
-    plt.rcParams['axes.labelsize'] = 20
+    plt.rcParams['axes.labelsize'] = 13
     fig = plt.figure ()
     ax = fig.add_subplot(1,1,1)
     l = len(cell1)
