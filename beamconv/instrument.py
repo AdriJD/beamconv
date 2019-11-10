@@ -2344,7 +2344,8 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def satellite_scan(self, alpha=50., beta=50.,
-        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False):
+        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
+        **kwargs):
         '''
         A function to simulate satellite scanning strategy.
 
@@ -2369,6 +2370,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Start index
         end : int
             End index
+        cidx : int
 
         Returns
         -------
@@ -3260,7 +3262,7 @@ class ScanStrategy(Instrument, qp.QMap):
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
             tod = np.real(tod_c) # Note, shares memory with tod_c.
-            
+
 
             # Add unpolarized tod.
             # Reset starting point recursion.
@@ -3291,20 +3293,20 @@ class ScanStrategy(Instrument, qp.QMap):
                 if interp:
                     tod_c += hp.get_interp_val(func_c[nidx], dec, ra)
                 else:
-                    tod_c += func_c[nidx,pix] 
+                    tod_c += func_c[nidx,pix]
             for n in s_vals:
                 if interp:
                     tod += np.real(hp.get_interp_val(func[n], dec, ra))
                 else:
                     tod += np.real(func[n,pix])
-            
+
             if not hasattr(self, 'hwp_ang'):
                 hwp_ang = 0
             else:
                 hwp_ang = self.hwp_ang
 
-            # Modulate by HWP angle and polarization angle. 
-            tod = np.real(self.instr_modulation(beam, hwp_ang=hwp_ang, 
+            # Modulate by HWP angle and polarization angle.
+            tod = np.real(self.instr_modulation(beam, hwp_ang=hwp_ang,
                 pa=pa, polang=polang, tod=tod, tod_c=tod_c))
 
         else:
@@ -3340,7 +3342,7 @@ class ScanStrategy(Instrument, qp.QMap):
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
 
-    def instr_modulation(self, beam, hwp_ang, pa, polang, tod, tod_c): 
+    def instr_modulation(self, beam, hwp_ang, pa, polang, tod, tod_c):
         #Thanks to Alex
 
         if (beam.sensitive_freq==None):
@@ -3351,7 +3353,7 @@ class ScanStrategy(Instrument, qp.QMap):
         #incidence = beam.el
         #incidence = self._elev2ang(beam)
 
-        #If wanted, set your own Mueller params 
+        #If wanted, set your own Mueller params
         #WARNING, _choose_HWP_model returns that only if the keyword is ideal.
         #Otherwise, it returns a HWP stack
         #beam.hwp._choose_HWP_model('HWP_only')
@@ -3359,11 +3361,11 @@ class ScanStrategy(Instrument, qp.QMap):
         #beam._set_HWP_values(model_name='SPIDER')
         #angles in rad, freq in Hz, base IPPV
         M_II, M_IP, M_IPt = beam.get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
-        #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
+        #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang,
         # 	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
         #print np.amax(M_II-M_Il), np.amax(M_IP-M_Pl), np.amax(M_lt-M_IPt)
         ## BASE IQUV
-        # M_II, M_IQ, M_IU = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang, 
+        # M_II, M_IQ, M_IU = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang,
         #    np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
 
         # BASE IPPV
