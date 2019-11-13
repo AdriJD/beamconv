@@ -71,12 +71,12 @@ class HWP(object):
             materials = [duroid_a, duroid_c, sapphire, duroid_c, duroid_a]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-        elif (model_name == '3layers_HWP'):
+        elif (model_name == '3layer_HWP'):
             thicknesses = [0.38*tm.mm, 0.32*tm.mm, 0.27*tm.mm, 3.75*tm.mm, 0.27*tm.mm, 0.32*tm.mm, 0.38*tm.mm]
             materials = [duroid_a, duroid_b, duroid_c, sapphire, duroid_c, duroid_b, duroid_a]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-        elif (model_name == '4layers_HWP'):
+        elif (model_name == '4layer_HWP'):
             thicknesses = [0.38*tm.mm, 0.32*tm.mm, 0.27*tm.mm, 0.2*tm.mm, 3.75*tm.mm, 0.2*tm.mm, 0.27*tm.mm, 0.32*tm.mm, 0.38*tm.mm]
             materials = [duroid_a, duroid_b, duroid_c, duroid_d, sapphire, duroid_d, duroid_c, duroid_b, duroid_a]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -665,12 +665,13 @@ class Beam(object):
         return self.az, self.el, self.polang_truth
 
     def set_HWP_values(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
-        if(model_name is None and None in [thicknesses, indices, losses, angles]):
+        if(model_name is None and any(elem is None for elem in [thicknesses, indices, losses, angles])):
             raise ValueError('You must give either a model or parameters for a stack !')
         if (model_name !=None):
             self.hwp.choose_HWP_model(model_name=model_name)
         else:
-            self.hwp.stack_builder(self, thicknesses=thicknesses, 
+
+            self.hwp.stack_builder(thicknesses=thicknesses, 
                 indices=indices, losses=losses, angles=angles)
 
         self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
