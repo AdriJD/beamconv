@@ -56,20 +56,29 @@ class HWP(object):
         circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
         hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
         
-        if (model_name=='Ar+HWP+Ar'):
-            thicknesses = [0.305*tm.mm, 3.15*tm.mm, 0.305*tm.mm]
-            angles   = [0.0, 0.0, 0.0]
-            materials   = [duroid_b, sapphire, duroid_b]
-        
-        elif (model_name=='HWP_only'):
+        if (model_name=='HWP_only'):
             thicknesses = [3.15*tm.mm]
             materials = [sapphire]
             angles = [0.0]
 
-        elif (model_name=='Ar1+Ar2+HWP+Ar2+Ar1'):
-            
+        if (model_name=='1layer_HWP'):
+            thicknesses = [305e-6, 3.15*tm.mm, 305e-6]
+            angles   = [0.0, 0.0, 0.0]
+            materials   = [duroid_b, sapphire, duroid_b]
+
+        elif (model_name=='2layer_HWP'):
             thicknesses = [0.38*tm.mm, 0.27*tm.mm, 3.75*tm.mm, 0.27*tm.mm,0.38*tm.mm]
             materials = [duroid_a, duroid_c, sapphire, duroid_c, duroid_a]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == '3layers_HWP'):
+            thicknesses = [0.38*tm.mm, 0.32*tm.mm, 0.27*tm.mm, 3.75*tm.mm, 0.27*tm.mm, 0.32*tm.mm, 0.38*tm.mm]
+            materials = [duroid_a, duroid_b, duroid_c, sapphire, duroid_c, duroid_b, duroid_a]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == '4layers_HWP'):
+            thicknesses = [0.38*tm.mm, 0.32*tm.mm, 0.27*tm.mm, 0.2*tm.mm, 3.75*tm.mm, 0.2*tm.mm, 0.27*tm.mm, 0.32*tm.mm, 0.38*tm.mm]
+            materials = [duroid_a, duroid_b, duroid_c, duroid_d, sapphire, duroid_d, duroid_c, duroid_b, duroid_a]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
 
         elif (model_name=='SPIDER_95'):
