@@ -10,7 +10,7 @@ import healpy as hp
 import tools
 from beamconv import ScanStrategy, MPIBase, Instrument
 from beamconv import Beam
-from beamconv import plot_map, plot_iqu
+from plot_tools import plot_map, plot_iqu
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
