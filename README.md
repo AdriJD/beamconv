@@ -24,11 +24,26 @@ Apart from the standard libraries, [NumPy](https://github.com/numpy/numpy), [Hea
 ```
 python setup.py install --user
 ```
-run unittests:
+
+or, when using pip and virtuelenv:
 
 ```
-python setup.py test
+pip install .
 ```
+
+Run tests:
+
+```
+python -m pytest tests
+```
+
+Testing requires the `pytest` package, this can be automatically obtained during installation by running:
+
+```
+pip install .[test]
+```
+
+Consider adding the `-e` flag to the `pip install` command to enable automatic updating of code changes when developing.
 
 
 
