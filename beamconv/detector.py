@@ -61,7 +61,7 @@ class HWP(object):
             materials = [sapphire]
             angles = [0.0]
 
-        if (model_name=='1layer_HWP'):
+        elif (model_name=='1layer_HWP'):
             thicknesses = [305e-6, 3.15*tm.mm, 305e-6]
             angles   = [0.0, 0.0, 0.0]
             materials   = [duroid_b, sapphire, duroid_b]
