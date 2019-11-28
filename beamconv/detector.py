@@ -55,6 +55,7 @@ class HWP(object):
         quartz = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
         circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
         hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
+        artificial_ar = tm.material(1.5, 1.5, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         
         if (model_name=='HWP_only'):
             thicknesses = [3.15*tm.mm]
@@ -92,6 +93,11 @@ class HWP(object):
             thicknesses = [0.254*tm.mm, 0.006*tm.mm, 3.16*tm.mm, 0.006*tm.mm, 0.254*tm.mm]
             materials = [circlex, hdpe, spider_sapphire, hdpe, circlex]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif(model_name=='monobest'):
+            thicknesses=[0.35*tm.mm,3.48*tm.mm,0.35*tm.mm]
+            materials=[artificial_ar, spider_sapphire, artificial_ar]
+            angles =[0.0, 0.0, 0.0]
 
         else:
             raise ValueError('Unknown type of HWP entered')
