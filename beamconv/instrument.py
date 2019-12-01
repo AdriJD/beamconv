@@ -11,8 +11,6 @@ import healpy as hp
 from . import tools
 from .detector import Beam
 
-from . import coupling_mueller_matrix as cmm
-
 class MPIBase(object):
     '''
     Parent class for MPI related stuff
