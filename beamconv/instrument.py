@@ -2156,6 +2156,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
         hwpang = kwargs.pop('hwpang', None)
+        hwp_status = kwargs.pop('hwp_status', None)
 
         if kwargs:
             raise TypeError("constant_el_scan() got unexpected "
