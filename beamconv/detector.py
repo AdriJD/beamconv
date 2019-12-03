@@ -52,7 +52,7 @@ class HWP(object):
         duroid_a = tm.material( 1.55, 1.55, 0.5e-4, 0.5e-4, 'RT Duroid', materialType='isotropic')
         duroid_b = tm.material( 1.715, 1.715, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
         duroid_c = tm.material( 2.52, 2.52, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
-        duroid_d = tm.material( 2.75, 2.75, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
+        duroid_d = tm.material( 2.76, 2.76, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
         quartz = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
         circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
         hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
