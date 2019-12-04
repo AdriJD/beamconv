@@ -109,7 +109,7 @@ class HWP(object):
         '''
         Compute the parameters for the unrotated Mueller Matrix
         '''
-        Mueller = tm.Mueller(self.stack, freq, alpha, 0., reflected=False)
+        Mueller = tm.Mueller(self.stack, freq, alpha, 0., reflected=True)
         T = Mueller[0,0]
         rho= Mueller[0,1]/ Mueller[0,0]
         c =  Mueller[2,2]/ Mueller[0,0]
