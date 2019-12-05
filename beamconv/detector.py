@@ -118,7 +118,7 @@ class HWP(object):
 
         elif(model_name=='monobest'):
             thicknesses=[0.35*tm.mm,3.48*tm.mm,0.35*tm.mm]
-            materials=[art_ar_mono, spider_sapphire, art_ar_mon]
+            materials=[art_ar_mono, spider_sapphire, art_ar_mono]
             angles =[0.0, 0.0, 0.0]
 
         elif (model_name == 'best_3layer_95'):
