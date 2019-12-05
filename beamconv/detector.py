@@ -52,9 +52,22 @@ class HWP(object):
         duroid_a = tm.material( 1.55, 1.55, 0.5e-4, 0.5e-4, 'RT Duroid', materialType='isotropic')
         duroid_b = tm.material( 1.715, 1.715, 1.2e-3, 1.2e-3, 'RT Duroid', materialType='isotropic')
         duroid_c = tm.material( 2.52, 2.52, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
+        duroid_d = tm.material( 2.76, 2.76, 56.6e-4, 56.5e-4, 'RT Duroid', materialType='isotropic')
         quartz = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
         circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
         hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
+        art_ar95 = tm.material(1.9, 1.9, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar150 = tm.material(1.7, 1.7, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar_mono = tm.material(1.5, 1.5, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar1_95 = tm.material(3.01, 3.01, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar2_95 = tm.material(2.157, 2.157, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar3_95 = tm.material(1.232, 1.232, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar1_150 = tm.material(2.766, 2.766, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar2_150 = tm.material(1.969, 1.969, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar3_150 = tm.material(1.423, 1.423, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar1_mono = tm.material(2.654, 2.654, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar2_mono = tm.material(2.543, 2.543, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar3_mono = tm.material(1.348, 1.348, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic') 
         
         if (model_name=='HWP_only'):
             thicknesses = [3.15*tm.mm]
@@ -74,12 +87,12 @@ class HWP(object):
         elif (model_name == '3layer_HWP'):
             thicknesses = [0.38*tm.mm, 0.32*tm.mm, 0.27*tm.mm, 3.75*tm.mm, 0.27*tm.mm, 0.32*tm.mm, 0.38*tm.mm]
             materials = [duroid_a, duroid_b, duroid_c, sapphire, duroid_c, duroid_b, duroid_a]
-            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         elif (model_name == '4layer_HWP'):
             thicknesses = [0.38*tm.mm, 0.32*tm.mm, 0.27*tm.mm, 0.2*tm.mm, 3.75*tm.mm, 0.2*tm.mm, 0.27*tm.mm, 0.32*tm.mm, 0.38*tm.mm]
             materials = [duroid_a, duroid_b, duroid_c, duroid_d, sapphire, duroid_d, duroid_c, duroid_b, duroid_a]
-            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         elif (model_name=='SPIDER_95'):
             
@@ -93,6 +106,42 @@ class HWP(object):
             materials = [circlex, hdpe, spider_sapphire, hdpe, circlex]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0]
 
+        elif(model_name=='best_95'):
+            thicknesses=[0.41*tm.mm,4.95*tm.mm,0.41*tm.mm]
+            materials=[art_ar95, spider_sapphire, art_ar95]
+            angles =[0.0, 0.0, 0.0]
+
+        elif(model_name=='best_150'):
+            thicknesses=[0.29*tm.mm,3.13*tm.mm,0.29*tm.mm]
+            materials=[art_ar150, spider_sapphire, art_ar150]
+            angles =[0.0, 0.0, 0.0]
+
+        elif(model_name=='monobest'):
+            thicknesses=[0.35*tm.mm,3.48*tm.mm,0.35*tm.mm]
+            materials=[art_ar_mono, spider_sapphire, art_ar_mon]
+            angles =[0.0, 0.0, 0.0]
+
+        elif (model_name == 'best_3layer_95'):
+            thicknesses = [0.45*tm.mm,0.349*tm.mm, 0.217*tm.mm, 4.942*tm.mm, 0.217*tm.mm, 0.349*tm.mm, 0.45*tm.mm]
+            materials = [art_ar3_95, art_ar2_95 ,art_ar1_95, spider_sapphire, art_ar1_95, art_ar2_95, art_ar3_95]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == 'best_3layer_150'):
+            thicknesses = [0.45*tm.mm,0.349*tm.mm, 0.217*tm.mm, 3.138*tm.mm, 0.217*tm.mm, 0.349*tm.mm, 0.45*tm.mm]
+            materials = [art_ar3_150, art_ar2_150 ,art_ar1_150, spider_sapphire, art_ar1_150, art_ar2_150, art_ar3_150]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == 'best_3layer_mono'):
+            thicknesses = [0.45*tm.mm,0.349*tm.mm, 0.217*tm.mm, 3.620*tm.mm, 0.217*tm.mm, 0.349*tm.mm, 0.45*tm.mm]
+            materials = [art_ar3_mono, art_ar2_mono ,art_ar1_mono, spider_sapphire, art_ar1_mono, art_ar2_mono, art_ar3_mono]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name =='9lAHWP'):
+            thicknesses = np.ones(9)*3.14*tm.mm
+            materials = [spider_sapphire, spider_sapphire, spider_sapphire, spider_sapphire,
+                         spider_sapphire, spider_sapphire, spider_sapphire, spider_sapphire, spider_sapphire]
+            angles = [0.,18.5,37.5,73.9,141.5,73.9,37.5,18.5,22.7]*np.pi/180.0
+
         else:
             raise ValueError('Unknown type of HWP entered')
 
@@ -102,7 +151,7 @@ class HWP(object):
         '''
         Compute the parameters for the unrotated Mueller Matrix
         '''
-        Mueller = tm.Mueller(self.stack, freq, alpha, 0., reflected=False)
+        Mueller = tm.Mueller(self.stack, freq, alpha, 0., reflected=True)
         T = Mueller[0,0]
         rho= Mueller[0,1]/ Mueller[0,0]
         c =  Mueller[2,2]/ Mueller[0,0]

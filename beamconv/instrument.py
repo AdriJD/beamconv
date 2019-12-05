@@ -11,8 +11,6 @@ import healpy as hp
 from . import tools
 from .detector import Beam
 
-from . import coupling_mueller_matrix as cmm
-
 class MPIBase(object):
     '''
     Parent class for MPI related stuff
@@ -1705,7 +1703,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, hwp_status='non-ideal', **kwargs):
+            preview_pointing=False, hwp_status='ideal', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1903,7 +1901,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # Scan and bin.
                     if beam_a and not beam_a.dead:
-
                         self._scan_detector(beam_a, interp=interp,
                                             save_tod=save_tod,
                                             save_point=save_point,
@@ -2158,6 +2155,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
         hwpang = kwargs.pop('hwpang', None)
+        hwp_status = kwargs.pop('hwp_status', None)
 
         if kwargs:
             raise TypeError("constant_el_scan() got unexpected "
@@ -2932,7 +2930,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-                           save_point=False, skip_scan=False, hwp_kind='ideal', **kwargs):
+        save_point=False, skip_scan=False, hwp_kind='ideal', **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
