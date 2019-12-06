@@ -140,7 +140,12 @@ class HWP(object):
             thicknesses = np.ones(9)*3.14*tm.mm
             materials = [spider_sapphire, spider_sapphire, spider_sapphire, spider_sapphire,
                          spider_sapphire, spider_sapphire, spider_sapphire, spider_sapphire, spider_sapphire]
-            angles = [0.,18.5,37.5,73.9,141.5,73.9,37.5,18.5,22.7]*np.pi/180.0
+            angles = np.array([0.,18.5,37.5,73.9,141.5,73.9,37.5,18.5,22.7])*np.pi/180.0
+
+        elif (model_name =='3lAHWP'):
+            thicknesses = np.ones(3)*3.14*tm.mm
+            materials = [spider_sapphire, spider_sapphire, spider_sapphire]
+            angles = np.array([0.,52.5,0.])*np.pi/180.0
 
         else:
             raise ValueError('Unknown type of HWP entered')
