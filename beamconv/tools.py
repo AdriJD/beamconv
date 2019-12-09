@@ -689,3 +689,97 @@ def ippv2iquv(mueller_mat):
 
     mueller_mat = np.matmul(Ainv,np.matmul(mueller_mat,A))
     return mueller_mat
+
+def tukey_window(n):
+    '''
+    Return tukey window (alpha=0.5).
+    See https://en.wikipedia.org/wiki/Window_function#Tukey_window.
+
+    Arguments
+    ---------
+    n : int
+        Window_length.
+
+    Returns
+    -------
+    window : ndarray
+        Tukey window.
+    '''
+    alpha = 0.5
+    L = float(n + 1)
+
+    window = np.ones(n, dtype=float)
+    x = np.arange(int(alpha * L / 2.) + 1, dtype=float)
+
+    window[:int(alpha * L / 2.) + 1] -= 0.5 * np.cos(2 * np.pi * x / alpha / L) + .5
+    # Use symmetry of window.
+    window[-int(n/2.):] = np.flip(window[:int(n/2.)])
+
+    return window
+
+def filter_ft_hwp(fd, center_idx, filter_width):
+    '''
+    Apply window to fourier transformed real data around given frequency.
+
+    Note, calculated in-place for memory reasons.
+
+    Arguments
+    ---------
+    fd : ndarray
+        Fourier-transformed (real) data, fd[0] should contain the zero
+        frequency term.
+    center_idx : int
+        Apply filter around this element of the input array.
+    filter_width : int
+        Wdith of filter measured in elements of fd. If even, 1 is
+        added to window width.
+    '''
+
+    # We select a view from the input array and apply the window to it,
+    # this avoids creating another large array for the window.
+    left = center_idx - int(filter_width / 2.)
+    right = center_idx + int(filter_width / 2.) + 1
+    arr2filter = fd[left:right]
+
+    # Apply the filter.
+    w = tukey_window(arr2filter.size)
+    arr2filter *= w
+
+    # Set array outside filter to zero.
+    fd[:left] *= 0.
+    fd[right:] *= 0.
+    
+    return
+
+def filter_tod_hwp(tod, fsamp, hwp_freq):
+    '''
+    Convolve TOD with window around 4 * fHWP (in place).
+
+    Arguments
+    ---------
+    tod : ndarray
+    fsamp : float
+        Sample frequency of TOD in Hz
+    hwp_freq : float
+        HWP rotation frequency (fHWP) in Hz.
+    '''
+
+    fd = np.fft.rfft(tod)
+
+    # Find sample that corresponds to 4 * fHWP.
+    # We could use numpy.fft.rfftfreq here, but we want to
+    # avoid loading another large array in memory.
+
+    center_idx = round((4 * hwp_freq) / float(fsamp) * tod.size)
+
+    # For now, we use a window width of 2 * hwp_freq.
+    left_idx = round((3 * hwp_freq) / float(fsamp) * tod.size)
+    right_idx = round((5 * hwp_freq) / float(fsamp) * tod.size)
+    filter_width = right_idx - left_idx + 1
+        
+    filter_ft_hwp(fd, center_idx, filter_width)
+
+    # This is not really in place I think.
+    tod[:] = np.fft.irfft(fd, n=tod.size)
+    
+    return

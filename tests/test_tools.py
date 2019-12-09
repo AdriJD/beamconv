@@ -130,6 +130,57 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(tod_a, expt_a)
         np.testing.assert_array_almost_equal(tod_b, expt_b)
 
+    def test_tukey_window(self):
+
+        # Even input.
+        n = 10
+        w = tools.tukey_window(n)
+
+        exp_ans = np.asarray(
+            [0, 0.292292, 0.827430, 1, 1, 1, 1, 0.827430, 0.292292, 0])
+        np.testing.assert_array_almost_equal(w, exp_ans)
+
+        # Odd input
+        n = 11
+        w = tools.tukey_window(n)
+
+        exp_ans = np.asarray(
+            [0, 0.25, 0.75, 1, 1, 1, 1, 1, 0.75, 0.25, 0])
+        np.testing.assert_array_almost_equal(w, exp_ans)
+
+    def test_filter_ft_hwp(self):
+
+        fd = np.ones(10, dtype=np.complex)
+        fd += 1j
+        center_idx = 4
+        filter_width = 4
+        tools.filter_ft_hwp(fd, center_idx, filter_width)
+
+        exp_ans = np.zeros(10, dtype=np.complex)
+        exp_ans[3] = .75 + .75j
+        exp_ans[4] = 1. + 1.j
+        exp_ans[5] = .75 + .75j
+
+        np.testing.assert_array_almost_equal(fd, exp_ans)
+
+    def test_filter_tod_hwp(self):
+
+        fsamp = 10.3
+        nsamp = 103 # I.e. 10 sec of data.
+        
+        t = np.arange(nsamp, dtype=np.float) # Samples.
+        
+        tod = np.sin(2 * t * (2 * np.pi) / float(nsamp)) # f = .2 Hz
+        tod += np.sin(4 * t * (2 * np.pi) / float(nsamp)) # f = .4 Hz
+
+        hwp_freq = .1
+        
+        tools.filter_tod_hwp(tod, fsamp, hwp_freq)
+
+        # We should have filtered out the f = .2 Hz component.
+        exp_ans = np.sin(4 * t * (2 * np.pi) / float(nsamp))# f = .4 Hz
+        np.testing.assert_array_almost_equal(tod, exp_ans)
+
 if __name__ == '__main__':
     unittest.main()
         

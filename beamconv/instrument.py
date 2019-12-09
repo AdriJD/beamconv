@@ -1703,7 +1703,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, hwp_status='ideal', **kwargs):
+            preview_pointing=False, hwp_status='ideal',
+            filter_4fhwp=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1753,6 +1754,9 @@ class ScanStrategy(Instrument, qp.QMap):
             and no scanning is done (tod are zero). All pointing and binning
             steps are performed, so useful for quickly checking output hits-map
             and condition number (default : False)
+        filter_4fhwp : bool
+            Only use TOD modes modulated at 4 x the HWP frequency.
+            Only allowed with spinning HWP. (default : False)
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
@@ -1918,7 +1922,8 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_a = self.tod.copy()
                         elif binning:
-                            self.bin_tod(beam_a, add_to_global=True, **subchunk)
+                            self.bin_tod(beam_a, add_to_global=True,
+                                filter_4fhwp=filter_4fhwp, **subchunk)
 
                     if beam_b and not beam_b.dead:
                         self._scan_detector(beam_b, interp=interp,
@@ -1931,7 +1936,8 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_b = self.tod
                         elif binning:
-                            self.bin_tod(beam_b, add_to_global=True, **subchunk)
+                            self.bin_tod(beam_b, add_to_global=True,
+                                filter_4fhwp=filter_4fhwp, **subchunk)
 
                     if do_ctalk:
                         tools.cross_talk(tod_a, tod_b, ctalk=ctalk)
@@ -1943,9 +1949,11 @@ class ScanStrategy(Instrument, qp.QMap):
 
                         if binning:
                             self.bin_tod(beam_a, tod=tod_a,
-                                         add_to_global=True, **subchunk)
+                             add_to_global=True, filter_4fhwp=filter_4fhwp,
+                             **subchunk)
                             self.bin_tod(beam_b, tod=tod_b,
-                                         add_to_global=True, **subchunk)
+                             add_to_global=True, filter_4fhwp=filter_4fhwp,
+                             **subchunk)
 
     def _chunk2idx(self, **kwargs):
         '''
@@ -3611,7 +3619,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return func, func_c, spin_values_unpol, spin_values_pol
 
     def bin_tod(self, beam, tod=None, flag=None, init=True,
-                add_to_global=True, **kwargs):
+                add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -3636,6 +3644,9 @@ class ScanStrategy(Instrument, qp.QMap):
         add_to_global : bool
             Add local maps to maps allocated by `allocate_maps`.
             (default : True)
+        filter_4fhwp : bool
+            Only use TOD modes modulated at 4 x the HWP frequency.
+            Only allowed with spinning HWP. (default : False)
         kwargs : {chunk_opts}
         '''
 
@@ -3664,12 +3675,21 @@ class ScanStrategy(Instrument, qp.QMap):
 
         q_off = q_off[np.newaxis]
 
-        # Note that qpoint wants (,nsamples) shaped tod array.
         if tod is None:
-            tod = self.tod[np.newaxis]
-        else:
-            tod = tod[np.newaxis]
-
+            tod = self.tod
+            
+        if filter_4fhwp:
+            if self.hwp_dict['mode'] == 'continuous':
+                hwp_freq = self.hwp_dict['freq']
+                tools.filter_tod_hwp(tod, self.fsamp, hwp_freq)
+            else:
+                raise ValueError(
+                    'filter_4fhwp not valid with hwp mode : {}'.format(
+                    self.hwp_dict['mode']))
+                      
+        # Note that qpoint wants (,nsamples) shaped tod array.
+        tod = tod[np.newaxis]
+                                    
         if flag is False:
             flag  = None
         elif flag is None and hasattr(self, 'flag'):
