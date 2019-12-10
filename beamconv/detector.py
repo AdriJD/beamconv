@@ -156,12 +156,14 @@ class HWP(object):
         '''
         Compute the parameters for the unrotated Mueller Matrix
         '''
-        Mueller = tm.Mueller(self.stack, freq, alpha, 0., reflected=False)
+
+        Mueller = tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=alpha, 
+            rotation=0., reflected=False)
+        
         T = Mueller[0,0]
         rho= Mueller[0,1]/ Mueller[0,0]
         c =  Mueller[2,2]/ Mueller[0,0]
         s =  Mueller[3,2]/ Mueller[0,0]
-
         return np.array([T,rho,c,s])
 
     def topRowMuellerMatrix(self, psi=0.0, xi=0.0, theta=0.0, 
@@ -200,7 +202,7 @@ class Beam(object):
     A class representing detector and beam properties.
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = 150e9,
+                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = 150,
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
@@ -233,8 +235,10 @@ class Beam(object):
                 PO       : A physical optics beam
             (default: Gaussian)
         fwhm : float
-            Detector beam FWHM in arcmin (used for Guassian beam)
+            Detector beam FWHM in arcmin (used for Gaussian beam)
             (default : 43)
+        sensitive_freq : float
+            Detector beam frequency in GHz
         lmax : int
             Bandlimit beam. If None, use 1.4*2*pi/fwhm. (default : None)
         mmax : int
