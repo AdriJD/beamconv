@@ -235,7 +235,7 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
     ---------
     c2_fwhm : float, None
         fwhm in arcmin. Used to multiply \pm 2 blm coefficients
-        with exp 2 sigma**2. Needed to match healpy Gaussian 
+        with exp 2 sigma**2. Needed to match healpy Gaussian
         smoothing for pol (see Challinor et al. 2000)
         (default : None)
     kwargs : {scale_blm_opts}
@@ -289,7 +289,7 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
     blmm2_q, blmp2_q = unpol2pol(blm_q)
     blmm2_u, blmp2_u = unpol2pol(blm_u)
 
-    # Note the signs here, phi -> -phi+pi compared to to 
+    # Note the signs here, phi -> -phi+pi compared to to
     # Challinor et al. 2000
     blmm2 = blmm2_q + 1j * blmm2_u
     blmp2 = blmp2_q - 1j * blmp2_u
@@ -359,7 +359,7 @@ def radec2colatlong(ra, dec):
     and longitude used for healpy.
 
     Long = RA
-    Co-lat = -DEC + pi/2 
+    Co-lat = -DEC + pi/2
 
     Arguments
     ---------
@@ -367,10 +367,10 @@ def radec2colatlong(ra, dec):
         Right ascension in degrees.
     dec : array-like
         Declination in degrees.
-    
+
     '''
 
-    # Convert RA to healpix longitude (=phi) 
+    # Convert RA to healpix longitude (=phi)
     ra *= (np.pi / 180.)
     ra = np.mod(ra, 2 * np.pi, out=ra)
 
@@ -563,7 +563,7 @@ def blm2bl(blm, m=0, copy=True):
     ---------
     blm : array-like
        Complex numpy array corresponding to the spherical harmonics of the beam
-        
+
     Keyword arguments
     -----------------
     m : int
@@ -582,7 +582,7 @@ def blm2bl(blm, m=0, copy=True):
         raise ValueError('blm should have have ndim == 1')
     if m < 0:
         raise ValueError('m cannot be negative')
-        
+
     lmax = hp.Alm.getlmax(blm.size)
 
     start = hp.Alm.getidx(lmax, m, m)
@@ -607,14 +607,14 @@ def sawtooth_wave(num_samp, scan_speed, period):
         Degrees per sample.
     period : float
         Period of wave in degrees.
-        
+
     Returns
     -------
     az : array-like
          Azimuth value for each sample in degrees.
     '''
 
-    tot_degrees = scan_speed * num_samp 
+    tot_degrees = scan_speed * num_samp
     az = np.linspace(0, tot_degrees, num=num_samp, dtype=float,
                      endpoint=False)
     np.mod(az, period, out=az)
@@ -634,7 +634,7 @@ def cross_talk(tod_a, tod_b, ctalk=0.01):
     Keyword arguments
     -----------------
     ctalk : float
-        Amount of cross-talk, i.e. fraction of each time-stream 
+        Amount of cross-talk, i.e. fraction of each time-stream
         that is added to the other. (default : 0.01)
     '''
 
@@ -748,7 +748,7 @@ def filter_ft_hwp(fd, center_idx, filter_width):
     # Set array outside filter to zero.
     fd[:left] *= 0.
     fd[right:] *= 0.
-    
+
     return
 
 def filter_tod_hwp(tod, fsamp, hwp_freq):
@@ -770,16 +770,16 @@ def filter_tod_hwp(tod, fsamp, hwp_freq):
     # We could use numpy.fft.rfftfreq here, but we want to
     # avoid loading another large array in memory.
 
-    center_idx = round((4 * hwp_freq) / float(fsamp) * tod.size)
+    center_idx = int(round((4 * hwp_freq) / float(fsamp) * tod.size))
 
     # For now, we use a window width of 2 * hwp_freq.
     left_idx = round((3 * hwp_freq) / float(fsamp) * tod.size)
     right_idx = round((5 * hwp_freq) / float(fsamp) * tod.size)
     filter_width = right_idx - left_idx + 1
-        
+
     filter_ft_hwp(fd, center_idx, filter_width)
 
     # This is not really in place I think.
     tod[:] = np.fft.irfft(fd, n=tod.size)
-    
+
     return
