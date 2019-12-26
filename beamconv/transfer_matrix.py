@@ -701,3 +701,11 @@ def JonesRotation(jones, theta):
     rot = np.array(((cos(theta*deg),-sin(theta*deg)),(sin(theta*deg),cos(theta*deg))),dtype=np.complex)
 
     return np.dot(rot, np.dot( jones, inv(rot)))
+
+def MuellerRotation(mueller, theta):
+
+    rot = np.array(((1.,0.,0.,0.), (0.,cos(2*theta),sin(2*theta),0.), (0.,-sin(2*theta),cos(2*theta),0.), (0.,0.,0.,1.)))
+    m_rot = np.array(((1.,0.,0.,0.), (0.,cos(-2*theta),sin(-2*theta),0.), (0.,-sin(2*theta),cos(-2*theta),0.), (0.,0.,0.,1.)))
+
+    return np.dot(m_rot, np.dot(mueller, rot))
+

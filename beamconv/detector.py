@@ -166,6 +166,11 @@ class HWP(object):
         s =  Mueller[3,2]/ Mueller[0,0]
         return np.array([T,rho,c,s])
 
+    def compute_mueller(self,freq,alpha):
+        return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=alpha, 
+            rotation=0., reflected=False))
+
+
     def topRowMuellerMatrix(self, psi=0.0, xi=0.0, theta=0.0, 
                              hwp_params=None):
         '''
@@ -196,6 +201,27 @@ class HWP(object):
         #return MII, MIQ, MIU 
         return MII, MIP, MIP_t 
 
+    def fullMuellerTopRow(self, psi=0.0, xi = 0.0, theta=0.0,
+            hwp_mueller = None):
+        
+        # Compute the top row of the full HWP+polang+boresight Mueller Matrix 
+        # for a given unrotated stack Mueller matrix
+        m_psi = np.array(( (1.,0.,0.,0.), (0.,np.cos(2*psi),np.sin(2*psi),0.), 
+                           (0.,-np.sin(2*psi),np.cos(2*psi),0.), (0.,0.,0.,1.)))
+        m_xi = np.array(( (1.,0.,0.,0.), (0.,np.cos(2*xi),np.sin(2*xi),0.), 
+                           (0.,-np.sin(2*xi),np.cos(2*xi),0.), (0.,0.,0.,1.)))
+        m_pol = np.array(( (.5,.5,0.,0.), (.5,.5,0.,0.), 
+                           (0.,0.,0.,0.), (0.,0.,0.,0.)))
+
+        m_full = np.dot(m_pol, np.dot(m_xi, 
+            np.dot(tm.MuellerRotation(mueller=hwp_mueller, theta=theta), m_psi)))
+
+        MII = m_full[0,0]
+        MIP = 0.5*(m_full[0,1]-1j*m_full[0,2]) 
+        MIP_t = 0.5*(m_full[0,1]+1j*m_full[0,2]) 
+        return MII, MIP, MIP_t # MII, MIP, MIPt
+
+
 
 class Beam(object):
     '''
@@ -206,7 +232,8 @@ class Beam(object):
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
-                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=None):
+                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=None,
+                 hwp_mueller=None):
         '''
         Initialize a detector beam.
 
@@ -735,10 +762,32 @@ class Beam(object):
         self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
                 alpha=np.radians(self.el))
 
+    def set_hwp_mueller(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
+        if(model_name is None and any(elem is None for elem in [thicknesses, indices, losses, angles])):
+            raise ValueError('You must give either a model or parameters for a stack !')
+        if (model_name !=None):
+            self.hwp.choose_HWP_model(model_name=model_name)
+        else:
+
+            self.hwp.stack_builder(thicknesses=thicknesses, 
+                indices=indices, losses=losses, angles=angles)
+
+        self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
+                alpha=np.radians(self.el))
+
     def get_Mueller_top_row(self, xi, psi, theta):
         if (self.hwp_precomp_mueller is None):
             self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
                 alpha=np.radians(self.el))
-        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, theta=theta, hwp_params = self.hwp_precomp_mueller)
+        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, theta=theta, 
+            hwp_params = self.hwp_precomp_mueller)
+
+    def get_mueller_top_row_full(self, xi, psi, theta):
+        if (self.hwp_mueller is None):
+            self.hwp_mueller = self.hwp.compute_mueller(freq=sensitive_freq, 
+                alpha = np.radians(self.el))
+        return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, theta = theta,
+            hwp_mueller = self.hwp_mueller)
+
 
 
