@@ -188,11 +188,11 @@ class HWP(object):
         s = hwp_params[3]
         #print T, rho, c, s
         MII = H*T*(1+(gamma*rho*np.cos(2*(theta+xi))))
-        MIQ = H*T*(rho*np.cos(2*(theta+psi)) + (0.5*(1+c)*gamma*np.cos(2*(psi-xi))) 
+        MIQ = H*T*(rho*np.cos(2*(theta+psi)) + (0.5*(1+c)*gamma*np.cos(2*(xi-psi))) 
             + (0.5*(1-c)*gamma*np.cos(2*(2*theta+xi+psi))))
-        MIU = H*T*(rho*np.sin(2*(theta+psi)) + (0.5*(1+c)*gamma*np.sin(2*(psi-xi))) 
+        MIU = H*T*(rho*np.sin(2*(theta+psi)) - (0.5*(1+c)*gamma*np.sin(2*(xi-psi))) 
             + (0.5*(1-c)*gamma*np.sin(2*(2*theta+xi+psi))))
-        MIV = H*T*(s*gamma*np.sin(2*(theta+xi)))
+        MIV = H*T*(s*gamma*np.sin(4*(theta+xi)))
 
         # IPPV base
         MIP = 0.5*(MIQ-1j*MIU) 
@@ -208,8 +208,8 @@ class HWP(object):
         # for a given unrotated stack Mueller matrix
         m_psi = np.array(( (1.,0.,0.,0.), (0.,np.cos(2*psi),np.sin(2*psi),0.), 
                            (0.,-np.sin(2*psi),np.cos(2*psi),0.), (0.,0.,0.,1.)))
-        m_xi = np.array(( (1.,0.,0.,0.), (0.,np.cos(2*xi),np.sin(2*xi),0.), 
-                           (0.,-np.sin(2*xi),np.cos(2*xi),0.), (0.,0.,0.,1.)))
+        m_xi = np.array(( (1.,0.,0.,0.), (0.,np.cos(-2*xi),np.sin(-2*xi),0.), 
+                           (0.,-np.sin(-2*xi),np.cos(-2*xi),0.), (0.,0.,0.,1.)))
         m_pol = np.array(( (.5,.5,0.,0.), (.5,.5,0.,0.), 
                            (0.,0.,0.,0.), (0.,0.,0.,0.)))
 
