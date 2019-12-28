@@ -188,9 +188,9 @@ class HWP(object):
         s = hwp_params[3]
         #print T, rho, c, s
         MII = H*T*(1+(gamma*rho*np.cos(2*(theta+xi))))
-        MIQ = H*T*(rho*np.cos(2*(theta+psi)) + (0.5*(1+c)*gamma*np.cos(2*(xi-psi))) 
+        MIQ = H*T*(rho*np.cos(2*(theta+psi)) + (0.5*(1+c)*gamma*np.cos(2*(psi-xi))) 
             + (0.5*(1-c)*gamma*np.cos(2*(2*theta+xi+psi))))
-        MIU = H*T*(rho*np.sin(2*(theta+psi)) - (0.5*(1+c)*gamma*np.sin(2*(xi-psi))) 
+        MIU = H*T*(rho*np.sin(2*(theta+psi)) + (0.5*(1+c)*gamma*np.sin(2*(psi-xi))) 
             + (0.5*(1-c)*gamma*np.sin(2*(2*theta+xi+psi))))
         MIV = H*T*(s*gamma*np.sin(4*(theta+xi)))
 
