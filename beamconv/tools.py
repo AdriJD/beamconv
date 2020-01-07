@@ -783,3 +783,12 @@ def filter_tod_hwp(tod, fsamp, hwp_freq):
     tod[:] = np.fft.irfft(fd, n=tod.size)
 
     return
+
+
+def hwp_freq2thick(indx_diff, freq):
+	# Compute the ideal thickness of the HWP for a frequency and index difference
+	# freq in GHz
+	# indx_diff the difference between the two indices of the birefringent material
+	# Answer given in mm
+
+	return 299.792458/(2*np.abs(indx_diff)*freq)
