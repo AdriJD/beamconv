@@ -331,7 +331,7 @@ class Beam(object):
         self.hwp = hwp
         self.hwp_precomp_mueller=hwp_precomp_mueller
         self.hwp_mueller = hwp_mueller
-        
+
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
         if not self.ghost:
@@ -790,7 +790,7 @@ class Beam(object):
 
     def get_mueller_top_row_full(self, xi, psi, theta):
         if (self.hwp_mueller is None):
-            self.hwp_mueller = self.hwp.compute_mueller(freq=sensitive_freq, 
+            self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq, 
                 alpha = np.radians(self.el))
         return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, theta = theta,
             hwp_mueller = self.hwp_mueller)
