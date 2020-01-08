@@ -3366,7 +3366,7 @@ class ScanStrategy(Instrument, qp.QMap):
         #beam.hwp_precomp_mueller=np.array([1.,0.,-1.,0.])
         #beam._set_HWP_values(model_name='SPIDER')
         #angles in rad, freq in Hz, base IPPV
-        M_II, M_IP, M_IPt = beam.get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+        M_II, M_IP, M_IPt = beam.get_mueller_top_row_full(xi = np.radians(polang), psi=pa, theta=hwp_ang)
         #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang,
         # 	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
         #print np.amax(M_II-M_Il), np.amax(M_IP-M_Pl), np.amax(M_lt-M_IPt)
