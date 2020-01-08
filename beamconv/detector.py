@@ -147,6 +147,11 @@ class HWP(object):
             materials = [spider_sapphire, spider_sapphire, spider_sapphire]
             angles = np.array([0.,52.5,0.])*np.pi/180.0
 
+        elif (model_name =='1AR3BR'):#NEW: A AHWP with the best 1 layer of AR
+            thicknesses = [0.35*tm.mm,3.14*tm.mm,3.14*tm.mm,3.14*tm.mm,0.35*tm.mm]
+            materials = [art_ar_mono,spider_sapphire, spider_sapphire, spider_sapphire, art_ar_mono]
+            angles = np.array([0.,0.,52.5,0.,0.])*np.pi/180.0
+
         else:
             raise ValueError('Unknown type of HWP entered')
 
