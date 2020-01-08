@@ -330,7 +330,8 @@ class Beam(object):
         self.symmetric = symmetric
         self.hwp = hwp
         self.hwp_precomp_mueller=hwp_precomp_mueller
-
+        self.hwp_mueller = hwp_mueller
+        
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
         if not self.ghost:
