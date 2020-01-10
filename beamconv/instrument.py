@@ -1704,7 +1704,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, hwp_status='ideal',
-            filter_4fhwp=False, **kwargs):
+            filter_4fhwp=False, muell_mat_model='simple', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1909,7 +1909,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
-                                            hwp_kind=hwp_status,
+                                            hwp_status=hwp_status,
+                                            muell_mat_model=muell_mat_model,
                                             **subchunk)
 
                         # Save memory by not copying if no pair.
@@ -1930,7 +1931,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
-                                            hwp_kind=hwp_status,
+                                            hwp_status=hwp_status,
+                                            muell_mat_model=muell_mat_model,
                                             **subchunk)
 
                         if do_ctalk:
@@ -2938,7 +2940,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-        save_point=False, skip_scan=False, hwp_kind='ideal', **kwargs):
+        save_point=False, skip_scan=False, hwp_status='ideal', muell_mat_model='simple', **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -3000,7 +3002,8 @@ class ScanStrategy(Instrument, qp.QMap):
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
                         return_point=save_point,
-                        skip_scan=skip_scan, hwp_type=hwp_kind, **kwargs)
+                        skip_scan=skip_scan, hwp_status=hwp_status, 
+                        muell_mat_model=muell_mat_model, **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
@@ -3058,8 +3061,8 @@ class ScanStrategy(Instrument, qp.QMap):
             return self._data[str(chunk['cidx'])][str(beam.idx)][data_type]
 
     def scan(self, beam, add_to_tod=False, interp=False,
-             return_tod=False, return_point=False, skip_scan=False, hwp_type='ideal',
-             **kwargs):
+             return_tod=False, return_point=False, skip_scan=False, hwp_status='ideal',
+             muell_mat_model='simple', **kwargs):
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
@@ -3235,7 +3238,7 @@ class ScanStrategy(Instrument, qp.QMap):
         pa += np.pi
 
 
-        if (hwp_type=='ideal'):
+        if (hwp_status=='ideal'):
             # Fill complex array, i.e. the linearly polarized part
             # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
             # to avoid doing triginometry at each n.
@@ -3294,7 +3297,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     else:
                         tod += 2 * np.real(func[n,pix] * expipan)
 
-        elif(hwp_type=='non-ideal'):
+        elif(hwp_status=='non-ideal'):
             for nidx, n in enumerate(s_vals_c):
                 if interp:
                     tod_c += hp.get_interp_val(func_c[nidx], dec, ra)
@@ -3313,7 +3316,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # Modulate by HWP angle and polarization angle.
             tod = np.real(self.instr_modulation(beam, hwp_ang=hwp_ang,
-                pa=pa, polang=polang, tod=tod, tod_c=tod_c))
+                pa=pa, polang=polang, tod=tod, tod_c=tod_c, muell_mat_model=muell_mat_model))
 
         else:
             raise ValueError('HWP_type variable only accepts values `ideal` and `non-ideal`')
@@ -3348,8 +3351,8 @@ class ScanStrategy(Instrument, qp.QMap):
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
 
-    def instr_modulation(self, beam, hwp_ang, pa, polang, tod, tod_c):
-        #Thanks to Alex
+    def instr_modulation(self, beam, hwp_ang, pa, polang, tod, tod_c, muell_mat_model):
+        
 
         if (beam.sensitive_freq==None):
             raise ValueError('The beam does not have a defined frequency')
@@ -3366,7 +3369,12 @@ class ScanStrategy(Instrument, qp.QMap):
         #beam.hwp_precomp_mueller=np.array([1.,0.,-1.,0.])
         #beam._set_HWP_values(model_name='SPIDER')
         #angles in rad, freq in Hz, base IPPV
-        M_II, M_IP, M_IPt = beam.get_mueller_top_row_full(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+        if (muell_mat_model=='simple'):
+            M_II, M_IP, M_IPt = beam.get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+        elif (muell_mat_model=='full'):
+            M_II, M_IP, M_IPt = beam.get_mueller_top_row_full(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+        else:
+            raise ValueError('Unknown model for the Mueller matrix !')
         #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang,
         # 	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
         #print np.amax(M_II-M_Il), np.amax(M_IP-M_Pl), np.amax(M_lt-M_IPt)
