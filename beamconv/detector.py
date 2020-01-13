@@ -217,9 +217,14 @@ class HWP(object):
         #                    (0.,-np.sin(-2*xi),np.cos(-2*xi),0.), (0.,0.,0.,1.)))
         # m_pol = np.array(( (.5,.5,0.,0.), (.5,.5,0.,0.), 
         #                    (0.,0.,0.,0.), (0.,0.,0.,0.)))
+        m = len(psi)#length of chunk
+        m_rhs = np.array(( (np.ones(m), np.zeros(m), np.zeros(m), np.zeros(m)),
+                           (np.zeros(m), np.cos(2.*psi+2.*theta), np.sin(2.*psi+2.*theta), np.zeros(m)), 
+                           (np.zeros(m), -np.sin(2.*psi+2.*theta),np.cos(2.*psi+2.*theta), np.zeros(m)), 
+                           (np.zeros(m), np.zeros(m), np.zeros(m), np.ones(m))))
 
-        m_rhs = np.array(( (1.,0.,0.,0.), (0.,np.cos(2.*psi+2.*theta),np.sin(2.*psi+2.*theta),0.), 
-                           (0.,-np.sin(2.*psi+2.*theta),np.cos(2.*psi+2.*theta),0.), (0.,0.,0.,1.)))
+        m_rhs = np.transpose(m_rhs,(2,0,1))
+
         # m_lhs = .5*np.array((   (1.,np.cos(-2.*xi-2.*theta),np.sin(-2.*xi-2.*theta),0.),
         #                         (1.,np.cos(-2.*xi-2.*theta),np.sin(-2.*xi-2.*theta),0.),
         #                         (0.,0.,0.,0.),(0.,0.,0.,0.)))
@@ -233,12 +238,12 @@ class HWP(object):
         # MIP_t = 0.5*(m_full[0,1]+1j*m_full[0,2])
 
         # m_full =np.dot(m_lhs, np.dot(hwp_mueller, m_rhs))
-        tm_rhs = np.dot(hwp_mueller, m_rhs)
-        MII = .5*(tm_rhs[0,0] + np.cos(-2*(xi+theta))*tm_rhs[1,0] + np.sin(-2*(xi+theta))*tm_rhs[2,0])
-        MIQ = .5*(tm_rhs[0,1] + np.cos(-2*(xi+theta))*tm_rhs[1,1] + np.sin(-2*(xi+theta))*tm_rhs[2,1])
-        MIU = .5*(tm_rhs[0,2] + np.cos(-2*(xi+theta))*tm_rhs[1,2] + np.sin(-2*(xi+theta))*tm_rhs[2,2])
-        MIP = 0.5*(M_IQ-1j*M_IU)
-        MIP_t = 0.5*(M_IQ+1j*M_IU)
+        tm_rhs = np.matmul(hwp_mueller, m_rhs)
+        MII = .5*(tm_rhs[:,0,0] + np.cos(-2*(xi+theta))*tm_rhs[:,1,0] + np.sin(-2*(xi+theta))*tm_rhs[:,2,0])
+        MIQ = .5*(tm_rhs[:,0,1] + np.cos(-2*(xi+theta))*tm_rhs[:,1,1] + np.sin(-2*(xi+theta))*tm_rhs[:,2,1])
+        MIU = .5*(tm_rhs[:,0,2] + np.cos(-2*(xi+theta))*tm_rhs[:,1,2] + np.sin(-2*(xi+theta))*tm_rhs[:,2,2])
+        MIP = 0.5*(MIQ-1j*MIU)
+        MIP_t = 0.5*(MIQ+1j*MIU)
         return MII, MIP, MIP_t 
 
 
