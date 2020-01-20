@@ -818,9 +818,9 @@ class Beam(object):
             self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq, 
                 alpha = np.radians(self.el))
         if (self.hwp_induced_phase is None):#Degree precision
-            self.hwp_induced_phase = theta[np.argmax(
-                np.real(fullMuellerTopRow(psi=np.zeros(181), 
-                    xi=np.zeros(181), theta=np.linspace(0, np.pi, 181), hwp_mueller=self.hwp_mueller)))]
+            self.hwp_induced_phase = np.linspace(0, np.pi, 181)[np.argmax(
+                np.real(self.hwp.fullMuellerTopRow(psi=np.zeros(181), 
+                    xi=np.zeros(181), theta=np.linspace(0, np.pi, 181), hwp_mueller=self.hwp_mueller)[1][:90]))]
 
         return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, theta = theta,
             hwp_mueller = self.hwp_mueller)
