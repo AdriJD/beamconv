@@ -3659,6 +3659,9 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         # HWP does not depend on particular detector.
+        if beam.hwp_induced_phase:
+            self.hwp_ang -= beam.hwp_induced_phase
+
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
 
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
