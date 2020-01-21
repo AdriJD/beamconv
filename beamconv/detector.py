@@ -355,7 +355,6 @@ class Beam(object):
         self.hwp = hwp
         self.hwp_precomp_mueller=hwp_precomp_mueller
         self.hwp_mueller = hwp_mueller
-        self.hwp_induced_phase = hwp_induced_phase
 
         self.__ghost = ghost
         # Ghosts are not allowed to have ghosts
