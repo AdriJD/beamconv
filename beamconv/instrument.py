@@ -1394,7 +1394,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def set_hwp_mod(self, mode=None,
                     freq=None, start_ang=0.,
-                    angles=None):
+                    angles=None, hwp_induced_phase=0.):
         '''
         Set options for modulating the polarized sky signal
         using a (stepped or continuously rotating) half-wave
@@ -1422,7 +1422,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.hwp_dict['angle'] = start_ang
         self.hwp_dict['start_ang'] = start_ang
         self.hwp_dict['remainder'] = 0 # num. samp. from last step
-
+        self.hwp_dict['hwp_induced_phase'] = hwp_induced_phase
 
         if angles is None:
             angles = np.arange(start_ang, 360+start_ang, 22.5)
@@ -3660,9 +3660,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # HWP does not depend on particular detector.
 
-        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
-        if beam.hwp_induced_phase:
-            q_hwp = self.hwp_quat(np.degrees(self.hwp_ang-beam.hwp_induced_phase))
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['hwp_induced_phase'])
+
 
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
 

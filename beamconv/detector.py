@@ -262,7 +262,7 @@ class Beam(object):
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
                  symmetric=False, hwp=HWP(), hwp_precomp_mueller=None,
-                 hwp_mueller=None, hwp_induced_phase=None):
+                 hwp_mueller=None):
         '''
         Initialize a detector beam.
 
@@ -817,10 +817,6 @@ class Beam(object):
         if (self.hwp_mueller is None):
             self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq, 
                 alpha = np.radians(self.el))
-        if (self.hwp_induced_phase is None):#Degree precision
-            self.hwp_induced_phase = np.linspace(0, np.pi, 181)[np.argmax(
-                np.real(self.hwp.fullMuellerTopRow(psi=np.zeros(181), 
-                    xi=np.zeros(181), theta=np.linspace(0, np.pi, 181), hwp_mueller=self.hwp_mueller)[1][:90]))]
 
         return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, theta = theta,
             hwp_mueller = self.hwp_mueller)
