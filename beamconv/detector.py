@@ -68,6 +68,10 @@ class HWP(object):
         art_ar1_mono = tm.material(2.654, 2.654, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         art_ar2_mono = tm.material(2.543, 2.543, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         art_ar3_mono = tm.material(1.348, 1.348, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic') 
+
+        a3b5_ar1 = tm.material(1.297,1.297,1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
+        a3b5_ar2 = tm.material(1.676,1.676,1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
+        a3b5_ar3 = tm.material(2.439,2.439,1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
         
         if (model_name=='HWP_only'):
             thicknesses = [3.15*tm.mm]
@@ -156,6 +160,15 @@ class HWP(object):
             thicknesses = [0.35*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,0.35*tm.mm]
             materials = [art_ar_mono,spider_sapphire, spider_sapphire, spider_sapphire, art_ar_mono]
             angles = np.array([0.,0.,52.5,0.,0.])*np.pi/180.0
+        elif (model_name=='3AR5BR'):#angles from Matsumura, AR from our optimization
+            thicknesses = [0.319*tm.mm, 0.213*tm.mm, 0.216*tm.mm, 
+                            3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,
+                            0.216*tm.mm, 0.213*tm.mm, 0.319*tm.mm]
+            materials = [a3b5_ar1, a3b5_ar2, a3b5_ar3, spider_sapphire, 
+                         spider_sapphire, spider_sapphire, spider_sapphire, 
+                         spider_sapphire, a3b5_ar3, a3b5_ar2, a3b5_ar1]
+            angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
+
         else:
             raise ValueError('Unknown type of HWP entered')
 
