@@ -12,6 +12,8 @@ and sky to generate simulated CMB detector signal timelines. Beams can be arbitr
 Pointing timelines can be read in or calculated on the fly. Optionally, the results can be
 binned on the sphere.
 
+The code and some results is described in: https://arxiv.org/abs/1809.05034
+
 ### Usage
 
 See example scripts [`beamconv/test.py`](../../tree/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../../tree/master/notebooks). In particular, we suggest that the user try running [`notebooks/introduction.ipynb`](../../tree/master/notebooks/introduction.ipynb) followed by [`notebooks/simple_scan.ipynb`](../../tree/master/notebooks/simple_scan.ipynb).
