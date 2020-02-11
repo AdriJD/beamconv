@@ -168,7 +168,7 @@ class HWP(object):
         elif (model_name == '3AR3BRcent'):#NEW: A AHWP with the best 3 layer of AR centered at 122.5GHz
             thicknesses = [0.338*tm.mm, 0.132*tm.mm, 0.240*tm.mm, 3.86*tm.mm, 3.86*tm.mm, 3.86*tm.mm,
                            0.240*tm.mm, 0.132*tm.mm, 0.338*tm.mm]
-            materials = [a3b3_ar3, a3b3_ar2, a3b3_ar1, spider_mono, spider_mono, spider_mono,
+            materials = [a3b3_ar3, a3b3_ar2, a3b3_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
                         a3b3_ar1, a3be_ar2, a3b3_ar3]
             angles = np.array([0.,0. ,0.,0.,52.5,0.,0.,0., 0.])*np.pi/180.
 
