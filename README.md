@@ -12,7 +12,7 @@ and sky to generate simulated CMB detector signal timelines. Beams can be arbitr
 Pointing timelines can be read in or calculated on the fly. Optionally, the results can be
 binned on the sphere.
 
-The code and some results is described in: https://arxiv.org/abs/1809.05034
+The code and some results based on its use are described in: https://arxiv.org/abs/1809.05034
 
 ### Usage
 
