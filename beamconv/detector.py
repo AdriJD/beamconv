@@ -169,7 +169,7 @@ class HWP(object):
             thicknesses = [0.338*tm.mm, 0.132*tm.mm, 0.240*tm.mm, 3.86*tm.mm, 3.86*tm.mm, 3.86*tm.mm,
                            0.240*tm.mm, 0.132*tm.mm, 0.338*tm.mm]
             materials = [a3b3_ar3, a3b3_ar2, a3b3_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
-                        a3b3_ar1, a3be_ar2, a3b3_ar3]
+                        a3b3_ar1, a3b3_ar2, a3b3_ar3]
             angles = np.array([0.,0. ,0.,0.,52.5,0.,0.,0., 0.])*np.pi/180.
 
         elif (model_name=='3AR5BR'):#angles from Matsumura, AR from our optimization
