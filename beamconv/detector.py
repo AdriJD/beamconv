@@ -201,7 +201,7 @@ class HWP(object):
 
 
         elif (model_name == '3AR5BR_new'):#New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
-            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
             materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, 
                          spider_sapphire, spider_sapphire, spider_sapphire,
