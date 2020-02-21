@@ -69,6 +69,12 @@ class HWP(object):
         art_ar2_mono = tm.material(2.644, 2.644, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         art_ar3_mono = tm.material(1.524, 1.524, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic') 
         
+        #New 3AR1BR & 3AR3BR & 3AR5BR AR coatings
+        equal_ar1 = tm.material(2.855, 2.855, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        equal_ar2 = tm.material(1.979, 1.979, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        equal_ar3 = tm.material(1.268, 1.268, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+	         
+
         a3b3_ar1 = tm.material(2.350, 2.350, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         a3b3_ar2 = tm.material(1.542, 1.542, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         a3b3_ar3 = tm.material(1.344, 1.344, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
@@ -139,10 +145,16 @@ class HWP(object):
             materials = [art_ar3_150, art_ar2_150 ,art_ar1_150, spider_sapphire, art_ar1_150, art_ar2_150, art_ar3_150]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-        elif (model_name == 'best_3layer_mono'):
+        elif (model_name == 'best_3layer_mono_old'):
             thicknesses = [0.358*tm.mm,1.849*tm.mm, 1.978*tm.mm, 3.6*tm.mm, 1.978*tm.mm, 1.849*tm.mm, 0.358*tm.mm]
-            materials = [art_ar3_mono, art_ar2_mono ,art_ar1_mono, spider_sapphire, art_ar1_mono, art_ar2_mono, art_ar3_mono]
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == 'best_3layer_mono_new'):#New 1AR3BR- same thicknesses for New 3AR3BR_new, 3AR5BR_new
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [art_ar3_mono_new, art_ar2_mono_new ,art_ar1_mono_new, spider_sapphire, art_ar1_mono_new, art_ar2_mono_new, art_ar3_mono_new]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
 
         elif (model_name =='9lAHWP'):
             thicknesses = np.ones(9)*3.14*tm.mm
@@ -172,6 +184,12 @@ class HWP(object):
                         a3b3_ar1, a3b3_ar2, a3b3_ar3]
             angles = np.array([0.,0. ,0.,0.,52.5,0.,0.,0., 0.])*np.pi/180.
 
+        elif (model_name == '3AR3BR_new'):#New 3AR3BR- same thicknesses for New 3AR1BR_new, 3AR5BR_new
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [art_ar3_mono_new, art_ar2_mono_new ,art_ar1_mono_new, spider_sapphire, spider_sapphire, spider_sapphire,
+                         art_ar1_mono_new, art_ar2_mono_new, art_ar3_mono_new]
+            angles = np.array([0.,0. ,0.,0.,54,0.,0.,0., 0.])*np.pi/180.
+
         elif (model_name=='3AR5BR'):#angles from Matsumura, AR from our optimization
             thicknesses = [0.356*tm.mm, 0.225*tm.mm, 0.188*tm.mm, 
                             3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,
@@ -180,6 +198,15 @@ class HWP(object):
                          spider_sapphire, spider_sapphire, spider_sapphire, 
                          spider_sapphire, a3b5_ar1, a3b5_ar2, a3b5_ar3]
             angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
+
+
+        elif (model_name == '3AR5BR_new'):#New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [art_ar3_mono_new, art_ar2_mono_new ,art_ar1_mono_new, spider_sapphire, 
+                         spider_sapphire, spider_sapphire, spider_sapphire,
+                         spider_sapphire, art_ar1_mono_new, art_ar2_mono_new, art_ar3_mono_new]
+            angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
+
 
         else:
             raise ValueError('Unknown type of HWP entered')
