@@ -147,7 +147,7 @@ class HWP(object):
 
         elif (model_name == 'best_3layer_mono_old'):
             thicknesses = [0.358*tm.mm,1.849*tm.mm, 1.978*tm.mm, 3.6*tm.mm, 1.978*tm.mm, 1.849*tm.mm, 0.358*tm.mm]
-            materials = [art_ar3_mono_new, art_ar2_mono_new ,art_ar1_mono_new, spider_sapphire, art_ar1_mono_new, art_ar2_mono_new, art_ar3_mono_new]
+            materials = [art_ar3_mono, art_ar2_mono ,art_ar1_mono, spider_sapphire, art_ar1_mono, art_ar2_mono, art_ar3_mono]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         elif (model_name == 'best_3layer_mono_new'):#New 1AR3BR- same thicknesses for New 3AR3BR_new, 3AR5BR_new
@@ -208,7 +208,13 @@ class HWP(object):
                          spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
 
-
+        elif (model_name == '5BRJeffMcM'):#It's a kind of magic...
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
+                           3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, 
+                         spider_sapphire, spider_sapphire, spider_sapphire,
+                         spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
+            angles = np.array([0.,0.,0.,22.9, -50,0,  50,  -22.9 ,0.,0.,0.])*np.pi/180.0
         else:
             raise ValueError('Unknown type of HWP entered')
 
