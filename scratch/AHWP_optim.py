@@ -381,15 +381,16 @@ def quick_penalty(model_name, phase95=0., phase150=0.):
     for i, freq in enumerate(nu):
 
         if (freq<130):
-            phase = phase95
+            phase = np.radians(phase95)
         elif (freq>130):
-            phase = phase150
+            phase = np.radians(phase150)
         phase_rot = np.array(((1.,0.,0.,0.), (0.,np.cos(-4*phase),np.sin(-4*phase),0.),
                     (0.,-np.sin(-4*phase),np.cos(-4*phase),0.),(0.,0.,0.,1)))
         dumbeam = Beam(name='testbeam', sensitive_freq=freq, el=0.0)
         dumbeam.set_hwp_mueller(model_name=model_name)
         B=np.dot(phase_rot,dumbeam.hwp_mueller)
         penalty += np.sum(np.square(B-ideal_muell_mat))*modBB(freq, 1.59)
+
         dumbeam = Beam(name='testbeam', sensitive_freq=freq, el=10.0)
         dumbeam.set_hwp_mueller(model_name=model_name)
         B=np.dot(phase_rot,dumbeam.hwp_mueller)
@@ -400,26 +401,26 @@ def penalty95(model_name, phase95=0.):
     penalty = 0.
     nu = np.array((80,85,90,95,100,105,110))
     ideal_muell_mat = np.array(((1,0,0,0),(0,1,0,0),(0,0,-1,0),(0,0,0,-1)))
-    phase = phase95
+    phase = np.radians(phase95)
     for i, freq in enumerate(nu):        
         phase_rot = np.array(((1.,0.,0.,0.), (0.,np.cos(-4*phase),np.sin(-4*phase),0.),
                     (0.,-np.sin(-4*phase),np.cos(-4*phase),0.),(0.,0.,0.,1)))
         dumbeam = Beam(name='testbeam', sensitive_freq=freq, el=0.0)
         dumbeam.set_hwp_mueller(model_name=model_name)
         B=np.dot(phase_rot,dumbeam.hwp_mueller)
+        penalty += np.sum(np.square(B-ideal_muell_mat))*modBB(freq, 1.59)
 
-        penalty += np.sum(np.square(B-ideal_muell_mat))#*modBB(freq, 1.59)
         dumbeam = Beam(name='testbeam', sensitive_freq=freq, el=10.0)
         dumbeam.set_hwp_mueller(model_name=model_name)
         B=np.dot(phase_rot,dumbeam.hwp_mueller)
-        penalty += np.sum(np.square(B-ideal_muell_mat))#*modBB(freq, 1.59)
+        penalty += np.sum(np.square(B-ideal_muell_mat))*modBB(freq, 1.59)
     return .5*np.sum(penalty)
 
 def penalty150(model_name, phase150=0.):
     penalty = 0.
     nu = np.array((135,140,145,150,155,160,165))
     ideal_muell_mat = np.array(((1,0,0,0),(0,1,0,0),(0,0,-1,0),(0,0,0,-1)))
-    phase = phase150
+    phase = np.radians(phase150)
     for i, freq in enumerate(nu):        
         phase_rot = np.array(((1.,0.,0.,0.), (0.,np.cos(-4*phase),np.sin(-4*phase),0.),
                     (0.,-np.sin(-4*phase),np.cos(-4*phase),0.),(0.,0.,0.,1)))
@@ -427,15 +428,15 @@ def penalty150(model_name, phase150=0.):
         dumbeam.set_hwp_mueller(model_name=model_name)
         B=np.dot(phase_rot,dumbeam.hwp_mueller)
 
-        penalty += np.sum(np.square(B-ideal_muell_mat))#*modBB(freq, 1.59)
+        penalty += np.sum(np.square(B-ideal_muell_mat))*modBB(freq, 1.59)
         dumbeam = Beam(name='testbeam', sensitive_freq=freq, el=10.0)
         dumbeam.set_hwp_mueller(model_name=model_name)
         B=np.dot(phase_rot,dumbeam.hwp_mueller)
-        penalty += np.sum(np.square(B-ideal_muell_mat))#*modBB(freq, 1.59)
+        penalty += np.sum(np.square(B-ideal_muell_mat))*modBB(freq, 1.59)
     return .5*np.sum(penalty)
 
 def phase_through_penalty(model_name):
-    phases = np.linspace(50,60, num=101, endpoint=True)
+    phases = np.linspace(50,65, num=151, endpoint=True)
     best_phase9 = 0
     best_phase150 = 0
     bestpenalty95 = 100
@@ -448,6 +449,7 @@ def phase_through_penalty(model_name):
         if (penalty150(model_name, phi)<bestpenalty150):
             bestpenalty150 = penalty150(model_name, phi)
             best_phase150 = phi
+
     print('95GHz phase: %.1f, 150GHz phase: %.1f, combined penalty score: %f'%
         (best_phase95, best_phase150, bestpenalty95+bestpenalty150))
     return  best_phase95, best_phase150, bestpenalty95+bestpenalty150
@@ -490,17 +492,17 @@ def phase_through_penalty(model_name):
 #     bounds=[(1., 3.1), (1., 3.1), (1., 3.1), (1e-3, 5), (1e-3, 5), (1e-3, 5), (1e-3, 5), (0,90)])
 # print('Indices, Thicknesses(mm)', res5.x)
 
-print('Current penalty 3BR old, CMB: %f\n Current penalty 3BR new, CMB: %f\n Current penalty 5BR old, CMB: %f\n Current penalty 5BR new, CMB: %f\n' %
+print('Current penalty 3BR old, Dust: %f\n Current penalty 3BR new, Dust: %f\n Current penalty 5BR old, Dust: %f\n Current penalty 5BR new, Dust: %f\n' %
     (quick_penalty('3AR3BRcent', phase95=57.1, phase150=57.6), quick_penalty('3AR3BR_new', phase95=59.2, phase150=57.4) ,
-    quick_penalty('3AR5BR', phase95=51.3, phase150=51.3) , quick_penalty('3AR5BR_new', phase95=53.6, phase150=53.0)))
+    quick_penalty('3AR5BR', phase95=51.3, phase150=51.3) , quick_penalty('3AR5BR_new', phase95=53.5, phase150=53.0)))
 
-# print('3BR old, CMB:')
-# phase_through_penalty('3AR3BRcent')
-# print('3BR new, CMB:')
-# phase_through_penalty('3AR3BR_new')
-# print('5BR old, CMB:')
-# phase_through_penalty('3AR5BR')
-# print('5BR new, CMB:')
-# phase_through_penalty('3AR5BR_new')
+print('3BR old, Dust:')
+phase_through_penalty('3AR3BRcent')
+print('3BR new, Dust:')
+phase_through_penalty('3AR3BR_new')
+print('5BR old, Dust:')
+phase_through_penalty('3AR5BR')
+print('5BR new, Dust:')
+phase_through_penalty('3AR5BR_new')
 
 
