@@ -1394,7 +1394,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def set_hwp_mod(self, mode=None,
                     freq=None, start_ang=0.,
-                    angles=None, hwp_induced_phase=0.):
+                    angles=None, varphi=0.):
         '''
         Set options for modulating the polarized sky signal
         using a (stepped or continuously rotating) half-wave
@@ -1422,7 +1422,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.hwp_dict['angle'] = start_ang
         self.hwp_dict['start_ang'] = start_ang
         self.hwp_dict['remainder'] = 0 # num. samp. from last step
-        self.hwp_dict['hwp_induced_phase'] = hwp_induced_phase
+        self.hwp_dict['varphi'] = varphi
 
         if angles is None:
             angles = np.arange(start_ang, 360+start_ang, 22.5)
@@ -3352,41 +3352,22 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
     def instr_modulation(self, beam, hwp_ang, pa, polang, tod, tod_c, muell_mat_model):
-        
-
+        '''
+        Compute tod modulation by single or multiple layer HWP for a given beam, given
+        the unmodulated tod, tod_c, and the angkes of the hwp, boresight, and detector
+        '''
         if (beam.sensitive_freq==None):
             raise ValueError('The beam does not have a defined frequency')
-
-        #frequency = beam.sensitive_freq
-
-        #incidence = beam.el
-        #incidence = self._elev2ang(beam)
-
-        #If wanted, set your own Mueller params
-        #WARNING, _choose_HWP_model returns that only if the keyword is ideal.
-        #Otherwise, it returns a HWP stack
-        #beam.hwp._choose_HWP_model('HWP_only')
-        #beam.hwp_precomp_mueller=np.array([1.,0.,-1.,0.])
-        #beam._set_HWP_values(model_name='SPIDER')
-        #angles in rad, freq in Hz, base IPPV
+        #angles in rad, freq in GHz, base IPPV
         if (muell_mat_model=='simple'):
-            M_II, M_IP, M_IPt = beam.get_Mueller_top_row(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+            M_II, M_IP, M_IPt = beam.get_Mueller_top_row(xi = np.radians(polang), psi=pa, alpha=hwp_ang)
         elif (muell_mat_model=='full'):
-            M_II, M_IP, M_IPt = beam.get_mueller_top_row_full(xi = np.radians(polang), psi=pa, theta=hwp_ang)
+            M_II, M_IP, M_IPt = beam.get_mueller_top_row_full(xi = np.radians(polang), psi=pa, alpha=hwp_ang)
         else:
             raise ValueError('Unknown model for the Mueller matrix !')
-        #M_II, M_IP, M_IPt = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang,
-        # 	np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
-        #print np.amax(M_II-M_Il), np.amax(M_IP-M_Pl), np.amax(M_lt-M_IPt)
-        ## BASE IQUV
-        # M_II, M_IQ, M_IU = cmm.coupling_system(cmm.hwp4, frequency, hwp_ang,
-        #    np.radians(incidence), np.radians(polang), pa)#angles in rad, freq in Hz
 
         # BASE IPPV
         tod = 2*(M_II*tod + M_IPt*tod_c +  M_IP*np.conj(tod_c))
-
-        ## BASE IQUV
-        # tod = 2*(M_II*tod + M_IQ*np.real(tod_c) - M_IU*np.imag(tod_c))
 
         return tod
 
@@ -3660,7 +3641,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # HWP does not depend on particular detector.
 
-        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['hwp_induced_phase'])
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])
 
 
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
