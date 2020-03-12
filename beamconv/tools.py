@@ -555,7 +555,7 @@ def quat_conj_by(q, q2):
 
     return q3
 
-def blm2bl(blm, m=0, copy=True):
+def blm2bl(blm, m=0, copy=True, full=False):
     '''
     A tool to return blm for a fixed m-mode
 
@@ -570,6 +570,9 @@ def blm2bl(blm, m=0, copy=True):
         The m-mode being requested (note m >= 0) (default : 0)
     copy : bool
         Return copied slice or not (default : True)
+    full : bool
+        If set, always return full-sized (lmax + 1) array
+        Note, this always produces a copy. (default : False)
 
     Returns
     -------
@@ -590,6 +593,11 @@ def blm2bl(blm, m=0, copy=True):
 
     bell = blm[start:end]
 
+    if full:
+        bell_full = np.zeros(lmax + 1, dtype=blm.dtype)
+        bell_full[m:] = bell
+        bell = bell_full
+        
     if copy:
         return bell.copy()
     else:
