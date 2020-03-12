@@ -3171,18 +3171,34 @@ class ScanStrategy(Instrument, qp.QMap):
             # Skip all other scanning.
             return
 
+#        if not beam.ghost:
+#            func, func_c = self.spinmaps['main_beam']['maps']
+#            s_vals, s_vals_c = self.spinmaps['main_beam']['s_vals']
+#        else:
+#            ghost_idx = beam.ghost_idx
+#            func, func_c = self.spinmaps['ghosts'][ghost_idx]['maps']
+#            s_vals, s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s_vals']
+
         if not beam.ghost:
-            func, func_c = self.spinmaps['main_beam']['maps']
-            s_vals, s_vals_c = self.spinmaps['main_beam']['s_vals']
+            func = self.spinmaps['main_beam']['s0a0']['maps']
+            func_c = self.spinmaps['main_beam']['s2a4']['maps']
+            s_vals = self.spinmaps['main_beam']['s0a0']['s_vals']
+            s_vals_c = self.spinmaps['main_beam']['s2a4']['s_vals']
         else:
             ghost_idx = beam.ghost_idx
-            func, func_c = self.spinmaps['ghosts'][ghost_idx]['maps']
-            s_vals, s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s_vals']
-
+            func = self.spinmaps['ghosts'][ghost_idx]['s0a0']['maps']
+            func_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['maps']
+            s_vals = self.spinmaps['ghosts'][ghost_idx]['s0a0']['s_vals']
+            s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['s_vals']
+                        
         # Check if shape spinmaps matches s_vals.
-        if func.shape[0] != s_vals.size or func_c.shape[0] != s_vals_c.size:
-            raise ValueError('Shap spinmaps and size s_vals do not match.')
-
+        if func.shape[0] != s_vals.size:
+            raise ValueError('Shape func {} and size s_vals {} do not match.'.
+                             format(func.shape[0], s_vals.size))
+        if func_c.shape[0] != s_vals_c.size:
+            raise ValueError('Shape func_c {} and size s_vals {} do not match.'.
+                             format(func_c.shape[0], s_vals_c.size))
+        
         # Check for azimuthal symmetry.
         if beam.symmetric:
             if s_vals[0] != 0 or s_vals.size != 1:
@@ -3441,8 +3457,15 @@ class ScanStrategy(Instrument, qp.QMap):
                                                 nside_spin=nside_spin,
                                                 verbose=verbose,
                                                 symmetric=beam_obj.symmetric)
-            self.spinmaps['main_beam']['maps'] = [func, func_c]
-            self.spinmaps['main_beam']['s_vals'] = [s_vals, s_vals_pol]
+
+            # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
+            # s refers to spin value under psi, a to spin value under HWP rot.
+            self.spinmaps['main_beam']['s0a0'] = {}
+            self.spinmaps['main_beam']['s0a0']['maps'] = func
+            self.spinmaps['main_beam']['s0a0']['s_vals'] = s_vals
+            self.spinmaps['main_beam']['s2a4'] = {}
+            self.spinmaps['main_beam']['s2a4']['maps'] = func_c
+            self.spinmaps['main_beam']['s2a4']['s_vals'] = s_vals_pol
 
             if beam_obj.ghosts:
 
@@ -3475,8 +3498,13 @@ class ScanStrategy(Instrument, qp.QMap):
                                                       verbose=verbose,
                                                       symmetric=ghost.symmetric)
 
-                    self.spinmaps['ghosts'][u]['maps'] = [func, func_c]
-                    self.spinmaps['ghosts'][u]['s_vals'] = [s_vals, s_vals_pol]
+                    self.spinmaps['ghosts'][u]['s0a0'] = {}
+                    self.spinmaps['ghosts'][u]['s0a0']['maps'] = func
+                    self.spinmaps['ghosts'][u]['s0a0']['s_vals'] = s_vals
+                    self.spinmaps['ghosts'][u]['s2a4'] = {}
+                    self.spinmaps['ghosts'][u]['s2a4']['maps'] = func_c
+                    self.spinmaps['ghosts'][u]['s2a4']['s_vals'] = s_vals_pol
+                    
             return
 
         # Check for nans in alms. E.g from when there was a nan in original maps.
@@ -3511,9 +3539,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
             N = max_spin + 1
-            # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.            
+            # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.
             spin_values_unpol = np.arange(N, dtype=int)
             spin_values_pol = np.arange(-N+1, N, dtype=int)
+
+        # NOTE if Mueller matrix arg is given, you should multiply
+        # blms by matrix elements here.
+
 
         # Unpolarized sky and beam first.
         func = self._spinmaps_spin0(alm[0], blm[0], spin_values_unpol, nside_spin)
@@ -3677,7 +3709,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 func_c[sidx,:] = spinmaps[0] - 1j * spinmaps[1]
 
         return func_c
-    
+
     def bin_tod(self, beam, tod=None, flag=None, init=True,
                 add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
