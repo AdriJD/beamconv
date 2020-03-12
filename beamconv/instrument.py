@@ -3171,14 +3171,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # Skip all other scanning.
             return
 
-#        if not beam.ghost:
-#            func, func_c = self.spinmaps['main_beam']['maps']
-#            s_vals, s_vals_c = self.spinmaps['main_beam']['s_vals']
-#        else:
-#            ghost_idx = beam.ghost_idx
-#            func, func_c = self.spinmaps['ghosts'][ghost_idx]['maps']
-#            s_vals, s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s_vals']
-
         if not beam.ghost:
             func = self.spinmaps['main_beam']['s0a0']['maps']
             func_c = self.spinmaps['main_beam']['s2a4']['maps']
@@ -3251,7 +3243,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # NOTE
         pa += np.pi
-
 
         if (hwp_status=='ideal'):
             # Fill complex array, i.e. the linearly polarized part
@@ -3387,7 +3378,6 @@ class ScanStrategy(Instrument, qp.QMap):
         tod = 2*(M_II*tod + M_IPt*tod_c +  M_IP*np.conj(tod_c))
 
         return tod
-
 
     def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
                       verbose=True, beam_obj=None, symmetric=False):
