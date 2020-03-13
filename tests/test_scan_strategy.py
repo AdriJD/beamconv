@@ -274,10 +274,10 @@ class TestTools(unittest.TestCase):
 
         tod_man = maps_sm[0][pix]
         tod_man += (maps_sm[1][pix] \
-                    * np.cos(-2 * np.radians(pa + polang + 2 * hwp_ang2)))
+                    * np.cos(2 * np.radians(pa - polang - 2 * hwp_ang2)))
         tod_man += (maps_sm[2][pix] \
-                    * np.sin(-2 * np.radians(pa + polang + 2 * hwp_ang2)))
-
+                    * np.sin(2 * np.radians(pa - polang - 2 * hwp_ang2)))
+        
         np.testing.assert_almost_equal(tod2, tod_man)
         
     def test_scan_spole_bin(self):
