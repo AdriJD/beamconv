@@ -296,7 +296,7 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
 
     return blmm2, blmp2
 
-def spin2eb(almm2, almp2):
+def spin2eb(almm2, almp2, spin=2):
     '''
     Convert spin-harmonic coefficients
     to E and B mode coefficients.
@@ -310,18 +310,37 @@ def spin2eb(almm2, almp2):
        Healpix-ordered complex array with spin-(+2)
        coefficients
 
+    Keyword arguments
+    -----------------
+    spin : int
+        Spin of input. Odd spins receive relative
+        minus sign between inputs. To be consistent
+        with HEALPix alm2map_spin.
+
     Returns
     -------
     almE : array-like
         Healpix ordered array with E-modes
     almB : array-like
-        Healpix ordered array with B-modes
+        Healpix ordered array with B-modes\
+
+    Raises
+    ------
+    ValueError
+        If spin is not an integer.
+
+    Notes
+    -----
+    See https://healpix.jpl.nasa.gov/html/subroutinesnode12.htm
     '''
 
-    almE = almp2 + almm2
+    if int(spin) != spin:
+        raise ValueError('Spin must be integer')
+    
+    almE = almp2 + (-1) ** spin * almm2
     almE /= -2.
 
-    almB = almp2 - almm2
+    almB = almp2 - (-1) ** spin * almm2
     almB *= (1j / 2.)
 
     return almE, almB

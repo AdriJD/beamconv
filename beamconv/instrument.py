@@ -3055,8 +3055,8 @@ class ScanStrategy(Instrument, qp.QMap):
             return self._data[str(chunk['cidx'])][str(beam.idx)][data_type]
 
     def scan(self, beam, add_to_tod=False, interp=False,
-             return_tod=False, return_point=False, skip_scan=False, hwp_status='ideal',
-             muell_mat_model='simple', **kwargs):
+             return_tod=False, return_point=False, skip_scan=False,
+             hwp_status='ideal', muell_mat_model='simple', **kwargs):
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
@@ -3588,7 +3588,6 @@ class ScanStrategy(Instrument, qp.QMap):
                             dtype=np.complex128)
 
         for sidx, s in enumerate(spin_values): # s are azimuthal modes in bls.
-
             bell = tools.blm2bl(blm, m=s, full=True)
             
             if s == 0: # Scalar transform.
@@ -3598,15 +3597,21 @@ class ScanStrategy(Instrument, qp.QMap):
 
             else: # Spin transforms.
 
+                # The positive s values.
                 flms = hp.almxfl(alm, bell, inplace=False)
-                flmms = hp.almxfl(alm, np.conj(bell), inplace=False)
+
+                # The negative s values: alm bl-s = alm bls^* (-1)^s.
+                flmms = hp.almxfl(alm, (-1) ** s * np.conj(bell), inplace=False)
 
                 # Turn into plus and minus (think E and B) modes for healpy's
                 # alm2map_spin.
-                flmsp = - (flms + flmms) / 2.
-                flmsm = 1j * (flms - flmms) / 2.
-                spinmaps = hp.alm2map_spin([flmsp, flmsm], nside, s, lmax,
-                                           lmax)
+                #flmsp = - (flms + flmms) / 2.
+                #flmsm = 1j * (flms - flmms) / 2.
+                #spinmaps = hp.alm2map_spin([flmsp, flmsm], nside, s, lmax,
+                #                           lmax)
+                spinmaps = hp.alm2map_spin(tools.spin2eb(flms, flmms, spin=s),
+                                           nside, s, lmax, lmax)
+                
                 func[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
         return func
@@ -3648,7 +3653,6 @@ class ScanStrategy(Instrument, qp.QMap):
                               dtype=np.complex128)
 
         for sidx, s in enumerate(spin_values):
-
             bellp2 = tools.blm2bl(blmp2, m=abs(s), full=True)
             bellm2 = tools.blm2bl(blmm2, m=abs(s), full=True)            
 
