@@ -314,7 +314,7 @@ def spin2eb(almm2, almp2, spin=2):
     -----------------
     spin : int
         Spin of input. Odd spins receive relative
-        minus sign between inputs. To be consistent
+        minus sign between input in order to be consistent
         with HEALPix alm2map_spin.
 
     Returns

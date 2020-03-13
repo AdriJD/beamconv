@@ -3236,6 +3236,7 @@ class ScanStrategy(Instrument, qp.QMap):
         np.radians(pa, out=pa)
 
         # NOTE
+        pa *= -1
         pa += np.pi
 
         if (hwp_status=='ideal'):
@@ -3245,11 +3246,11 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # If beam.symmetric is True, we can be sure to only have s=2.
             if beam.symmetric:
-                expipan = np.exp(1j * pa * 2)
+                expipan = np.exp(-1j * pa * 2)                
             else:
-                expipa = np.exp(1j * pa) # used for recursion
-                expipan = np.exp(1j * pa * (-N + 1)) # starting point (n = -N+1)
-
+                expipa = np.exp(-1j * pa) # used for recursion
+                expipan = np.exp(-1j * pa * (-N + 1)) # starting point (n=-N+1)
+                
             for nidx, n in enumerate(s_vals_c):
 
                 if nidx != 0: # expipan is already initialized for nidx=0
@@ -3599,19 +3600,15 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # The positive s values.
                 flms = hp.almxfl(alm, bell, inplace=False)
-
+        
                 # The negative s values: alm bl-s = alm bls^* (-1)^s.
                 flmms = hp.almxfl(alm, (-1) ** s * np.conj(bell), inplace=False)
 
                 # Turn into plus and minus (think E and B) modes for healpy's
                 # alm2map_spin.
-                #flmsp = - (flms + flmms) / 2.
-                #flmsm = 1j * (flms - flmms) / 2.
-                #spinmaps = hp.alm2map_spin([flmsp, flmsm], nside, s, lmax,
-                #                           lmax)
-                spinmaps = hp.alm2map_spin(tools.spin2eb(flms, flmms, spin=s),
+                spinmaps = hp.alm2map_spin(tools.spin2eb(flmms, flms, spin=s),
                                            nside, s, lmax, lmax)
-                
+                                
                 func[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
         return func

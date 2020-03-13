@@ -10,7 +10,7 @@ import healpy as hp
 import tools
 from beamconv import ScanStrategy, MPIBase, Instrument
 from beamconv import Beam
-from beamconv import plot_map, plot_iqu
+from plot_tools import plot_map, plot_iqu
 
 def get_cls(fname='../ancillary/wmap7_r0p03_lensed_uK_ext.txt'):
     '''
@@ -1207,11 +1207,10 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
                  unit='Hits', plot_func=hp.mollview, **cart_opts)
 
 if __name__ == '__main__':
-    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    #scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=3, ncol=3,
     #    fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
-
-    # offset_beam(az_off=4, el_off=13, polang=36., pol_only=False)
+    offset_beam(az_off=4, el_off=13, polang=36., pol_only=False)
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
     # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # single_detector()
