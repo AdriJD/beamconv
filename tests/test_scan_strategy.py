@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import healpy as hp
 from beamconv import ScanStrategy
-from beamconv import Beam
+from beamconv import Beam, tools
 import os
 import pickle
 
@@ -16,7 +16,7 @@ class TestTools(unittest.TestCase):
         Create random alm.
         '''
 
-        lmax = 10
+        lmax = 50
         
         def rand_alm(lmax):
             alm = np.empty(hp.Alm.getsize(lmax), dtype=np.complex128)
@@ -211,7 +211,7 @@ class TestTools(unittest.TestCase):
         ra0=-10
         dec0=-57.5
         fwhm = 200
-        nside = 256
+        nside = 128
         az_throw = 10
         polang = 20.
 
@@ -292,7 +292,7 @@ class TestTools(unittest.TestCase):
         ra0=-10
         dec0=-57.5
         fwhm = 200
-        nside = 256
+        nside = 128
         az_throw = 10
 
         scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
@@ -350,7 +350,7 @@ class TestTools(unittest.TestCase):
         ra0=-10
         dec0=-57.5
         fwhm = 200
-        nside = 256
+        nside = 128
         az_throw = 10
 
         scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
@@ -411,7 +411,7 @@ class TestTools(unittest.TestCase):
         ra0=-10
         dec0=-57.5
         fwhm = 200
-        nside = 256
+        nside = 128
         az_throw = 10
 
         scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
@@ -495,7 +495,7 @@ class TestTools(unittest.TestCase):
         ra0=-10
         dec0=-57.5
         fwhm = 200
-        nside = 256
+        nside = 128
         az_throw = 10
 
         scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
@@ -586,7 +586,7 @@ class TestTools(unittest.TestCase):
 
     def test_interpolate(self):
         '''
-        Compare interpoted TOD to raw for extremely bandlimited 
+        Compare interpolated TOD to default for extremely bandlimited 
         input such that should agree relatively well.
         '''
 
@@ -594,8 +594,8 @@ class TestTools(unittest.TestCase):
         mmax = 2        
         ra0=-10
         dec0=-57.5
-        fwhm = 100
-        nside = 128
+        fwhm = 10 * 60
+        nside = 256
         az_throw = 10
 
         scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
@@ -791,6 +791,249 @@ class TestTools(unittest.TestCase):
         # Proj should be identical.
         np.testing.assert_array_almost_equal(scs.proj, proj_prev, decimal=9)
 
+    def test_offset_beam(self):
+        
+        mlen = 20 # mission length
+        sample_rate = 10
+        location='spole'
+        lmax = self.lmax
+        fwhm = 200
+        nside_spin = 256
+        polang = 30
+        az_off = 20
+        el_off = 40
+        
+        ss = ScanStrategy(mlen, sample_rate=sample_rate,
+                          location=location) 
+
+        # Create single detector.
+        ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
+                              polang=polang, lmax=lmax, fwhm=fwhm)        
+
+        # Move detector away from boresight.
+        ss.beams[0][0].az = az_off
+        ss.beams[0][0].el = el_off
+
+        # Start instrument rotated.
+        rot_period =  ss.mlen
+        ss.set_instr_rot(period=rot_period, start_ang=45)
+
+        ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
+                       angles=[34, 12, 67])
+
+        ss.partition_mission()
+        ss.scan_instrument_mpi(self.alm, binning=False, nside_spin=nside_spin,
+                               max_spin=2, interp=True)
+
+        # Store the tod and pixel indices made with symmetric beam.
+        tod_sym = ss.tod.copy()
+
+        # Now repeat with asymmetric beam and no detector offset.
+        # Set offsets to zero such that tods are generated using
+        # only the boresight pointing.
+        ss.beams[0][0].az = 0
+        ss.beams[0][0].el = 0
+        ss.beams[0][0].polang = 0
+
+        # Convert beam spin modes to E and B modes and rotate them
+        # create blm again, scan_instrument_mpi detetes blms when done
+        ss.beams[0][0].gen_gaussian_blm()
+        blm = ss.beams[0][0].blm
+        blmI = blm[0].copy()
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
+
+        # Rotate blm to match centroid.
+        # Note that rotate_alm uses the ZYZ euler convention.
+        # Note that we include polang here as first rotation.
+        q_off = ss.det_offset(az_off, el_off, polang)
+        ra, dec, pa = ss.quat2radecpa(q_off)
+
+        # We need to to apply these changes to the angles.
+        phi = np.radians(ra)
+        theta = np.radians(90 - dec)
+        psi = np.radians(-pa)
+
+        # rotate blm
+        hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+
+        # convert beam coeff. back to spin representation.
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+        ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+
+        ss.reset_instr_rot()
+        ss.reset_hwp_mod()
+
+        ss.scan_instrument_mpi(self.alm, binning=False, nside_spin=nside_spin,
+                               max_spin=lmax, interp=True) 
+
+        # TODs must agree at least at 1% per sample.
+        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.01 * np.std(tod_sym),
+                                np.full(tod_sym.size, True))
+    
+    def test_offset_beam_pol(self):
+
+        mlen = 20 # mission length
+        sample_rate = 10
+        location='spole'
+        lmax = self.lmax
+        fwhm = 200
+        nside_spin = 256
+        polang = 30
+        az_off = 20
+        el_off = 40
+
+        alm = (self.alm[0]*0., self.alm[1], self.alm[2])
+        
+        ss = ScanStrategy(mlen, sample_rate=sample_rate,
+                          location=location) 
+
+        # Create single detector.
+        ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
+                              polang=polang, lmax=lmax, fwhm=fwhm)        
+
+        # Move detector away from boresight.
+        ss.beams[0][0].az = az_off
+        ss.beams[0][0].el = el_off
+
+        # Start instrument rotated.
+        rot_period =  ss.mlen
+        ss.set_instr_rot(period=rot_period, start_ang=45)
+
+        ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
+                       angles=[34, 12, 67])
+
+        ss.partition_mission()
+        ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
+                               max_spin=2, interp=True)
+
+        # Store the tod and pixel indices made with symmetric beam.
+        tod_sym = ss.tod.copy()
+
+        # Now repeat with asymmetric beam and no detector offset.
+        # Set offsets to zero such that tods are generated using
+        # only the boresight pointing.
+        ss.beams[0][0].az = 0
+        ss.beams[0][0].el = 0
+        ss.beams[0][0].polang = 0
+
+        # Convert beam spin modes to E and B modes and rotate them
+        # create blm again, scan_instrument_mpi detetes blms when done
+        ss.beams[0][0].gen_gaussian_blm()
+        blm = ss.beams[0][0].blm
+        blmI = blm[0].copy()
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
+
+        # Rotate blm to match centroid.
+        # Note that rotate_alm uses the ZYZ euler convention.
+        # Note that we include polang here as first rotation.
+        q_off = ss.det_offset(az_off, el_off, polang)
+        ra, dec, pa = ss.quat2radecpa(q_off)
+
+        # We need to to apply these changes to the angles.
+        phi = np.radians(ra)
+        theta = np.radians(90 - dec)
+        psi = np.radians(-pa)
+
+        # rotate blm
+        hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+
+        # convert beam coeff. back to spin representation.
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+        ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+
+        ss.reset_instr_rot()
+        ss.reset_hwp_mod()
+
+        ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
+                               max_spin=lmax, interp=True) 
+
+        # TODs must agree at least at 1% per sample.
+        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.01 * np.std(tod_sym),
+                                np.full(tod_sym.size, True))
+        
+    def test_offset_beam_I(self):
+
+        mlen = 20 # mission length
+        sample_rate = 10
+        location='spole'
+        lmax = self.lmax
+        fwhm = 200
+        nside_spin = 256
+        polang = 30
+        az_off = 20
+        el_off = 40
+
+        alm = (self.alm[0], self.alm[1] * 0., self.alm[2] * 0.)
+
+        
+        ss = ScanStrategy(mlen, sample_rate=sample_rate,
+                          location=location) 
+
+        # Create single detector.
+        ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
+                              polang=polang, lmax=lmax, fwhm=fwhm)        
+
+        # Move detector away from boresight.
+        ss.beams[0][0].az = az_off
+        ss.beams[0][0].el = el_off
+
+        # Start instrument rotated.
+        rot_period =  ss.mlen
+        ss.set_instr_rot(period=rot_period, start_ang=45)
+
+        ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
+                       angles=[34, 12, 67])
+
+        ss.partition_mission()
+        ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
+                               max_spin=2, interp=True)
+
+        # Store the tod and pixel indices made with symmetric beam.
+        tod_sym = ss.tod.copy()
+
+        # Now repeat with asymmetric beam and no detector offset.
+        # Set offsets to zero such that tods are generated using
+        # only the boresight pointing.
+        ss.beams[0][0].az = 0
+        ss.beams[0][0].el = 0
+        ss.beams[0][0].polang = 0
+
+        # Convert beam spin modes to E and B modes and rotate them
+        # create blm again, scan_instrument_mpi detetes blms when done
+        ss.beams[0][0].gen_gaussian_blm()
+        blm = ss.beams[0][0].blm
+        blmI = blm[0].copy()
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
+
+        # Rotate blm to match centroid.
+        # Note that rotate_alm uses the ZYZ euler convention.
+        # Note that we include polang here as first rotation.
+        q_off = ss.det_offset(az_off, el_off, polang)
+        ra, dec, pa = ss.quat2radecpa(q_off)
+
+        # We need to to apply these changes to the angles.
+        phi = np.radians(ra)
+        theta = np.radians(90 - dec)
+        psi = np.radians(-pa)
+
+        # rotate blm
+        hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+
+        # convert beam coeff. back to spin representation.
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+        ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+
+        ss.reset_instr_rot()
+        ss.reset_hwp_mod()
+
+        ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
+                               max_spin=lmax, interp=True) 
+
+        # TODs must agree at least at 1% per sample.
+        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.01 * np.std(tod_sym),
+                                np.full(tod_sym.size, True))
+                
+        
 if __name__ == '__main__':
     unittest.main()
 
