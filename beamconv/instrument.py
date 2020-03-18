@@ -3270,9 +3270,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # Modulate by HWP angle and polarization angle.
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
+            tod_c *= expm2
             tod = np.real(tod_c) # Note, shares memory with tod_c.
-
 
             # Add unpolarized tod.
             # Reset starting point recursion.
