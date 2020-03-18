@@ -597,7 +597,6 @@ def blm2bl(blm, m=0, copy=True, full=False):
     -------
     blm : array-like
         Array of bl's for the m-mode requested
-
     '''
 
     if blm.ndim > 1:

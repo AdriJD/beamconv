@@ -22,6 +22,8 @@ class TestTools(unittest.TestCase):
             alm = np.empty(hp.Alm.getsize(lmax), dtype=np.complex128)
             alm[:] = np.random.randn(hp.Alm.getsize(lmax))
             alm += 1j * np.random.randn(hp.Alm.getsize(lmax))
+            # Make m=0 modes real.
+            alm[:lmax+1] = np.real(alm[:lmax+1])            
             return alm
         
         cls.alm = tuple([rand_alm(lmax) for i in range(3)])
@@ -797,7 +799,7 @@ class TestTools(unittest.TestCase):
         sample_rate = 10
         location='spole'
         lmax = self.lmax
-        fwhm = 200
+        fwhm = 300
         nside_spin = 256
         polang = 30
         az_off = 20
@@ -866,8 +868,8 @@ class TestTools(unittest.TestCase):
         ss.scan_instrument_mpi(self.alm, binning=False, nside_spin=nside_spin,
                                max_spin=lmax, interp=True) 
 
-        # TODs must agree at least at 1% per sample.
-        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.01 * np.std(tod_sym),
+        # TODs must agree at least at 2% per sample.
+        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.02 * np.std(tod_sym),
                                 np.full(tod_sym.size, True))
     
     def test_offset_beam_pol(self):
@@ -876,7 +878,7 @@ class TestTools(unittest.TestCase):
         sample_rate = 10
         location='spole'
         lmax = self.lmax
-        fwhm = 200
+        fwhm = 300
         nside_spin = 256
         polang = 30
         az_off = 20
@@ -947,8 +949,8 @@ class TestTools(unittest.TestCase):
         ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
                                max_spin=lmax, interp=True) 
 
-        # TODs must agree at least at 1% per sample.
-        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.01 * np.std(tod_sym),
+        # TODs must agree at least at 2% per sample.
+        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.02 * np.std(tod_sym),
                                 np.full(tod_sym.size, True))
         
     def test_offset_beam_I(self):
@@ -957,14 +959,13 @@ class TestTools(unittest.TestCase):
         sample_rate = 10
         location='spole'
         lmax = self.lmax
-        fwhm = 200
+        fwhm = 300
         nside_spin = 256
         polang = 30
         az_off = 20
         el_off = 40
 
         alm = (self.alm[0], self.alm[1] * 0., self.alm[2] * 0.)
-
         
         ss = ScanStrategy(mlen, sample_rate=sample_rate,
                           location=location) 
@@ -1029,10 +1030,31 @@ class TestTools(unittest.TestCase):
         ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
                                max_spin=lmax, interp=True) 
 
-        # TODs must agree at least at 1% per sample.
-        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.01 * np.std(tod_sym),
+        # TODs must agree at least at 2% per sample.
+        np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.02 * np.std(tod_sym),
                                 np.full(tod_sym.size, True))
                 
+    def test_spinmaps_spin2(self):
+
+        def rand_alm(lmax):
+            alm = np.empty(hp.Alm.getsize(lmax), dtype=np.complex128)
+            alm[:] = np.random.randn(hp.Alm.getsize(lmax))
+            alm += 1j * np.random.randn(hp.Alm.getsize(lmax))
+            # Make m=0 modes real.
+            alm[:lmax+1] = np.real(alm[:lmax+1])
+            return alm
+
+        lmax = 10
+        almE, almB = tuple([rand_alm(lmax) for i in range(2)])
+        blmE, blmB = tuple([rand_alm(lmax) for i in range(2)])
+        spin_values = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
+        nside = 32
+
+        spinmaps = ScanStrategy._spinmaps_spin2(almE, almB, blmE, blmB*0,
+                                                spin_values, nside)
+        #for sidx, spin in enumerate(spin_values):
+        #    print(spin, spinmaps[sidx])
+
         
 if __name__ == '__main__':
     unittest.main()

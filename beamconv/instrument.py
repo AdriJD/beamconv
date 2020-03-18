@@ -3253,7 +3253,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 
             for nidx, n in enumerate(s_vals_c):
 
-                if nidx != 0: # expipan is already initialized for nidx=0
+                if nidx != 0: #\ expipan is already initialized for nidx=0
                     expipan *= expipa
 
                 if interp:
@@ -3550,7 +3550,8 @@ class ScanStrategy(Instrument, qp.QMap):
         
         return func, func_c, spin_values_unpol, spin_values_pol
 
-    def _spinmaps_spin0(self, alm, blm, spin_values, nside):
+    @staticmethod
+    def _spinmaps_spin0(alm, blm, spin_values, nside):
         '''
         Return spinmaps for real, spin-0 input sky and beam.
 
@@ -3613,7 +3614,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func
 
-    def _spinmaps_spin2(self, almE, almB, blmE, blmB, spin_values, nside):
+    @staticmethod
+    def _spinmaps_spin2(almE, almB, blmE, blmB, spin_values, nside):
         '''
         Return spinmaps for spin-2 input sky and beam.
 
@@ -3643,7 +3645,7 @@ class ScanStrategy(Instrument, qp.QMap):
         lmax = hp.Alm.getlmax(almm2.size)
 
         if len(spin_values) == 1 and spin_values[0] == 2:
-            # Symmetric case
+            # Symmetric case.
             func_c = np.zeros((1, 12*nside**2), dtype=np.complex128)
         else:
             func_c = np.zeros((len(spin_values), 12*nside**2),
@@ -3672,7 +3674,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 ms_flm_m *= 1j / 2.
 
             if s == 0:
-                # The (-1) factor for spin0 is explained in HEALPix doc.
+                # The (-1) factor for spin 0 is explained in HEALPix doc.
                 spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
                             hp.alm2map(-ms_flm_m, nside, verbose=False)]
                 func_c[sidx,:] = spinmaps[0] - 1j * spinmaps[1]
