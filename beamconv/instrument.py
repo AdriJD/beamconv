@@ -3666,23 +3666,19 @@ class ScanStrategy(Instrument, qp.QMap):
             bellm2 = tools.blm2bl(blmm2, m=abs(s), full=True)
 
             if s >= 0:
-                ps_flm_p = hp.almxfl(almp2, bellm2, inplace=False) + \
-                    hp.almxfl(almm2, np.conj(bellm2), inplace=False)
-                ps_flm_p /= -2.
 
-                ps_flm_m = hp.almxfl(almp2, bellm2, inplace=False) - \
-                    hp.almxfl(almm2, np.conj(bellm2), inplace=False)
-                ps_flm_m *= 1j / 2.
-
+                ps_flm_p, ps_flm_m = tools.spin2eb(
+                    hp.almxfl(almm2, np.conj(bellm2) * (-1) ** abs(s)),                    
+                    hp.almxfl(almp2, bellm2),
+                    spin = abs(s))
+                
             if s <= 0:
-                ms_flm_p = hp.almxfl(almm2, bellp2, inplace=False) + \
-                    hp.almxfl(almp2, np.conj(bellp2), inplace=False)
-                ms_flm_p /= -2.
 
-                ms_flm_m = hp.almxfl(almm2, bellp2, inplace=False) - \
-                    hp.almxfl(almp2, np.conj(bellp2), inplace=False)
-                ms_flm_m *= 1j / 2.
-
+                ms_flm_p, ms_flm_m = tools.spin2eb(
+                    hp.almxfl(almp2, np.conj(bellp2) * (-1) ** abs(s)),                    
+                    hp.almxfl(almm2, bellp2),
+                    spin = abs(s))
+                
             if s == 0:
                 # The (-1) factor for spin 0 is explained in HEALPix doc.
                 spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
