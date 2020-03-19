@@ -211,8 +211,6 @@ class HWP(object):
         MIP_t = 0.5*(MIQ+1j*MIU)
         return MII, MIP, MIP_t 
 
-
-
 class Beam(object):
     '''
     A class representing detector and beam properties.

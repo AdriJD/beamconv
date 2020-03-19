@@ -178,7 +178,7 @@ class MPIBase(object):
         '''
         Sum arrays on all ranks elementwise into an
         array living in the root process.
-        
+
         Arguments
         ---------
         arr_loc : array-like
@@ -1192,13 +1192,6 @@ class Instrument(MPIBase):
                     continue
 
                 beam.btype = btype
-
-
-    def elev2ang(self, beam):
-        mm_inc = np.load('ancillary/beam_angles.npy')
-        fp_hwp_distance = 500
-        #return np.radians(mm_inc[1,:])
-        return np.deg2rad(np.interp(beam.el, np.rad2deg(np.arctan(mm_inc[0,:]/fp_hwp_distance)), mm_inc[1,:]))
 
 class ScanStrategy(Instrument, qp.QMap):
     '''
@@ -3176,7 +3169,7 @@ class ScanStrategy(Instrument, qp.QMap):
             func_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['maps']
             s_vals = self.spinmaps['ghosts'][ghost_idx]['s0a0']['s_vals']
             s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['s_vals']
-                        
+
         # Check if shape spinmaps matches s_vals.
         if func.shape[0] != s_vals.size:
             raise ValueError('Shape func {} and size s_vals {} do not match.'.
@@ -3184,7 +3177,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if func_c.shape[0] != s_vals_c.size:
             raise ValueError('Shape func_c {} and size s_vals {} do not match.'.
                              format(func_c.shape[0], s_vals_c.size))
-        
+
         # Check for azimuthal symmetry.
         if beam.symmetric:
             if s_vals[0] != 0 or s_vals.size != 1:
@@ -3246,11 +3239,11 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # If beam.symmetric is True, we can be sure to only have s=2.
             if beam.symmetric:
-                expipan = np.exp(-1j * pa * 2)                
+                expipan = np.exp(-1j * pa * 2)
             else:
                 expipa = np.exp(-1j * pa) # used for recursion
                 expipan = np.exp(-1j * pa * (-N + 1)) # starting point (n=-N+1)
-                
+
             for nidx, n in enumerate(s_vals_c):
 
                 if nidx != 0: #\ expipan is already initialized for nidx=0
@@ -3259,9 +3252,11 @@ class ScanStrategy(Instrument, qp.QMap):
                 if interp:
                     tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
                              * expipan
+
                 else:
                     tod_c += func_c[nidx,pix] * expipan
 
+                    
             # Check for HWP angle array.
             if not hasattr(self, 'hwp_ang'):
                 hwp_ang = 0
@@ -3493,7 +3488,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     self.spinmaps['ghosts'][u]['s2a4'] = {}
                     self.spinmaps['ghosts'][u]['s2a4']['maps'] = func_c
                     self.spinmaps['ghosts'][u]['s2a4']['s_vals'] = s_vals_pol
-                    
+
             return
 
         # Check for nans in alms. E.g from a nan pixel in original maps.
@@ -3546,13 +3541,15 @@ class ScanStrategy(Instrument, qp.QMap):
                                       nside_spin)
 
         # ADD three more calls to _spinmaps functions here.
-        
+
         return func, func_c, spin_values_unpol, spin_values_pol
 
     @staticmethod
     def _spinmaps_spin0(alm, blm, spin_values, nside):
         '''
-        Return spinmaps for real, spin-0 input sky and beam.
+        Return spinmaps for a "real-valued" spin field with 
+        spin-weighted spherical harmonic coefficients given 
+        by sflm = alm * bls.
 
         Arguments
         ---------
@@ -3574,6 +3571,13 @@ class ScanStrategy(Instrument, qp.QMap):
         ------
         ValueError
             If spin values contain negative values.
+
+        Notes
+        -----
+        We only consider non-negative spin values here because for
+        a real spin field sf we have sf^* = -sf, or, in terms of the
+        harmonic coefficients: sflm^* = -sfl-m (-1)^(s+m). We can 
+        therefore reconstruct the fields for negative s if needed.
         '''
 
         if spin_values.min() < 0:
@@ -3590,7 +3594,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         for sidx, s in enumerate(spin_values): # s are azimuthal modes in bls.
             bell = tools.blm2bl(blm, m=s, full=True)
-            
+
             if s == 0: # Scalar transform.
 
                 flms = hp.almxfl(alm, bell, inplace=False)
@@ -3600,7 +3604,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # The positive s values.
                 flms = hp.almxfl(alm, bell, inplace=False)
-        
+
                 # The negative s values: alm bl-s = alm bls^* (-1)^s.
                 flmms = hp.almxfl(alm, (-1) ** s * np.conj(bell), inplace=False)
 
@@ -3608,7 +3612,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # alm2map_spin.
                 spinmaps = hp.alm2map_spin(tools.spin2eb(flmms, flms, spin=s),
                                            nside, s, lmax, lmax)
-                                
+
                 func[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
         return func
@@ -3616,7 +3620,10 @@ class ScanStrategy(Instrument, qp.QMap):
     @staticmethod
     def _spinmaps_spin2(almE, almB, blmE, blmB, spin_values, nside):
         '''
-        Return spinmaps for spin-2 input sky and beam.
+        Return spinmaps for a complex spin field with harmonic
+        coefficients given by sflm = 2alm -2bls. Where 2alm and 
+        -2bls are the harmonic coefficients of two (real) spin
+        fields.
 
         Arguments
         ---------
@@ -3636,6 +3643,14 @@ class ScanStrategy(Instrument, qp.QMap):
         Returns
         -------
         spinmaps : (nspin, 12*nside**2) complex array
+
+        Notes
+        -----
+        A complex spin field is one that does not obey the reality 
+        condition for spin fields: sf^* != -sf, or, equivalently, 
+        sflm^* != -sfl-m (-1)^(s+m). This means that the spin 0 output
+        map is complex and that the s < 0 output maps are not generally
+        given by the complex conjugate of the s > 0 maps.
         '''
 
         almm2, almp2 = tools.eb2spin(almE, almB)
@@ -3643,16 +3658,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         lmax = hp.Alm.getlmax(almm2.size)
 
-        if len(spin_values) == 1 and spin_values[0] == 2:
-            # Symmetric case.
-            func_c = np.zeros((1, 12*nside**2), dtype=np.complex128)
-        else:
-            func_c = np.zeros((len(spin_values), 12*nside**2),
+        func_c = np.zeros((len(spin_values), 12*nside**2),
                               dtype=np.complex128)
 
         for sidx, s in enumerate(spin_values):
             bellp2 = tools.blm2bl(blmp2, m=abs(s), full=True)
-            bellm2 = tools.blm2bl(blmm2, m=abs(s), full=True)            
+            bellm2 = tools.blm2bl(blmm2, m=abs(s), full=True)
 
             if s >= 0:
                 ps_flm_p = hp.almxfl(almp2, bellm2, inplace=False) + \

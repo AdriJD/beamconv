@@ -17,7 +17,8 @@ class TestTools(unittest.TestCase):
         '''
 
         lmax = 50
-        
+
+        np.random.seed(10)
         def rand_alm(lmax):
             alm = np.empty(hp.Alm.getsize(lmax), dtype=np.complex128)
             alm[:] = np.random.randn(hp.Alm.getsize(lmax))
@@ -172,6 +173,7 @@ class TestTools(unittest.TestCase):
         for i in range(1, 2 * mmax + 1):
             if i == mmax + 2:
                 continue
+            print(i)
             np.testing.assert_array_almost_equal(zero_map,
                                                  func_c[i], decimal=6)
 
@@ -265,6 +267,88 @@ class TestTools(unittest.TestCase):
         # Construct TOD manually.
         polang = beam.polang
         maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.)))
+
+        np.testing.assert_almost_equal(maps_sm[0],
+                                       scs.spinmaps['main_beam']['s0a0']['maps'][0])
+        q = np.real(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
+        u = np.imag(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
+        np.testing.assert_almost_equal(maps_sm[1], q)
+        np.testing.assert_almost_equal(maps_sm[2], u)
+
+        tod_man = maps_sm[0][pix]
+        tod_man += (maps_sm[1][pix] \
+                    * np.cos(2 * np.radians(pa - polang - 2 * hwp_ang2)))
+        tod_man += (maps_sm[2][pix] \
+                    * np.sin(2 * np.radians(pa - polang - 2 * hwp_ang2)))
+        
+        np.testing.assert_almost_equal(tod2, tod_man)
+
+    def test_scan_spole_pol(self):
+        '''
+        Perform a (low resolution) pol only scan and see if TOD make sense.
+        '''
+
+        alm = (self.alm[0] * 0, self.alm[1], self.alm[2])
+        
+        mlen = 10 * 60 
+        rot_period = 120
+        mmax = 2        
+        ra0=-10
+        dec0=-57.5
+        fwhm = 200
+        nside = 128
+        az_throw = 10
+        polang = 20.
+
+        ces_opts = dict(ra0=ra0, dec0=dec0, az_throw=az_throw,
+                        scan_speed=2.)
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create a 1 x 1 square grid of Gaussian beams.
+        scs.create_focal_plane(nrow=1, ncol=1, fov=4,
+                               lmax=self.lmax, fwhm=fwhm,
+                               polang=polang)
+        beam = scs.beams[0][0]
+        scs.init_detpair(alm, beam, nside_spin=nside,
+                                   max_spin=mmax)
+        scs.partition_mission()
+
+        chunk = scs.chunks[0]
+        ces_opts.update(chunk)
+
+        # Populate boresight.
+        scs.constant_el_scan(**ces_opts)
+
+        # Test without returning anything (default behaviour).
+        scs.scan(beam, **chunk)
+
+        tod = scs.scan(beam, return_tod=True, **chunk)
+        self.assertEqual(tod.size, chunk['end'] - chunk['start'])
+
+        pix, nside_out, pa, hwp_ang = scs.scan(beam, return_point=True,
+                                           **chunk)
+        self.assertEqual(pix.size, tod.size)
+        self.assertEqual(nside, nside_out)
+        self.assertEqual(pa.size, tod.size)
+        self.assertEqual(hwp_ang, 0)
+
+        # Turn on HWP
+        scs.set_hwp_mod(mode='continuous', freq=1., start_ang=0)
+        scs.rotate_hwp(**chunk)
+        tod2, pix2, nside_out2, pa2, hwp_ang2 = scs.scan(beam,
+                        return_tod=True, return_point=True, **chunk)
+        np.testing.assert_almost_equal(pix, pix2)
+        np.testing.assert_almost_equal(pix, pix2)
+        np.testing.assert_almost_equal(pa, pa2)
+        self.assertTrue(np.any(np.not_equal(tod, tod2)), True)
+        self.assertEqual(nside_out, nside_out2)
+        self.assertEqual(hwp_ang2.size, tod.size)
+
+        # Construct TOD manually.
+        polang = beam.polang
+        maps_sm = np.asarray(hp.alm2map(alm, nside, verbose=False,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
         np.testing.assert_almost_equal(maps_sm[0],
@@ -880,9 +964,13 @@ class TestTools(unittest.TestCase):
         lmax = self.lmax
         fwhm = 300
         nside_spin = 256
-        polang = 30
+        #polang = 30
+        #az_off = 20
+        #el_off = 40
+
+        polang = 90
         az_off = 20
-        el_off = 40
+        el_off = 0
 
         alm = (self.alm[0]*0., self.alm[1], self.alm[2])
         
@@ -901,8 +989,8 @@ class TestTools(unittest.TestCase):
         rot_period =  ss.mlen
         ss.set_instr_rot(period=rot_period, start_ang=45)
 
-        ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
-                       angles=[34, 12, 67])
+        #ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
+        #               angles=[34, 12, 67])
 
         ss.partition_mission()
         ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
@@ -936,6 +1024,7 @@ class TestTools(unittest.TestCase):
         theta = np.radians(90 - dec)
         psi = np.radians(-pa)
 
+        print('angles', psi, theta, phi)
         # rotate blm
         hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
 
@@ -950,6 +1039,8 @@ class TestTools(unittest.TestCase):
                                max_spin=lmax, interp=True) 
 
         # TODs must agree at least at 2% per sample.
+        print('tod_sym', tod_sym[::10])        
+        print('ss.tod', ss.tod[::10])
         np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.02 * np.std(tod_sym),
                                 np.full(tod_sym.size, True))
         
@@ -1030,7 +1121,7 @@ class TestTools(unittest.TestCase):
         ss.scan_instrument_mpi(alm, binning=False, nside_spin=nside_spin,
                                max_spin=lmax, interp=True) 
 
-        # TODs must agree at least at 2% per sample.
+        # TODs must agree at least at 2% per sample.        
         np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.02 * np.std(tod_sym),
                                 np.full(tod_sym.size, True))
                 
@@ -1052,9 +1143,10 @@ class TestTools(unittest.TestCase):
 
         spinmaps = ScanStrategy._spinmaps_spin2(almE, almB, blmE, blmB*0,
                                                 spin_values, nside)
-        #for sidx, spin in enumerate(spin_values):
-        #    print(spin, spinmaps[sidx])
+        for sidx, spin in enumerate(spin_values):
+            print(spin, spinmaps[sidx])
 
+        
         
 if __name__ == '__main__':
     unittest.main()

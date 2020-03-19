@@ -279,7 +279,7 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
     Returns
     -------
     blmm2, blmp2 : tuple of array-like
-        The spin \pm 2 harmonic coefficients of the
+        The spin -2 and +2 harmonic coefficients of the
         polarized beam.
     '''
 
@@ -337,10 +337,10 @@ def spin2eb(almm2, almp2, spin=2):
     if int(spin) != spin:
         raise ValueError('Spin must be integer')
     
-    almE = almp2 + (-1) ** spin * almm2
+    almE = almp2 + almm2 * (-1.) ** spin
     almE /= -2.
 
-    almB = almp2 - (-1) ** spin * almm2
+    almB = almp2 - almm2 * (-1.) ** spin
     almB *= (1j / 2.)
 
     return almE, almB
