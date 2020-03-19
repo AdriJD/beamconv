@@ -1125,7 +1125,7 @@ class TestTools(unittest.TestCase):
         np.testing.assert_equal(np.abs(ss.tod - tod_sym) < 0.02 * np.std(tod_sym),
                                 np.full(tod_sym.size, True))
                 
-    def test_spinmaps_spin2(self):
+    def test_spinmaps_complex(self):
 
         def rand_alm(lmax):
             alm = np.empty(hp.Alm.getsize(lmax), dtype=np.complex128)
@@ -1141,7 +1141,7 @@ class TestTools(unittest.TestCase):
         spin_values = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
         nside = 32
 
-        spinmaps = ScanStrategy._spinmaps_spin2(almE, almB, blmE, blmB*0,
+        spinmaps = ScanStrategy._spinmaps_complex(almE, almB, blmE, blmB*0,
                                                 spin_values, nside)
         for sidx, spin in enumerate(spin_values):
             print(spin, spinmaps[sidx])

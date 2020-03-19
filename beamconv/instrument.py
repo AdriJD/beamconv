@@ -3531,13 +3531,13 @@ class ScanStrategy(Instrument, qp.QMap):
         # blms by matrix elements here.
 
         # Unpolarized sky and beam first.
-        func = self._spinmaps_spin0(alm[0], blm[0], spin_values_unpol,
+        func = self._spinmaps_real(alm[0], blm[0], spin_values_unpol,
                                     nside_spin)
 
         # Linearly polarized sky and beam.
         almE, almB = alm[1:]
         blmE, blmB = tools.spin2eb(blm[1], blm[2])
-        func_c = self._spinmaps_spin2(almE, almB, blmE, blmB, spin_values_pol,
+        func_c = self._spinmaps_complex(almE, almB, blmE, blmB, spin_values_pol,
                                       nside_spin)
 
         # ADD three more calls to _spinmaps functions here.
@@ -3545,7 +3545,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return func, func_c, spin_values_unpol, spin_values_pol
 
     @staticmethod
-    def _spinmaps_spin0(alm, blm, spin_values, nside):
+    def _spinmaps_real(alm, blm, spin_values, nside):
         '''
         Return spinmaps for a "real-valued" spin field with 
         spin-weighted spherical harmonic coefficients given 
@@ -3618,7 +3618,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return func
 
     @staticmethod
-    def _spinmaps_spin2(almE, almB, blmE, blmB, spin_values, nside):
+    def _spinmaps_complex(almE, almB, blmE, blmB, spin_values, nside):
         '''
         Return spinmaps for a complex spin field with harmonic
         coefficients given by sflm = 2alm -2bls. Where 2alm and 
@@ -3686,8 +3686,8 @@ class ScanStrategy(Instrument, qp.QMap):
             if s == 0:
                 # The (-1) factor for spin 0 is explained in HEALPix doc.
                 spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
-                            hp.alm2map(-ms_flm_m, nside, verbose=False)]
-                func_c[sidx,:] = spinmaps[0] - 1j * spinmaps[1]
+                            hp.alm2map(ms_flm_m, nside, verbose=False)]
+                func_c[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
             if s > 0:
                 spinmaps = hp.alm2map_spin([ps_flm_p, ps_flm_m],
