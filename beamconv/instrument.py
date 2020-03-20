@@ -3228,34 +3228,17 @@ class ScanStrategy(Instrument, qp.QMap):
 
         np.radians(pa, out=pa)
 
-        # NOTE
+        # We convert from healpix convention to ias convention...
         pa *= -1
         pa += np.pi
 
         if (hwp_status=='ideal'):
-            # Fill complex array, i.e. the linearly polarized part
-            # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
-            # to avoid doing triginometry at each n.
 
-            # If beam.symmetric is True, we can be sure to only have s=2.
-            if beam.symmetric:
-                expipan = np.exp(-1j * pa * 2)
-            else:
-                expipa = np.exp(-1j * pa) # used for recursion
-                expipan = np.exp(-1j * pa * (-N + 1)) # starting point (n=-N+1)
-
-            for nidx, n in enumerate(s_vals_c):
-
-                if nidx != 0: #\ expipan is already initialized for nidx=0
-                    expipan *= expipa
-
-                if interp:
-                    tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
-                             * expipan
-
-                else:
-                    tod_c += func_c[nidx,pix] * expipan
-
+            if interp:
+                pix = (ra, dec)
+                
+            self._scan_modulate_pa(tod_c, pix, pa, func_c, s_vals_c,
+                                   reality=False, interp=interp)
                     
             # Check for HWP angle array.
             if not hasattr(self, 'hwp_ang'):
@@ -3269,29 +3252,9 @@ class ScanStrategy(Instrument, qp.QMap):
             tod = np.real(tod_c) # Note, shares memory with tod_c.
 
             # Add unpolarized tod.
-            # Reset starting point recursion.
-            # Note, if beam.symmetric=True, expipa is not initialized, so
-            # following will automatically crash if s_vals != [0]
-            expipan[:] = 1.
-
-            for n in s_vals:
-
-                # Equal to func exp(n pa) + c.c (pa: position angle).
-                if n == 0:
-                    if interp:
-                        tod += np.real(hp.get_interp_val(func[n], dec, ra))
-                    else:
-                        tod += np.real(func[n,pix])
-
-                if n > 0:
-                    expipan *= expipa
-
-                    if interp:
-                        tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
-                                       * expipan)
-                    else:
-                        tod += 2 * np.real(func[n,pix] * expipan)
-
+            self._scan_modulate_pa(tod, pix, pa, func, s_vals,
+                                   reality=True, interp=interp)
+            
         elif(hwp_status=='non-ideal'):
             for nidx, n in enumerate(s_vals_c):
                 if interp:
@@ -3347,7 +3310,79 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
+    @staticmethod
+    def _scan_modulate_pa(tod, pix, pa, maps, s_vals,
+                          reality=False, interp=False):
+        '''
+        Populate TOD with maps[pix] exp - i s psi.
 
+        Arguments
+        ---------
+        tod : (nsamp) array
+            TOD to be added to.
+        pix : (nsamp) int array or sequence of arrays.
+            HEALPix pixel indices or (ra, dec) if interpolation
+            is used.
+        pa : (nsamp) array
+            Psi angle (position angle).
+        maps : (nspin, npix) array
+            Maps to be scanned.
+        s_vals : (nspin) array
+            Spin values.
+
+        Keyword Arguments
+        -----------------
+        reality : bool
+            Whether or not the maps obey the reality condition:
+            sf = -sf^*. If set, use the s <-> -s symmetry.
+        interp : bool
+            If interpolation should be used while scanning.
+
+        Raises
+        ------
+        ValueError
+            If negative spin values are given while reality symmetry
+            is used.
+            If pix argument is not [ra, dec] if interpolation is used.
+        '''
+
+        if reality and s_vals.min() < 0:
+            raise ValueError('Negative spin not allowed when reality '
+                             'symmetry is used')
+        
+        # Use recursion of exponent if spin values are spaced by 1.
+        if np.array_equal(s_vals, np.arange(s_vals[0], s_vals[-1] + 1)):
+            recursion = True
+            expmipa = np.exp(-1j * pa) # Used for recursion
+            expmipas = np.exp(-1j * pa * s_vals[0]) 
+        else:
+            recursion = False
+
+        for sidx, spin in enumerate(s_vals):
+
+            if recursion and sidx != 0:
+                # Already initialized for first spin.                
+                expmipas *= expmipa
+            else:
+                expmipas = np.exp(-1j * pa * spin)
+                
+            if interp:
+                ra, dec = pix
+                scan = hp.get_interp_val(maps[sidx], dec, ra)
+            else:
+                scan = maps[sidx, pix] # Is already a copy.
+
+            if spin != 0:
+                scan *= expmipas
+
+            if reality:
+                scan = np.real(scan)
+                if spin != 0:
+                    # For -s and +s.
+                    scan *= 2
+
+            tod += scan
+                                
     def instr_modulation(self, beam, hwp_ang, pa, polang, tod,
                          tod_c, muell_mat_model):
         '''
