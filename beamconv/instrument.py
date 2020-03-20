@@ -3450,7 +3450,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # calculate spinmaps for main beam
         func, func_c, s_vals, s_vals_pol = self._init_spinmaps(alm,
-                        blm, max_s, nside_spin, symmetric=beam.symmetric)
+                    blm, max_s, nside_spin, symmetric=beam.symmetric,
+                    hwp_mueller=beam.hwp_mueller)
 
         # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
         # s refers to spin value under psi, a to spin value under HWP rot.
@@ -3487,7 +3488,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 max_s = min(ghost.mmax, max_spin)
 
                 func, func_c, s_vals, s_vals_pol = self._init_spinmaps(alm,
-                            blm, max_s, nside_spin, symmetric=ghost.symmetric)
+                            blm, max_s, nside_spin, symmetric=ghost.symmetric,
+                            hwp_mueller=ghost.hwp_mueller)
 
                 self.spinmaps['ghosts'][u]['s0a0'] = {}
                 self.spinmaps['ghosts'][u]['s0a0']['maps'] = func
@@ -3497,7 +3499,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 self.spinmaps['ghosts'][u]['s2a4']['s_vals'] = s_vals_pol
         
     def _init_spinmaps(self, alm, blm, max_spin, nside,
-                       symmetric=False):
+                       symmetric=False, hwp_mueller=None):
         '''
         Compute convolution of map with different spin modes
         of the beam. 
@@ -3518,7 +3520,9 @@ class ScanStrategy(Instrument, qp.QMap):
         symmetric : bool
             If set, only use s=0 (intensity) and s=2 (lin. pol).
             `max_spin` kwarg is ignored (default : False).
-
+        hwp_mueller : (4, 4) array, None
+            Unrotated Mueller matrix of half-wave-plate.
+    
         returns
         -------
         func : array_like
@@ -3534,7 +3538,6 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         # Check for nans in alms. E.g from a nan pixel in original maps.
-        # If so, crash. Otherwise healpy will just create nan maps.
         crash_a = False
         crash_b = False
         i = 0
@@ -3564,20 +3567,22 @@ class ScanStrategy(Instrument, qp.QMap):
             spin_values_pol = np.array([2], dtype=int)
         else:
             N = max_spin + 1
-            # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.
-            spin_values_unpol = np.arange(N, dtype=int)
-            spin_values_pol = np.arange(-N+1, N, dtype=int)
+            # Intensity only needs s >=0 maps.
+            spin_values_unpol = np.arange(max_spin + 1)
+            # Linear polarization need +s and -s maps.
+            spin_values_pol = np.arange(-max_spin, max_spin + 1)
 
-        # NOTE if Mueller matrix arg is given, you should multiply
-        # blms by matrix elements here.
+        if hwp_mueller is not None:
+            hwp_spin = tools.mueller2spin(hwp_mueller)
 
+        almE, almB = alm[1:]
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
+            
         # Unpolarized sky and beam first.
         func = self._spinmaps_real(alm[0], blm[0], spin_values_unpol,
                                    nside)
 
         # Linearly polarized sky and beam.
-        almE, almB = alm[1:]
-        blmE, blmB = tools.spin2eb(blm[1], blm[2])
         func_c = self._spinmaps_complex(almE, almB, blmE, blmB, spin_values_pol,
                                         nside)
     
@@ -3834,8 +3839,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Keyword arguments
         -----------------
         fill : scalar
-            Fill value for unobserved pixels
-            (default : hp.UNSEEN)
+            Fill value for unobserved pixels (default : hp.UNSEEN)
         return_proj : bool
             Also return proj matrix (default : False)
 

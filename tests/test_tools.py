@@ -181,6 +181,24 @@ class TestTools(unittest.TestCase):
         exp_ans = np.sin(4 * t * (2 * np.pi) / float(nsamp))# f = .4 Hz
         np.testing.assert_array_almost_equal(tod, exp_ans)
 
+    def test_mueller2spin_identity(self):
+
+        identity = np.eye(4)
+        mat_spin = tools.mueller2spin(identity)
+        np.testing.assert_almost_equal(mat_spin, identity)
+
+    def test_mueller2spin(self):
+
+        mat = np.arange(16).reshape(4,4)
+        mat_spin = tools.mueller2spin(mat)
+        exp_ans = np.asarray(
+            [[0, (1 - 2j) / np.sqrt(2), (1 + 2j) / np.sqrt(2), 3],
+             [(2 + 4j) * np.sqrt(2), (15 + 3j) / 2., (-5 + 15j) / 2., np.sqrt(-36 + 77j)],
+             [(2 - 4j) * np.sqrt(2), (-5 - 15j) / 2., (15 - 3j) / 2., np.sqrt(-36 - 77j)],
+             [12, (13 - 14j) / np.sqrt(2), (13 + 14j) / np.sqrt(2), 15]]
+            )
+        np.testing.assert_almost_equal(mat_spin, exp_ans)
+        
 if __name__ == '__main__':
     unittest.main()
         

@@ -810,6 +810,27 @@ def filter_tod_hwp(tod, fsamp, hwp_freq):
 
     return
 
+def mueller2spin(mueller_mat):
+    '''
+    Transform input Mueller matrix to complex
+    spin basis.
+
+    Arguments
+    ---------
+    mueller_mat : (4, 4) array
+
+    Returns
+    -------
+    spin_mat : (4, 4) complex array    
+    '''
+    sqrt2 = np.sqrt(2)
+    tmat = np.asarray([[1, 0, 0, 0],
+                       [0, 1/sqrt2, 1j/sqrt2, 0],
+                       [0, 1/sqrt2, -1j/sqrt2, 0],
+                       [0, 0, 0, 1]])
+    tmatinv = np.linalg.inv(tmat)
+    
+    return np.dot(np.dot(tmat, mueller_mat), tmatinv)        
 
 def hwp_freq2thick(indx_diff, freq):
 	# Compute the ideal thickness of the HWP for a frequency and index difference
