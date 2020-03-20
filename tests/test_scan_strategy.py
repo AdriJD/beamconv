@@ -134,8 +134,7 @@ class TestTools(unittest.TestCase):
         beam_a = Beam(fwhm=0., btype='Gaussian', mmax=mmax)
         beam_b = Beam(fwhm=0., btype='Gaussian', mmax=mmax)
 
-        init_spinmaps_opts = dict(max_spin=5, nside_spin=nside,
-                                  verbose=False)
+        init_spinmaps_opts = dict(max_spin=5, nside_spin=nside)
 
         scs.init_detpair(self.alm, beam_a, beam_b=beam_b,
                          **init_spinmaps_opts)
@@ -189,8 +188,7 @@ class TestTools(unittest.TestCase):
         beam_a = Beam(fwhm=0., btype='Gaussian', mmax=mmax)
         beam_b = None
 
-        init_spinmaps_opts = dict(max_spin=5, nside_spin=nside,
-                                  verbose=False)
+        init_spinmaps_opts = dict(max_spin=5, nside_spin=nside)
 
         scs.init_detpair(self.alm, beam_a, beam_b=beam_b,
                          **init_spinmaps_opts)
@@ -605,8 +603,8 @@ class TestTools(unittest.TestCase):
         beam_a, beam_b = scs.beams[0]
 
 
-        scs.init_detpair(self.alm, beam_a, beam_b=beam_b, nside_spin=nside,
-                         verbose=False)
+        scs.init_detpair(self.alm, beam_a, beam_b=beam_b, nside_spin=nside)
+
         
         # Generate timestreams, bin them and store as attributes.
         scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,

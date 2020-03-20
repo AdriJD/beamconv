@@ -1643,8 +1643,7 @@ class ScanStrategy(Instrument, qp.QMap):
         beam_b : <detector.Beam> object
             The B detector. (default : None)
         kwargs : {spinmaps_opts}
-            Extra kwargs are assumed input to
-            `init_spinmaps()`
+            Extra kwargs are assumed input to `init_spinmaps()`
 
         Notes
         -----
@@ -1688,7 +1687,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                 beam_a.ghosts[0])
 
 
-        self.init_spinmaps(alm, beam_obj=beam_a, **kwargs)
+        self.init_spinmaps(alm, beam_a, **kwargs)
 
         # free blm attributes
         beam_a.delete_blm(del_ghosts_blm=True)
@@ -1773,7 +1772,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Pop init_spinmaps kwargs.
         max_spin = kwargs.pop('max_spin', None)
         nside_spin = kwargs.pop('nside_spin', None)
-        spinmaps_opts = dict(verbose=(verbose==2))
+        spinmaps_opts = {}
         if max_spin:
             spinmaps_opts.update({'max_spin' : max_spin})
         if nside_spin:
@@ -3228,7 +3227,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         np.radians(pa, out=pa)
 
-        # We convert from healpix convention to ias convention...
+        # We convert from healpix convention to IAU convention...
         pa *= -1
         pa += np.pi
 
@@ -3280,7 +3279,6 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             raise ValueError(
                 'HWP_type variable only accepts values `ideal` and `non-ideal`')
-
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3408,12 +3406,101 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return tod
 
-    def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
-                      verbose=True, beam_obj=None, symmetric=False):
+    def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
+                      symmetric=False):
+        '''
+        Compute appropriate spinmaps for beam and
+        all its ghosts.
+
+        Arguments
+        ---------
+        alm : tuple of array-like
+            Sky alms (alm, almE, almB)
+        beam : <detector.Beam> object
+            If provided, create spinmaps for main beam and
+            all ghosts (if present). 
+        
+        Keyword arguments
+        -----------------
+        max_spin : int, optional
+            Maximum azimuthal mode describing the beam (default : 5)
+        nside_spin : int
+            Nside of spin maps (default : 256)
+        symmetric : bool
+            If set, only use s=0 (intensity) and s=2 (lin. pol).
+            `max_spin` kwarg is ignored (default : False)
+
+        Notes
+        -----
+        Populates following class attributes:
+
+        spinmaps : dict
+            Dictionary constaining all spinmaps for main beam and
+            possible ghosts.
+
+        The `ghost_idx` attribute decides whether ghosts have
+        distinct beams. See `Beam.__init__()`.                
+        '''
+        
+        self.spinmaps = {'main_beam' : {},
+                         'ghosts': []}
+
+        max_s = min(beam.mmax, max_spin)
+        blm = beam.blm # main beam
+
+        # calculate spinmaps for main beam
+        func, func_c, s_vals, s_vals_pol = self._init_spinmaps(alm,
+                        blm, max_s, nside_spin, symmetric=beam.symmetric)
+
+        # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
+        # s refers to spin value under psi, a to spin value under HWP rot.
+        self.spinmaps['main_beam']['s0a0'] = {}
+        self.spinmaps['main_beam']['s0a0']['maps'] = func
+        self.spinmaps['main_beam']['s0a0']['s_vals'] = s_vals
+        self.spinmaps['main_beam']['s2a4'] = {}
+        self.spinmaps['main_beam']['s2a4']['maps'] = func_c
+        self.spinmaps['main_beam']['s2a4']['s_vals'] = s_vals_pol
+
+        if beam.ghosts:
+
+            # Find unique ghost beams.
+            assert len(beam.ghosts) == beam.ghost_count
+            # Ghost_indices.
+            g_indices = np.empty(beam.ghost_count, dtype=int)
+
+            for gidx, ghost in enumerate(beam.ghosts):
+                g_indices[gidx] = ghost.ghost_idx
+
+            unique, u_indices = np.unique(g_indices, return_index=True)
+
+            # Calculate spinmaps for unique ghost beams.
+            for uidx, u in enumerate(unique):
+
+                self.spinmaps['ghosts'].append([])
+                self.spinmaps['ghosts'][u] = {}
+
+                # Use the blms from the first occurrence of unique
+                # ghost_idx.
+                ghost = beam.ghosts[u_indices[uidx]]
+
+                blm = ghost.blm
+                max_s = min(ghost.mmax, max_spin)
+
+                func, func_c, s_vals, s_vals_pol = self._init_spinmaps(alm,
+                            blm, max_s, nside_spin, symmetric=ghost.symmetric)
+
+                self.spinmaps['ghosts'][u]['s0a0'] = {}
+                self.spinmaps['ghosts'][u]['s0a0']['maps'] = func
+                self.spinmaps['ghosts'][u]['s0a0']['s_vals'] = s_vals
+                self.spinmaps['ghosts'][u]['s2a4'] = {}
+                self.spinmaps['ghosts'][u]['s2a4']['maps'] = func_c
+                self.spinmaps['ghosts'][u]['s2a4']['s_vals'] = s_vals_pol
+        
+    def _init_spinmaps(self, alm, blm, max_spin, nside,
+                       symmetric=False):
         '''
         Compute convolution of map with different spin modes
-        of the beam. Computed per spin, so creates spinmmap
-        for every s<= 0 for T and for every s for pol.
+        of the beam. 
 
         Arguments
         ---------
@@ -3421,23 +3508,16 @@ class ScanStrategy(Instrument, qp.QMap):
             Tuple of (alm, almE, almB)
         blm : tuple of array-like
             Tuple of (blmI, blmm2, blmp2)
+        max_spin : int
+            Maximum azimuthal mode describing the beam.
+        nside : int
+            Nside of output maps.
 
         Keyword arguments
         -----------------
-        max_spin : int, optional
-            Maximum azimuthal mode describing the beam
-            (default : 5)
-        nside_spin : int
-            Nside of spin maps (default : 256)
-        beam_obj : <detector.Beam> object
-            If provided, create spinmaps for main beam and
-            all ghosts (if present). `ghost_idx` attribute
-            decides whether ghosts have distinct beams. See
-            `Beam.__init__()`
         symmetric : bool
             If set, only use s=0 (intensity) and s=2 (lin. pol).
-            `max_spin` kwarg is ignored.
-            (default : False)
+            `max_spin` kwarg is ignored (default : False).
 
         returns
         -------
@@ -3448,83 +3528,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Notes
         -----
-        Populates following class attributes if beam_obj is provided:
-
-        spinmaps : dict
-            Dictionary constaining all spinmaps for main beam and
-            possible ghosts.
-
         Uses minimum lmax value of beam and sky SWSH coefficients.
         Uses min value of max_spin and the mmax of beam object as azimuthal
         band-limit.
         '''
-
-        # This block iterates the function to create spinmaps for
-        # the main beam and unique ghost beams (if present)
-        # spinmaps are stored internally in self.spinmaps dict.
-        if beam_obj:
-
-            self.spinmaps = {'main_beam' : {},
-                             'ghosts': []}
-
-            max_s = min(beam_obj.mmax, max_spin)
-            blm = beam_obj.blm # main beam
-
-            # calculate spinmaps for main beam
-            func, func_c, s_vals, s_vals_pol = self.init_spinmaps(alm,
-                                                blm=blm, max_spin=max_s,
-                                                nside_spin=nside_spin,
-                                                verbose=verbose,
-                                                symmetric=beam_obj.symmetric)
-
-            # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
-            # s refers to spin value under psi, a to spin value under HWP rot.
-            self.spinmaps['main_beam']['s0a0'] = {}
-            self.spinmaps['main_beam']['s0a0']['maps'] = func
-            self.spinmaps['main_beam']['s0a0']['s_vals'] = s_vals
-            self.spinmaps['main_beam']['s2a4'] = {}
-            self.spinmaps['main_beam']['s2a4']['maps'] = func_c
-            self.spinmaps['main_beam']['s2a4']['s_vals'] = s_vals_pol
-
-            if beam_obj.ghosts:
-
-                # Find unique ghost beams.
-                assert len(beam_obj.ghosts) == beam_obj.ghost_count
-                # Ghost_indices.
-                g_indices = np.empty(beam_obj.ghost_count, dtype=int)
-
-                for gidx, ghost in enumerate(beam_obj.ghosts):
-                    g_indices[gidx] = ghost.ghost_idx
-
-                unique, u_indices = np.unique(g_indices, return_index=True)
-
-                # Calculate spinmaps for unique ghost beams.
-                for uidx, u in enumerate(unique):
-
-                    self.spinmaps['ghosts'].append([])
-                    self.spinmaps['ghosts'][u] = {}
-
-                    # Use the blms from the first occurrence of unique
-                    # ghost_idx.
-                    ghost = beam_obj.ghosts[u_indices[uidx]]
-
-                    blm = ghost.blm
-                    max_s = min(ghost.mmax, max_spin)
-
-                    func, func_c, s_vals, s_vals_pol = self.init_spinmaps(alm,
-                                                      blm=blm, max_spin=max_s,
-                                                      nside_spin=nside_spin,
-                                                      verbose=verbose,
-                                                      symmetric=ghost.symmetric)
-
-                    self.spinmaps['ghosts'][u]['s0a0'] = {}
-                    self.spinmaps['ghosts'][u]['s0a0']['maps'] = func
-                    self.spinmaps['ghosts'][u]['s0a0']['s_vals'] = s_vals
-                    self.spinmaps['ghosts'][u]['s2a4'] = {}
-                    self.spinmaps['ghosts'][u]['s2a4']['maps'] = func_c
-                    self.spinmaps['ghosts'][u]['s2a4']['s_vals'] = s_vals_pol
-
-            return
 
         # Check for nans in alms. E.g from a nan pixel in original maps.
         # If so, crash. Otherwise healpy will just create nan maps.
@@ -3555,7 +3562,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if symmetric:
             spin_values_unpol = np.array([0], dtype=int)
             spin_values_pol = np.array([2], dtype=int)
-
         else:
             N = max_spin + 1
             # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.
@@ -3567,14 +3573,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Unpolarized sky and beam first.
         func = self._spinmaps_real(alm[0], blm[0], spin_values_unpol,
-                                    nside_spin)
+                                   nside)
 
         # Linearly polarized sky and beam.
         almE, almB = alm[1:]
         blmE, blmB = tools.spin2eb(blm[1], blm[2])
         func_c = self._spinmaps_complex(almE, almB, blmE, blmB, spin_values_pol,
-                                      nside_spin)
-
+                                        nside)
+    
         # ADD three more calls to _spinmaps functions here.
 
         return func, func_c, spin_values_unpol, spin_values_pol
