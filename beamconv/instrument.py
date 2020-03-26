@@ -3312,7 +3312,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def _scan_modulate_pa(tod, pix, pa, maps, s_vals,
                           reality=False, interp=False):
         '''
-        Populate TOD with maps[pix] exp - i s psi.
+        Populate TOD with maps[pix] * exp( -i s psi).
 
         Arguments
         ---------
@@ -3867,7 +3867,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Solve map on root process.
         if self.mpi_rank == 0:
-            # Suppress 1/0 warnings from numpy linalg.
+            # Suppress warnings from numpy linalg.
             with catch_warnings(record=True) as w:
                 filterwarnings('ignore', category=RuntimeWarning)
 
