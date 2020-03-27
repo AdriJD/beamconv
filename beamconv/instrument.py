@@ -3,6 +3,8 @@ import sys
 import time
 import copy
 from warnings import warn, catch_warnings, filterwarnings
+import glob
+import pickle
 
 import numpy as np
 import qpoint as qp
@@ -689,9 +691,6 @@ class Instrument(MPIBase):
         This method will overwrite the idx parameter of the
         beams.
         '''
-
-        import glob
-        import pickle
 
         # do all I/O on root
         if self.mpi_rank == 0:
@@ -3568,7 +3567,23 @@ class ScanStrategy(Instrument, qp.QMap):
             
         if hwp_mueller is not None:
             hwp_spin = tools.mueller2spin(hwp_mueller)
+
+            
             # Call function that combines hwp_spin with blms.
+
+            # s0a0  (Bi Mii + Bv Mvi) Ai
+            # s2a4  (Bp Mpc,p) Ap
+            # s0a2  (Bp Mpc,i) Ai
+            # s2a2  (Bi Mip + Bv Mvp) Ap
+            # s2a0  (Bpc Mpp) Ap
+
+            # For s0a0 no shift
+            # For s2a4, shift Bp up by 4, +2blm should have nonzero m=2.
+            # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
+            # For s2a2, unpol2pol for Bi, Bv
+            # For s2a0, no shift required.
+
+            
             
         if symmetric:
             spin_values_unpol = np.array([0], dtype=int)

@@ -198,6 +198,43 @@ class TestTools(unittest.TestCase):
              [12, (13 - 14j) / np.sqrt(2), (13 + 14j) / np.sqrt(2), 15]]
             )
         np.testing.assert_almost_equal(mat_spin, exp_ans)
+
+    def test_shift_blm_shift0(self):
+
+        # Test if shift of 0 leaves input unchanged.
+        lmax = 5
+        blmE = np.random.randn(hp.Alm.getsize(lmax)).astype(np.complex128)
+        blmE += 1j * np.random.randn(hp.Alm.getsize(lmax))        
+        blmB = np.random.randn(hp.Alm.getsize(lmax)).astype(np.complex128)
+        blmB += 1j * np.random.randn(hp.Alm.getsize(lmax))        
+
+        blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 0)
+
+        np.testing.assert_almost_equal(blmE_new, blmE)
+        np.testing.assert_almost_equal(blmB_new, blmB)
+
+    def test_shift_blm_shift0(self):
+
+        blmp2 = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2, 3, 3, 3, 4, 4, 5],
+                          dtype=np.complex128)
+        blmm2 = np.array(
+            [0, 0, 1j, 1j, 1j, 0, 2j, 2j, 2j, 3j, 3j, 3j, 4j, 4j, 5j],
+            dtype=np.complex128)
+        blmE, blmB = tools.spin2eb(blmm2, blmp2)
+        
+        blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 4)
+        blmm2_new, blmp2_new = tools.eb2spin(blmE_new, blmB_new)
+        
+        blmp2_exp = np.array(
+            [0, 0, 0, 0, -5j, 0, 0, 4j, 4j, -3j, -3j, -3j, 2j, 2j, 1],
+            dtype=np.complex128)
+
+        blmm2_exp = np.array(
+            [0, 0, 0, 0, 5j, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            dtype=np.complex128)
+        
+        np.testing.assert_almost_equal(blmm2_new, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2_new, blmp2_exp)        
         
 if __name__ == '__main__':
     unittest.main()

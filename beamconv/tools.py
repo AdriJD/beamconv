@@ -153,6 +153,83 @@ def scale_blm(blm, normalize=False, deconv_q=False):
     else:
         return blm
 
+def shift_blm(blmE, blmB, shift):
+    '''
+    Return copy of input with m values shifted
+    up or down.
+
+    \pm2b_lm^new = \pm2bl(m \mp shift)^old 
+    
+    Arguments
+    ---------
+    blmE : complex array
+        E-mode coefficients.
+    blmB : complex array
+        B-mdoe coefficients.
+    shift : int
+
+    Returns
+    -------
+    blmE : complex array
+        Updated E-mode coefficients.
+    BlmB : complex array
+        Updated B-mode coefficients.
+    
+    Raises
+    ------
+    ValueError
+        If input sizes do not match.
+        If shift > lmax.
+    '''
+
+    if blmE.size != blmB.size:
+        raise ValueError('Input sizes do not match')
+
+    lmax = hp.Alm.getlmax(blmE.size)
+
+    if shift > lmax:
+        raise ValueError('Shift exceeds lmax')
+        
+    blmm2, blmp2 = eb2spin(blmE, blmB)
+    blmm2_new = np.zeros_like(blmm2)
+    blmp2_new = np.zeros_like(blmp2)        
+
+    # Loop over m modes in new blms
+    for m in range(lmax + 1):
+
+        # Slice into new blms.
+        start = hp.Alm.getidx(lmax, m, m)
+        end = start + lmax + 1 - m        
+
+        # First we do +2blm^new.
+        m_old = m - shift
+        if abs(m_old) > lmax:
+            continue
+        
+        if m_old >= 0:
+            bell_old = blm2bl(blmp2, m=m_old, full=True)         
+        elif m_old < 0: 
+            bell_old = blm2bl(blmm2, m=abs(m_old), full=True)           
+            bell_old = np.conj(bell_old) * (-1) ** m_old
+ 
+        # Length bell_old is always (lmax + 1).
+        blmp2_new[start:end] = bell_old[m:]
+            
+        # Now we do -2blm^new.
+        m_old = m + shift
+        if abs(m_old) > lmax:
+            continue
+        
+        if m_old >= 0:
+            bell_old = blm2bl(blmm2, m=m_old, full=True)         
+        elif m_old < 0: 
+            bell_old = blm2bl(blmp2, m=abs(m_old), full=True)           
+            bell_old = np.conj(bell_old) * (-1) ** m_old
+
+        blmm2_new[start:end] = bell_old[m:]
+
+    return spin2eb(blmm2_new, blmp2_new)
+        
 def unpol2pol(blm):
     '''
     Compute spin \pm 2 blm coefficients by transforming input
@@ -595,7 +672,7 @@ def blm2bl(blm, m=0, copy=True, full=False):
 
     Returns
     -------
-    blm : array-like
+    bl : array-like
         Array of bl's for the m-mode requested
     '''
 
