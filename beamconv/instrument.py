@@ -3448,18 +3448,13 @@ class ScanStrategy(Instrument, qp.QMap):
         blm = beam.blm # main beam
 
         # calculate spinmaps for main beam
-        func, func_c, s_vals, s_vals_pol = self._init_spinmaps(alm,
+        spinmap_dict = self._init_spinmaps(alm,
                     blm, max_s, nside_spin, symmetric=beam.symmetric,
                     hwp_mueller=beam.hwp_mueller)
 
         # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
         # s refers to spin value under psi, a to spin value under HWP rot.
-        self.spinmaps['main_beam']['s0a0'] = {}
-        self.spinmaps['main_beam']['s0a0']['maps'] = func
-        self.spinmaps['main_beam']['s0a0']['s_vals'] = s_vals
-        self.spinmaps['main_beam']['s2a4'] = {}
-        self.spinmaps['main_beam']['s2a4']['maps'] = func_c
-        self.spinmaps['main_beam']['s2a4']['s_vals'] = s_vals_pol
+        self.spinmaps['main_beam'] = spinmap_dict
 
         if beam.ghosts:
 
@@ -3486,17 +3481,12 @@ class ScanStrategy(Instrument, qp.QMap):
                 blm = ghost.blm
                 max_s = min(ghost.mmax, max_spin)
 
-                func, func_c, s_vals, s_vals_pol = self._init_spinmaps(alm,
+                spinmap_dict = self._init_spinmaps(alm,
                             blm, max_s, nside_spin, symmetric=ghost.symmetric,
                             hwp_mueller=ghost.hwp_mueller)
 
-                self.spinmaps['ghosts'][u]['s0a0'] = {}
-                self.spinmaps['ghosts'][u]['s0a0']['maps'] = func
-                self.spinmaps['ghosts'][u]['s0a0']['s_vals'] = s_vals
-                self.spinmaps['ghosts'][u]['s2a4'] = {}
-                self.spinmaps['ghosts'][u]['s2a4']['maps'] = func_c
-                self.spinmaps['ghosts'][u]['s2a4']['s_vals'] = s_vals_pol
-        
+                self.spinmaps['ghosts'][u] = spinmap_dict
+                
     def _init_spinmaps(self, alm, blm, max_spin, nside,
                        symmetric=False, hwp_mueller=None):
         '''
@@ -3508,8 +3498,7 @@ class ScanStrategy(Instrument, qp.QMap):
         alm : tuple of array-like
             Sky alms (alm, almE, almB)
         blm : tuple of array-like
-            Beam alms (blmI, blmm2, blmp2) or 
-            (blmI, blmm2, blmp2, blmV)
+            Beam alms (blmI, blmm2, blmp2) or (blmI, blmm2, blmp2, blmV)
         max_spin : int
             Maximum azimuthal mode describing the beam.
         nside : int
@@ -3521,10 +3510,13 @@ class ScanStrategy(Instrument, qp.QMap):
             If set, only use s=0 (I, V) and s=2 (Q, U).
             `max_spin` kwarg is ignored (default : False).
         hwp_mueller : (4, 4) array, None
-            Unrotated Mueller matrix of half-wave-plate.
+            Unrotated Mueller matrix of half-wave plate.
     
         returns
         -------
+        spinmap_dict : dict of dicts
+            Container for spinmaps and spin values for each type, see notes.
+
         func : array_like
         func_c : array_like
         s_values : array_like
@@ -3532,11 +3524,18 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Notes
         -----
+        Keys of output dictionary refer to the behaviour under sky rotation (s)
+        and HWP rotation (a) of the maps in case of azimuthally symmetric beams.
+        So s0a0 is completely scalar, s2a4 is the standard linear polarization.
+
         Uses minimum lmax value of beam and sky SWSH coefficients.
         Uses min value of max_spin and the mmax of blm as azimuthal
         band-limit.
         '''
 
+        # Output.
+        spinmap_dict = {}
+        
         # Check for nans in alms. E.g from a nan pixel in original maps.
         crash_a = False
         crash_b = False
@@ -3564,10 +3563,67 @@ class ScanStrategy(Instrument, qp.QMap):
 
         almE, almB = alm[1:]
         blmE, blmB = tools.spin2eb(blm[1], blm[2])
-            
-        if hwp_mueller is not None:
-            hwp_spin = tools.mueller2spin(hwp_mueller)
 
+        if symmetric:
+            spin_values_unpol = np.array([0], dtype=int)
+            spin_values_pol = np.array([2], dtype=int)
+        else:
+            # Intensity only needs s >= 0 maps.
+            spin_values_unpol = np.arange(max_spin + 1)
+            # Linear polarization needs -s,...,+s maps.
+            spin_values_pol = np.arange(-max_spin, max_spin + 1)
+        
+        if hwp_mueller is not None:
+
+            pass
+            
+        else:    
+            # Unpolarized sky and beam.
+            func_c = self._spinmaps_complex(almE, almB, blmE, blmB, spin_values_pol,
+                                            nside)
+            spinmap_dict['s0a0'] = {}
+            spinmap_dict['s0a0']['maps'] = self._spinmaps_real(
+                alm[0], blm[0], spin_values_unpol, nside)
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+            
+            # Linearly polarized sky and beam.
+            spinmap_dict['s2a4'] = {}
+            spinmap_dict['s2a4']['maps'] = self._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
+            
+        # Add three more calls to _spinmaps_real/complex here.
+
+        # Probably want to place output into dict here already.
+        # Why not use s2a0, etc. keys here already?
+        #return func, func_c, spin_values_unpol, spin_values_pol
+        return spinmap_dict
+
+    @staticmethod
+    def beam_x_hwp(blm, hwp_mueller):
+        '''
+        
+
+        Arguments
+        ---------
+        blm : tuple of array-like
+            Beam alms (blmI, blmm2, blmp2) or (blmI, blmm2, blmp2, blmV)
+        hwp_mueller : (4, 4) array, None
+            Unrotated Mueller matrix of half-wave plate.
+            
+
+        Notes
+        -----
+        We have the SWSH modes of the beam (the blms).
+        However, we want to use the SHWSH modes of the
+        beam x HWP Mueller matrix elements. Instead of
+        Multiplying the two fields in real space, we
+        effecitively convolve the two in harmonic space,
+        this way we can use the blms and avoid going back
+        to real space.
+        
+        '''
             
             # Call function that combines hwp_spin with blms.
 
@@ -3582,32 +3638,9 @@ class ScanStrategy(Instrument, qp.QMap):
             # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
             # For s2a2, unpol2pol for Bi, Bv
             # For s2a0, no shift required.
-
-            
-            
-        if symmetric:
-            spin_values_unpol = np.array([0], dtype=int)
-            spin_values_pol = np.array([2], dtype=int)
-        else:
-            # Intensity only needs s >= 0 maps.
-            spin_values_unpol = np.arange(max_spin + 1)
-            # Linear polarization needs -s,...,+s maps.
-            spin_values_pol = np.arange(-max_spin, max_spin + 1)
-            
-        # Unpolarized sky and beam first.
-        func = self._spinmaps_real(alm[0], blm[0], spin_values_unpol,
-                                   nside)
-
-        # Linearly polarized sky and beam.
-        func_c = self._spinmaps_complex(almE, almB, blmE, blmB, spin_values_pol,
-                                        nside)
+        
+        hwp_spin = tools.mueller2spin(hwp_mueller)
     
-        # Add three more calls to _spinmaps_real/complex here.
-
-        # Probably want to place output into dict here already.
-        # Why not use s2a0, etc. keys here already?
-        return func, func_c, spin_values_unpol, spin_values_pol
-
     @staticmethod
     def _spinmaps_real(alm, blm, spin_values, nside):
         '''
