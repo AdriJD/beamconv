@@ -231,7 +231,6 @@ def shift_blm(blmE, blmB, shift, eb=True):
         end = start + lmax + 1 - m        
         
         m_old = m + shift
-        print(m_old)
         if abs(m_old) > lmax:
             continue
         

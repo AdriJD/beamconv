@@ -267,6 +267,20 @@ class TestTools(unittest.TestCase):
 
         np.testing.assert_almost_equal(blmm2, blmm2_exp)
         np.testing.assert_almost_equal(blmp2, blmp2_exp)        
+
+    def test_shift_blm_s2a4(self):
+        # Test if copolar beam does what we expect.
+        blmm2 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1j, 0, 0, 0],
+                         dtype=np.complex128) 
+        blmp2 = np.zeros_like(blmm2)
+        blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 4, eb=False)        
+
+        blmm2_exp = np.zeros_like(blmm2)
+        blmp2_exp = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, -1j, 0, 0, 0],
+                         dtype=np.complex128) 
+
+        np.testing.assert_almost_equal(blmm2, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2, blmp2_exp)        
         
 if __name__ == '__main__':
     unittest.main()

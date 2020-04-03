@@ -1143,8 +1143,6 @@ class TestTools(unittest.TestCase):
                                                 spin_values, nside)
         for sidx, spin in enumerate(spin_values):
             print(spin, spinmaps[sidx])
-
-        
         
 if __name__ == '__main__':
     unittest.main()

@@ -3154,42 +3154,62 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # Skip all other scanning.
             return
-
-        if not beam.ghost:
-            func = self.spinmaps['main_beam']['s0a0']['maps']
-            func_c = self.spinmaps['main_beam']['s2a4']['maps']
-            s_vals = self.spinmaps['main_beam']['s0a0']['s_vals']
-            s_vals_c = self.spinmaps['main_beam']['s2a4']['s_vals']
+        
+        beam_type = 'main_beam' if not beam.ghost else 'ghosts'
+        if beam_type == 'ghosts':
+            spinmaps = self.spinmaps[beam_type][beam.ghost_idx]
         else:
-            ghost_idx = beam.ghost_idx
-            func = self.spinmaps['ghosts'][ghost_idx]['s0a0']['maps']
-            func_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['maps']
-            s_vals = self.spinmaps['ghosts'][ghost_idx]['s0a0']['s_vals']
-            s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['s_vals']
+            spinmaps = self.spinmaps[beam_type]
+        
+        # Do some sanity checks on spinmaps.
+        for conv_type in spinmaps:
+            maps = spinmaps[conv_type]['maps']
+            s_vals = spinmaps[conv_type]['s_vals']
+            if maps.shape[0] != s_vals.size:
+                raise ValueError(
+                    'Shape maps {} and s_vals {} do not match for {} {}.'.
+                    format(maps.shape[0], s_vals.size, beam_type, conv_type))
+            nside_spin = hp.npix2nside(maps.shape[1])
+            try:
+                if nside_spin != nside_spin_previous:
+                    raise ValueError('spinmaps have different nside')
+            except NameError:
+                pass
+            nside_spin_previous = nside_spin
+
+        #if not beam.ghost:
+        #    func = self.spinmaps['main_beam']['s0a0']['maps']
+        #    func_c = self.spinmaps['main_beam']['s2a4']['maps']
+        #    s_vals = self.spinmaps['main_beam']['s0a0']['s_vals']
+        #    s_vals_c = self.spinmaps['main_beam']['s2a4']['s_vals']
+        #else:
+        #    ghost_idx = beam.ghost_idx
+        #    func = self.spinmaps['ghosts'][ghost_idx]['s0a0']['maps']
+        #    func_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['maps']
+        #    s_vals = self.spinmaps['ghosts'][ghost_idx]['s0a0']['s_vals']
+        #    s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['s_vals']
 
         # Check if shape spinmaps matches s_vals.
-        if func.shape[0] != s_vals.size:
-            raise ValueError('Shape func {} and size s_vals {} do not match.'.
-                             format(func.shape[0], s_vals.size))
-        if func_c.shape[0] != s_vals_c.size:
-            raise ValueError('Shape func_c {} and size s_vals {} do not match.'.
-                             format(func_c.shape[0], s_vals_c.size))
+        #if func.shape[0] != s_vals.size:
+        #    raise ValueError('Shape func {} and size s_vals {} do not match.'.
+        #                     format(func.shape[0], s_vals.size))
+        #if func_c.shape[0] != s_vals_c.size:
+        #    raise ValueError('Shape func_c {} and size s_vals {} do not match.'.
+        #                     format(func_c.shape[0], s_vals_c.size))
 
         # Check for azimuthal symmetry.
-        if beam.symmetric:
-            if s_vals[0] != 0 or s_vals.size != 1:
-                raise ValueError('Wrong shape spinmmaps for symmetric beam.')
-            if s_vals_c[0] != 2 or s_vals_c.size != 1:
-                raise ValueError('Wrong shape spinmmaps for symmetric beam.')
+        #if beam.symmetric:
+        #    if s_vals[0] != 0 or s_vals.size != 1:
+        #        raise ValueError('Wrong shape spinmmaps for symmetric beam.')
+        #    if s_vals_c[0] != 2 or s_vals_c.size != 1:
+        #        raise ValueError('Wrong shape spinmmaps for symmetric beam.')
 
         # Extract nside of spin maps.
-        _, npix = func.shape
-        nside_spin = hp.npix2nside(npix)
-        _, npix2 = func_c.shape
-        assert npix == npix2, "func and func_c have different npix"
-
-        tod = np.zeros(tod_size, dtype=float)
-        tod_c = np.zeros(tod_size, dtype=np.complex128)
+        #_, npix = func.shape
+        #nside_spin = hp.npix2nside(npix)
+        #_, npix2 = func_c.shape
+        #assert npix == npix2, "func and func_c have different npix"
+ 
 
         # Find the indices to the pointing and ctime arrays.
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
@@ -3227,28 +3247,49 @@ class ScanStrategy(Instrument, qp.QMap):
         pa += np.pi
 
         if (hwp_status=='ideal'):
-            if interp:
-                pix = (ra, dec)
-                
-            self._scan_modulate_pa(tod_c, pix, pa, func_c, s_vals_c,
-                                   reality=False, interp=interp)
-                    
-            # Check for HWP angle array.
-            if not hasattr(self, 'hwp_ang'):
-                hwp_ang = 0
+            # NOTE for now we should be in this block even if we are using
+            # a hwp_mueller matrix.
+
+            # Find out if old or new HWP behaviour is desired.
+            if set(spinmaps.keys()) == set(['s0a0', 's2a4']):
+                # Old behaviour.
+            
+                tod = np.zeros(tod_size, dtype=float)
+                tod_c = np.zeros(tod_size, dtype=np.complex128)
+
+                if interp:
+                    pix = (ra, dec)
+
+                self._scan_modulate_pa(tod_c, pix, pa,
+                                       spinmaps['s2a4']['maps'],
+                                       spinmaps['s2a4']['s_vals'],
+                                       reality=False, interp=interp)
+
+                # Check for HWP angle array.
+                if not hasattr(self, 'hwp_ang'):
+                    hwp_ang = 0
+                else:
+                    hwp_ang = self.hwp_ang
+
+                # Modulate by HWP angle and polarization angle.
+                expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+                tod_c *= expm2
+                tod = np.real(tod_c) # Note, shares memory with tod_c.
+
+                # Add unpolarized tod.
+                self._scan_modulate_pa(tod, pix, pa,
+                                       spinmaps['s0a0']['maps'],
+                                       spinmaps['s0a0']['s_vals'],
+                                       reality=True, interp=interp)
+
             else:
-                hwp_ang = self.hwp_ang
-
-            # Modulate by HWP angle and polarization angle.
-            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            tod_c *= expm2
-            tod = np.real(tod_c) # Note, shares memory with tod_c.
-
-            # Add unpolarized tod.
-            self._scan_modulate_pa(tod, pix, pa, func, s_vals,
-                                   reality=True, interp=interp)
+                raise NotImplementedError('dat dus')
             
         elif(hwp_status=='non-ideal'):
+
+            tod = np.zeros(tod_size, dtype=float)
+            tod_c = np.zeros(tod_size, dtype=np.complex128)
+            
             for nidx, n in enumerate(s_vals_c):
                 if interp:
                     tod_c += hp.get_interp_val(func_c[nidx], dec, ra)
@@ -3668,6 +3709,7 @@ class ScanStrategy(Instrument, qp.QMap):
             try:
                 blm_s0a0 *= blm[3] * hwp_spin[3,0]
             except IndexError:
+                # No V beam.
                 pass
             return blm_s0a0
         
@@ -3721,9 +3763,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
             # For s2a2, unpol2pol for Bi, Bv
             # For s2a0, no shift required.
-        
-
-    
+            
     @staticmethod
     def _spinmaps_real(alm, blm, spin_values, nside):
         '''
