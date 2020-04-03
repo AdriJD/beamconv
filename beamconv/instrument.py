@@ -1801,7 +1801,6 @@ class ScanStrategy(Instrument, qp.QMap):
         # Let every core loop over max number of beams per core
         # this makes sure that cores still participate in
         # calculating boresight quaternions.
-        #nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
         nmax = int(np.ceil(len(self.beams)/float(self.mpi_size)))
 
         for bidx in range(nmax): # Loop over beams.
@@ -3183,13 +3182,10 @@ class ScanStrategy(Instrument, qp.QMap):
             if s_vals_c[0] != 2 or s_vals_c.size != 1:
                 raise ValueError('Wrong shape spinmmaps for symmetric beam.')
 
-        # Extract N (= max_spin + 1) and nside of spin maps
-        N, npix = func.shape
+        # Extract nside of spin maps.
+        _, npix = func.shape
         nside_spin = hp.npix2nside(npix)
-
-        # Paranoid android.
-        N2, npix2 = func_c.shape
-        #assert 2*N-1 == N2, "func and func_c have different max_spin"
+        _, npix2 = func_c.shape
         assert npix == npix2, "func and func_c have different npix"
 
         tod = np.zeros(tod_size, dtype=float)
@@ -3231,7 +3227,6 @@ class ScanStrategy(Instrument, qp.QMap):
         pa += np.pi
 
         if (hwp_status=='ideal'):
-
             if interp:
                 pix = (ra, dec)
                 
@@ -3561,9 +3556,6 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             lmax = lmax_sky
 
-        almE, almB = alm[1:]
-        blmE, blmB = tools.spin2eb(blm[1], blm[2])
-
         if symmetric:
             spin_values_unpol = np.array([0], dtype=int)
             spin_values_pol = np.array([2], dtype=int)
@@ -3572,15 +3564,58 @@ class ScanStrategy(Instrument, qp.QMap):
             spin_values_unpol = np.arange(max_spin + 1)
             # Linear polarization needs -s,...,+s maps.
             spin_values_pol = np.arange(-max_spin, max_spin + 1)
-        
+
+        almE, almB = alm[1:]
+            
         if hwp_mueller is not None:
 
-            pass
+            hwp_spin = tools.mueller2spin(hwp_mueller)
+
+            # s0a0.
+            spinmap_dict['s0a0'] = {}
+            blm_s0a0 = self.blmxhwp(blm, hwp_spin, 's0a0')
+            spinmap_dict['s0a0']['maps'] = self._spinmaps_real(
+                alm[0], blm_s0a0, spin_values_unpol, nside)
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+            del blm_s0a0
             
-        else:    
-            # Unpolarized sky and beam.
-            func_c = self._spinmaps_complex(almE, almB, blmE, blmB, spin_values_pol,
-                                            nside)
+            # s2a4.
+            spinmap_dict['s2a4'] = {}
+            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's2a4')
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
+            spinmap_dict['s2a4']['maps'] = self._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
+
+            # s0a2.
+            spinmap_dict['s0a2'] = {}
+            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's0a2')
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
+            spinmap_dict['s0a2']['maps'] = self._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
+
+            # s2a2.
+            spinmap_dict['s2a2'] = {}
+            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's2a2')
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
+            spinmap_dict['s2a2']['maps'] = self._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a2']['s_vals'] = spin_values_pol   
+
+            # s2a0.
+            spinmap_dict['s2a0'] = {}
+            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's2a0')
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
+            spinmap_dict['s2a0']['maps'] = self._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a0']['s_vals'] = spin_values_pol   
+            
+        else:
+            # Old default behaviour.
+            blmE, blmB = tools.spin2eb(blm[1], blm[2])
+            
+            # Unpolarized sky and beam.            
             spinmap_dict['s0a0'] = {}
             spinmap_dict['s0a0']['maps'] = self._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
@@ -3590,28 +3625,32 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s2a4'] = {}
             spinmap_dict['s2a4']['maps'] = self._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
-
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
             
-        # Add three more calls to _spinmaps_real/complex here.
-
-        # Probably want to place output into dict here already.
-        # Why not use s2a0, etc. keys here already?
-        #return func, func_c, spin_values_unpol, spin_values_pol
         return spinmap_dict
 
     @staticmethod
-    def beam_x_hwp(blm, hwp_mueller):
+    def blmxhwp(blm, hwp_spin, mode):
         '''
         
-
         Arguments
         ---------
-        blm : tuple of array-like
+        blm : sequence of arrays
             Beam alms (blmI, blmm2, blmp2) or (blmI, blmm2, blmp2, blmV)
-        hwp_mueller : (4, 4) array, None
-            Unrotated Mueller matrix of half-wave plate.
+        hwp_spin : (4, 4) array, None
+            Unrotated Mueller matrix of half-wave plate in complex basis.
+            See `tools.mueller2spin`.
+        mode : str
+            Pick between 's0a0', 's2a4', 's0a2', 's2a2' or 's2a0'.
             
+        Returns
+        -------
+        blmxhwp : array or tuple of arrays
+
+        Raises
+        ------
+        ValueError
+            If mode is not recognized.
 
         Notes
         -----
@@ -3621,10 +3660,54 @@ class ScanStrategy(Instrument, qp.QMap):
         Multiplying the two fields in real space, we
         effecitively convolve the two in harmonic space,
         this way we can use the blms and avoid going back
-        to real space.
-        
+        to real space.        
         '''
-            
+
+        if mode == 's0a0':
+            blm_s0a0 = blm[0] * hwp_spin[0,0]
+            try:
+                blm_s0a0 *= blm[3] * hwp_spin[3,0]
+            except IndexError:
+                pass
+            return blm_s0a0
+        
+        elif mode == 's2a4':
+            blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 4, eb=False)
+            blmm2 *= hwp_spin[1,2]
+            blmp2 *= hwp_spin[2,1]
+            return blmm2, blmp2
+
+        elif mode == 's0a2':
+            blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)
+            blmm2 *= hwp_spin[0,2]
+            blmp2 *= hwp_spin[2,0]
+            return blmm2, blmp2
+
+        elif mode == 's2a2':
+            blmm2 = blm[0]            
+            blmp2 = blmm2
+            blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
+            blmm2 *= hwp_spin[0,1]
+            blmp2 *= hwp_spin[1,0]
+            try:
+                blmm2_v = blm[3]
+                blmp2_v = blmm2_v
+                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
+                blmm2_v *= hwp_spin[3,1]
+                blmp2_v *= hwp_spin[1,3]                
+                blmm2 += blmm2_v
+                blmp2 += blmp2_v                
+            except IndexError:
+                pass
+            return blmm2, blmp2
+
+        elif mode == 's2a0':
+            blmm2 = blm[1] * hwp_spin[1,1]
+            blmp2 = blm[2] * hwp_spin[2,2]
+            return blmm2, blmp2
+
+        else:
+            raise ValueError('{} is unrecognized mode'.format(mode))
             # Call function that combines hwp_spin with blms.
 
             # s0a0  (Bi Mii + Bv Mvi) Ai
@@ -3639,7 +3722,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # For s2a2, unpol2pol for Bi, Bv
             # For s2a0, no shift required.
         
-        hwp_spin = tools.mueller2spin(hwp_mueller)
+
     
     @staticmethod
     def _spinmaps_real(alm, blm, spin_values, nside):

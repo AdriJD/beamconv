@@ -73,7 +73,6 @@ class TestTools(unittest.TestCase):
 
         return
 
-
     def test_get_copol_blm(self):
         '''
         Test if converting the unpolarized beam to 
@@ -213,7 +212,7 @@ class TestTools(unittest.TestCase):
         np.testing.assert_almost_equal(blmE_new, blmE)
         np.testing.assert_almost_equal(blmB_new, blmB)
 
-    def test_shift_blm_shift0(self):
+    def test_shift_blm_shift4(self):
 
         blmp2 = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2, 3, 3, 3, 4, 4, 5],
                           dtype=np.complex128)
@@ -235,6 +234,39 @@ class TestTools(unittest.TestCase):
         
         np.testing.assert_almost_equal(blmm2_new, blmm2_exp)
         np.testing.assert_almost_equal(blmp2_new, blmp2_exp)        
+
+    def test_shift_nlm_mimic_unpol2pol(self):
+        # Test if shift by -2 is equal to unpol2pol.
+        blm = np.array([1, 1, 1, 1, 1, 2, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j],
+                          dtype=np.complex128)
+        blmm2, blmp2 = tools.shift_blm(blm, blm, -2, eb=False)
+        blmm2_exp, blmp2_exp = tools.unpol2pol(blm)
+
+        # Comparison is not perfect, because unpol2pol will set
+        # all l=0 and l=1 elemets to zero. shift_blm does not
+        # have that restriction. So, let us manually fix that.
+        blmm2[5] = 0
+        
+        np.testing.assert_almost_equal(blmm2, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2, blmp2_exp)        
+        
+    def test_shift_blm_undo_unpol2pol(self):
+        # Test if shift by +2 undoes unpol2pol operation.        
+        blm = np.array([1, 1, 1, 1, 1, 2, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j],
+                          dtype=np.complex128)
+        blmm2, blmp2 = tools.unpol2pol(blm)
+        
+        blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
+
+        # We now expect that blmm2 and blmp2 are equal to blm again.
+        # The only difference is that we have lost some l=0 and l=1
+        # elements along the way.
+
+        blmm2_exp = np.array([0, 0, 1, 1, 1, 0, 0, 2, 2j, 0, 0, 3j, 0, 0, 0])
+        blmp2_exp = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j])
+
+        np.testing.assert_almost_equal(blmm2, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2, blmp2_exp)        
         
 if __name__ == '__main__':
     unittest.main()

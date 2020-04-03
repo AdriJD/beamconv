@@ -153,7 +153,7 @@ def scale_blm(blm, normalize=False, deconv_q=False):
     else:
         return blm
 
-def shift_blm(blmE, blmB, shift):
+def shift_blm(blmE, blmB, shift, eb=True):
     '''
     Return copy of input with m values shifted
     up or down.
@@ -167,6 +167,11 @@ def shift_blm(blmE, blmB, shift):
     blmB : complex array
         B-mdoe coefficients.
     shift : int
+
+    Keyword arguments
+    -----------------
+    eb : bool
+        Whether input/output is E and B, or -2 and +2 spin (default : True).
 
     Returns
     -------
@@ -189,11 +194,16 @@ def shift_blm(blmE, blmB, shift):
 
     if shift > lmax:
         raise ValueError('Shift exceeds lmax')
+
+    if eb:
+        blmm2, blmp2 = eb2spin(blmE, blmB)
+    else:
+        blmm2, blmp2 = blmE, blmB
         
-    blmm2, blmp2 = eb2spin(blmE, blmB)
     blmm2_new = np.zeros_like(blmm2)
     blmp2_new = np.zeros_like(blmp2)        
 
+    # First we do +2blm^new.    
     # Loop over m modes in new blms
     for m in range(lmax + 1):
 
@@ -201,7 +211,6 @@ def shift_blm(blmE, blmB, shift):
         start = hp.Alm.getidx(lmax, m, m)
         end = start + lmax + 1 - m        
 
-        # First we do +2blm^new.
         m_old = m - shift
         if abs(m_old) > lmax:
             continue
@@ -214,9 +223,15 @@ def shift_blm(blmE, blmB, shift):
  
         # Length bell_old is always (lmax + 1).
         blmp2_new[start:end] = bell_old[m:]
-            
-        # Now we do -2blm^new.
+
+    # Now we do -2blm^new.        
+    for m in range(lmax + 1):
+
+        start = hp.Alm.getidx(lmax, m, m)
+        end = start + lmax + 1 - m        
+        
         m_old = m + shift
+        print(m_old)
         if abs(m_old) > lmax:
             continue
         
@@ -228,7 +243,10 @@ def shift_blm(blmE, blmB, shift):
 
         blmm2_new[start:end] = bell_old[m:]
 
-    return spin2eb(blmm2_new, blmp2_new)
+    if eb:
+        return spin2eb(blmm2_new, blmp2_new)
+    else:
+        return blmm2_new, blmp2_new
         
 def unpol2pol(blm):
     '''
