@@ -3177,40 +3177,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             nside_spin_previous = nside_spin
 
-        #if not beam.ghost:
-        #    func = self.spinmaps['main_beam']['s0a0']['maps']
-        #    func_c = self.spinmaps['main_beam']['s2a4']['maps']
-        #    s_vals = self.spinmaps['main_beam']['s0a0']['s_vals']
-        #    s_vals_c = self.spinmaps['main_beam']['s2a4']['s_vals']
-        #else:
-        #    ghost_idx = beam.ghost_idx
-        #    func = self.spinmaps['ghosts'][ghost_idx]['s0a0']['maps']
-        #    func_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['maps']
-        #    s_vals = self.spinmaps['ghosts'][ghost_idx]['s0a0']['s_vals']
-        #    s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s2a4']['s_vals']
-
-        # Check if shape spinmaps matches s_vals.
-        #if func.shape[0] != s_vals.size:
-        #    raise ValueError('Shape func {} and size s_vals {} do not match.'.
-        #                     format(func.shape[0], s_vals.size))
-        #if func_c.shape[0] != s_vals_c.size:
-        #    raise ValueError('Shape func_c {} and size s_vals {} do not match.'.
-        #                     format(func_c.shape[0], s_vals_c.size))
-
-        # Check for azimuthal symmetry.
-        #if beam.symmetric:
-        #    if s_vals[0] != 0 or s_vals.size != 1:
-        #        raise ValueError('Wrong shape spinmmaps for symmetric beam.')
-        #    if s_vals_c[0] != 2 or s_vals_c.size != 1:
-        #        raise ValueError('Wrong shape spinmmaps for symmetric beam.')
-
-        # Extract nside of spin maps.
-        #_, npix = func.shape
-        #nside_spin = hp.npix2nside(npix)
-        #_, npix2 = func_c.shape
-        #assert npix == npix2, "func and func_c have different npix"
- 
-
         # Find the indices to the pointing and ctime arrays.
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
 
