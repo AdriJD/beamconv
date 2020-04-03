@@ -3249,27 +3249,24 @@ class ScanStrategy(Instrument, qp.QMap):
         if (hwp_status=='ideal'):
             # NOTE for now we should be in this block even if we are using
             # a hwp_mueller matrix.
-
+            tod_c = np.zeros(tod_size, dtype=np.complex128)
+            
+            if interp:
+                pix = (ra, dec)
+                
+            # Check for HWP angle array.
+            if not hasattr(self, 'hwp_ang'):
+                hwp_ang = 0
+            else:
+                hwp_ang = self.hwp_ang
+           
             # Find out if old or new HWP behaviour is desired.
             if set(spinmaps.keys()) == set(['s0a0', 's2a4']):
-                # Old behaviour.
-            
-                tod = np.zeros(tod_size, dtype=float)
-                tod_c = np.zeros(tod_size, dtype=np.complex128)
-
-                if interp:
-                    pix = (ra, dec)
-
+                # Old behaviour.            
                 self._scan_modulate_pa(tod_c, pix, pa,
                                        spinmaps['s2a4']['maps'],
                                        spinmaps['s2a4']['s_vals'],
                                        reality=False, interp=interp)
-
-                # Check for HWP angle array.
-                if not hasattr(self, 'hwp_ang'):
-                    hwp_ang = 0
-                else:
-                    hwp_ang = self.hwp_ang
 
                 # Modulate by HWP angle and polarization angle.
                 expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
@@ -3283,8 +3280,49 @@ class ScanStrategy(Instrument, qp.QMap):
                                        reality=True, interp=interp)
 
             else:
-                raise NotImplementedError('dat dus')
-            
+                # New behaviour.
+                self._scan_modulate_pa(tod_c, pix, pa,
+                                       spinmaps['s2a4']['maps'],
+                                       spinmaps['s2a4']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                # Modulate by HWP angle and polarization angle.
+                expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+                tod_c *= expm2
+
+                tod_c_tmp = np.zeros_like(tod_c)
+                self._scan_modulate_pa(tod_c_tmp, pix, pa,
+                                       spinmaps['s0a2']['maps'],
+                                       spinmaps['s0a2']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                expm2 = np.exp(1j * (2 * hwp_ang + 2 * np.radians(polang)))
+                tod_c_tmp *= expm2
+                tod_c += tod_c_tmp
+
+                tod_c *= 0.
+                self._scan_modulate_pa(tod_c_tmp, pix, pa,
+                                       spinmaps['s2a2']['maps'],
+                                       spinmaps['s2a2']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                expm2 = np.exp(1j * (2 * hwp_ang))
+                tod_c_tmp *= expm2
+                tod_c += tod_c_tmp
+                del tod_c_tmp
+                
+                self._scan_modulate_pa(tod_c, pix, pa,
+                                       spinmaps['s2a0']['maps'],
+                                       spinmaps['s2a0']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                # Add unpolarized tod.                
+                tod = np.real(tod_c) # Note, shares memory with tod_c.
+                self._scan_modulate_pa(tod, pix, pa,
+                                       spinmaps['s0a0']['maps'],
+                                       spinmaps['s0a0']['s_vals'],
+                                       reality=True, interp=interp)
+                            
         elif(hwp_status=='non-ideal'):
 
             tod = np.zeros(tod_size, dtype=float)
@@ -3522,8 +3560,9 @@ class ScanStrategy(Instrument, qp.QMap):
                             hwp_mueller=ghost.hwp_mueller)
 
                 self.spinmaps['ghosts'][u] = spinmap_dict
-                
-    def _init_spinmaps(self, alm, blm, max_spin, nside,
+
+    @staticmethod
+    def _init_spinmaps(alm, blm, max_spin, nside,
                        symmetric=False, hwp_mueller=None):
         '''
         Compute convolution of map with different spin modes
@@ -3552,11 +3591,6 @@ class ScanStrategy(Instrument, qp.QMap):
         -------
         spinmap_dict : dict of dicts
             Container for spinmaps and spin values for each type, see notes.
-
-        func : array_like
-        func_c : array_like
-        s_values : array_like
-        s_values_c : array_like
 
         Notes
         -----
@@ -3614,41 +3648,45 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # s0a0.
             spinmap_dict['s0a0'] = {}
-            blm_s0a0 = self.blmxhwp(blm, hwp_spin, 's0a0')
-            spinmap_dict['s0a0']['maps'] = self._spinmaps_real(
+            blm_s0a0 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0')
+            spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
             
             # s2a4.
             spinmap_dict['s2a4'] = {}
-            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's2a4')
-            blmE, blmB = tools.spin2eb(blmm2, blmp2)
-            spinmap_dict['s2a4']['maps'] = self._spinmaps_complex(
-                almE, almB, blmE, blmB, spin_values_pol, nside)
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)            
+            spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)            
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
 
             # s0a2.
             spinmap_dict['s0a2'] = {}
-            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's0a2')
-            blmE, blmB = tools.spin2eb(blmm2, blmp2)
-            spinmap_dict['s0a2']['maps'] = self._spinmaps_complex(
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
+            spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
 
             # s2a2.
             spinmap_dict['s2a2'] = {}
-            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's2a2')
-            blmE, blmB = tools.spin2eb(blmm2, blmp2)
-            spinmap_dict['s2a2']['maps'] = self._spinmaps_complex(
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2')
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)                                    
+            spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a2']['s_vals'] = spin_values_pol   
 
             # s2a0.
             spinmap_dict['s2a0'] = {}
-            blmm2, blmp2 = self.blmxhwp(blm, hwp_spin, 's2a0')
-            blmE, blmB = tools.spin2eb(blmm2, blmp2)
-            spinmap_dict['s2a0']['maps'] = self._spinmaps_complex(
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a0')
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)                                                
+            spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a0']['s_vals'] = spin_values_pol   
             
@@ -3658,13 +3696,13 @@ class ScanStrategy(Instrument, qp.QMap):
             
             # Unpolarized sky and beam.            
             spinmap_dict['s0a0'] = {}
-            spinmap_dict['s0a0']['maps'] = self._spinmaps_real(
+            spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             
             # Linearly polarized sky and beam.
             spinmap_dict['s2a4'] = {}
-            spinmap_dict['s2a4']['maps'] = self._spinmaps_complex(
+            spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
             
