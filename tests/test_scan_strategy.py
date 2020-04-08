@@ -1273,6 +1273,73 @@ class TestTools(unittest.TestCase):
                     * np.sin(2 * np.radians(pa - polang - 2 * hwp_ang)))
 
         np.testing.assert_almost_equal(tod, tod_man)
+
+    def test_scan_spole_bin_hwp_mueller(self):
+        '''
+        Perform a (low resolution) scan, bin and compare
+        to input. Now with hwp_mueller.
+        '''
+
+        mlen = 10 * 60
+        rot_period = 120
+        mmax = 2
+        ra0=-10
+        dec0=-57.5
+        fwhm = 200
+        nside = 128
+        az_throw = 10
+
+        scs = ScanStrategy(duration=mlen, sample_rate=10, location='spole')
+
+        # Create a 1 x 2 square grid of Gaussian beams.
+        scs.create_focal_plane(nrow=1, ncol=2, fov=4,
+                              lmax=self.lmax, fwhm=fwhm)
+
+        # Add HWP Mueller matrix attribute to each beam.
+        hwp_mueller = np.asarray([[1, 0, 0, 0],
+                                  [0, 1, 0, 0],
+                                  [0, 0, -1, 0],
+                                  [0, 0, 0, -1]])
+        for beami in scs.beams:
+            beami[0].hwp_mueller = hwp_mueller
+            beami[1].hwp_mueller = hwp_mueller            
+        
+        # Allocate and assign parameters for mapmaking.
+        scs.allocate_maps(nside=nside)
+
+        # set instrument rotation.
+        scs.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
+
+        # Set elevation stepping.
+        scs.set_el_steps(rot_period, steps=[0, 2, 4])
+
+        # Set HWP rotation.
+        scs.set_hwp_mod(mode='continuous', freq=3.)
+
+        # Generate timestreams, bin them and store as attributes.
+        scs.scan_instrument_mpi(self.alm, verbose=0, ra0=ra0,
+                                dec0=dec0, az_throw=az_throw,
+                                scan_speed=2.,
+                                nside_spin=nside,
+                                max_spin=mmax)
+
+        # Solve for the maps.
+        maps, cond = scs.solve_for_map(fill=np.nan)
+
+        alm = hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.),
+                     verbose=False)
+        maps_raw = np.asarray(hp.alm2map(self.alm, nside, verbose=False))
+
+        cond[~np.isfinite(cond)] = 10
+
+        np.testing.assert_array_almost_equal(maps_raw[0,cond<2.5],
+                                             maps[0,cond<2.5], decimal=10)
+
+        np.testing.assert_array_almost_equal(maps_raw[1,cond<2.5],
+                                             maps[1,cond<2.5], decimal=10)
+
+        np.testing.assert_array_almost_equal(maps_raw[2,cond<2.5],
+                                             maps[2,cond<2.5], decimal=10)
         
 if __name__ == '__main__':
     unittest.main()
