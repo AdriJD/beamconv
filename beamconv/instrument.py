@@ -3266,7 +3266,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 tod_c_tmp *= expm2
                 tod_c += tod_c_tmp
 
-                tod_c *= 0.
+                tod_c_tmp *= 0.
                 self._scan_modulate_pa(tod_c_tmp, pix, pa,
                                        spinmaps['s2a2']['maps'],
                                        spinmaps['s2a2']['s_vals'],
