@@ -23,7 +23,7 @@ class HWP(object):
         thicknesses   - (float) thicknesses in mm
         indices       - ordinary and extraordinary index
         losses        - ratios of the imaginary part of the dielectric constant to the real part.
-        angles        - (float) radian angle between (extraordinary) axis and stack axis. 
+        angles        - (float) radian angle between (extraordinary) axis and stack axis.
         """
 
         if (thicknesses.size != angles.size or 2*thicknesses.size!=indices.size or 2*thicknesses.size!=losses.size):
@@ -32,13 +32,13 @@ class HWP(object):
         #Make a list of materials, with a name that corresponds to their position in the stack
         material_stack=[]
         for i in range(thicknesses.size):
-            
+
             if (indices[i,0]==indices[i,1] and losses[i,0]==losses[i,1]):
                 isotro_str = 'isotropic'
             else:
                 isotro_str = 'uniaxial'
 
-            material_stack.append(tm.material(indices[i,0], indices[i,1], 
+            material_stack.append(tm.material(indices[i,0], indices[i,1],
                 losses[i,0], losses[i,1], str(i), materialType=isotro_str))
 
         self.stack = tm.Stack( thicknesses*tm.mm, material_stack, angles)
@@ -56,11 +56,11 @@ class HWP(object):
         #Optimization results coatings
         art_ar1_mono = tm.material(3.439, 3.439, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         art_ar2_mono = tm.material(2.644, 2.644, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        art_ar3_mono = tm.material(1.524, 1.524, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic') 
+        art_ar3_mono = tm.material(1.524, 1.524, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         #New 3AR1BR & 3AR3BR & 3AR5BR AR coatings
         equal_ar1 = tm.material(2.855, 2.855, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         equal_ar2 = tm.material(1.979, 1.979, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        equal_ar3 = tm.material(1.268, 1.268, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')             
+        equal_ar3 = tm.material(1.268, 1.268, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         #From optimization
         a3b3_ar1 = tm.material(2.350, 2.350, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
         a3b3_ar2 = tm.material(1.542, 1.542, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
@@ -68,9 +68,9 @@ class HWP(object):
         a3b5_ar1 = tm.material(2.511, 2.511, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
         a3b5_ar2 = tm.material(1.782, 1.782, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
         a3b5_ar3 = tm.material(1.279, 1.279, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
-        
+
         if (model_name=='SPIDER_95'):
-            
+
             thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
             materials = [quartz, spider_sapphire, quartz]
             angles = [0.0, 0.0, 0.0]
@@ -87,12 +87,12 @@ class HWP(object):
             materials = [art_ar3_mono, art_ar2_mono ,art_ar1_mono, spider_sapphire, art_ar1_mono, art_ar2_mono, art_ar3_mono]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-        elif (model_name == '3AR1BRstd'):#New 1AR3BR- same thicknesses for New 3AR3BR_new, 3AR5BR_new
+        elif (model_name == '1BR'):#New 1AR3BR- same thicknesses for New 3AR3BR_new, 3AR5BR_new
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
             materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        
+
         elif (model_name == '3AR3BRopti'):#NEW: A AHWP with the best 3 layer of AR centered at 122.5GHz
 
             thicknesses = [0.338*tm.mm, 0.132*tm.mm, 0.240*tm.mm, 3.86*tm.mm, 3.86*tm.mm, 3.86*tm.mm,
@@ -101,7 +101,7 @@ class HWP(object):
                         a3b3_ar1, a3b3_ar2, a3b3_ar3]
             angles = np.array([0.,0. ,0.,0.,52.5,0.,0.,0., 0.])*np.pi/180.
 
-        elif (model_name == '3AR3BRstd'):#New 3AR3BR- same thicknesses for New 3AR1BR_new, 3AR5BR_new
+        elif (model_name == '3BR'):#New 3AR3BR- same thicknesses for New 3AR1BR_new, 3AR5BR_new
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
             materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
@@ -110,11 +110,11 @@ class HWP(object):
 
         elif (model_name=='3AR5BRopti'):#angles from Matsumura, AR from our optimization
 
-            thicknesses = [0.356*tm.mm, 0.225*tm.mm, 0.188*tm.mm, 
+            thicknesses = [0.356*tm.mm, 0.225*tm.mm, 0.188*tm.mm,
                             3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,
                             0.188*tm.mm, 0.225*tm.mm, 0.356*tm.mm]
-            materials = [a3b5_ar3, a3b5_ar2, a3b5_ar1, spider_sapphire, 
-                         spider_sapphire, spider_sapphire, spider_sapphire, 
+            materials = [a3b5_ar3, a3b5_ar2, a3b5_ar1, spider_sapphire,
+                         spider_sapphire, spider_sapphire, spider_sapphire,
                          spider_sapphire, a3b5_ar1, a3b5_ar2, a3b5_ar3]
             angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
 
@@ -123,16 +123,16 @@ class HWP(object):
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
-            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, 
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire,
                          spider_sapphire, spider_sapphire, spider_sapphire,
                          spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
 
-        elif (model_name == '3AR5BRzerophase'):#It's a kind of magic...
+        elif (model_name == '5BR'):#It's a kind of magic...
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
-            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, 
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire,
                          spider_sapphire, spider_sapphire, spider_sapphire,
                          spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = np.array([0.,0.,0.,22.9, -50,0,  50,  -22.9 ,0.,0.,0.])*np.pi/180.0
@@ -146,9 +146,9 @@ class HWP(object):
         Compute the parameters for the unrotated Mueller Matrix
         '''
 
-        Mueller = tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta, 
+        Mueller = tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
             rotation=0., reflected=False)
-        
+
         T = Mueller[0,0]
         rho= Mueller[0,1]/ Mueller[0,0]
         c =  Mueller[2,2]/ Mueller[0,0]
@@ -159,17 +159,17 @@ class HWP(object):
         '''
         Compute the unrotated Mueller Matrix
         '''
-        return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta, 
+        return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
             rotation=0., reflected=False))
 
 
-    def topRowMuellerMatrix(self, psi=0.0, xi=0.0, alpha=0.0, 
+    def topRowMuellerMatrix(self, psi=0.0, xi=0.0, alpha=0.0,
                              hwp_params=None):
         '''
         Compute the top row of the full HWP+polang+boresight Mueller Matrix
         '''
-        eta = 1. ## co-polar quantity (FREEZE) 
-        delta = 0. ## cross-polar quantity (FREEZE) 
+        eta = 1. ## co-polar quantity (FREEZE)
+        delta = 0. ## cross-polar quantity (FREEZE)
         gamma = (eta**2-delta**2)/(eta**2+delta**2) ## polarization efficienty (FREEZE)
         H = 0.5*(eta**2+delta**2)
         ## Ideal case: H = 0.5
@@ -178,28 +178,28 @@ class HWP(object):
         rho = hwp_params[1]
         c = hwp_params[2]
         s = hwp_params[3]
-        
+
         MII = H*T*(1+(gamma*rho*np.cos(2*(alpha+xi))))
-        MIQ = H*T*(rho*np.cos(2*(alpha+psi)) + (0.5*(1+c)*gamma*np.cos(2*(psi-xi))) 
+        MIQ = H*T*(rho*np.cos(2*(alpha+psi)) + (0.5*(1+c)*gamma*np.cos(2*(psi-xi)))
             + (0.5*(1-c)*gamma*np.cos(2*(2*alpha+xi+psi))))
-        MIU = H*T*(rho*np.sin(2*(alpha+psi)) + (0.5*(1+c)*gamma*np.sin(2*(psi-xi))) 
+        MIU = H*T*(rho*np.sin(2*(alpha+psi)) + (0.5*(1+c)*gamma*np.sin(2*(psi-xi)))
             + (0.5*(1-c)*gamma*np.sin(2*(2*alpha+xi+psi))))
         MIV = H*T*(s*gamma*np.sin(4*(alpha+xi)))
 
         # IPPV base
-        MIP = 0.5*(MIQ-1j*MIU) 
-        MIP_t = 0.5*(MIQ+1j*MIU) 
+        MIP = 0.5*(MIQ-1j*MIU)
+        MIP_t = 0.5*(MIQ+1j*MIU)
 
-        #return MII, MIQ, MIU 
-        return MII, MIP, MIP_t 
+        #return MII, MIQ, MIU
+        return MII, MIP, MIP_t
 
     def fullMuellerTopRow(self, psi=0.0, xi = 0.0, alpha=0.0,
             hwp_mueller = None):
-        
+
         m = len(psi)#length of chunk
         m_rhs = np.array(( (np.ones(m), np.zeros(m), np.zeros(m), np.zeros(m)),
-                           (np.zeros(m), np.cos(2.*psi+2.*alpha), np.sin(2.*psi+2.*alpha), np.zeros(m)), 
-                           (np.zeros(m), -np.sin(2.*psi+2.*alpha),np.cos(2.*psi+2.*alpha), np.zeros(m)), 
+                           (np.zeros(m), np.cos(2.*psi+2.*alpha), np.sin(2.*psi+2.*alpha), np.zeros(m)),
+                           (np.zeros(m), -np.sin(2.*psi+2.*alpha),np.cos(2.*psi+2.*alpha), np.zeros(m)),
                            (np.zeros(m), np.zeros(m), np.zeros(m), np.ones(m))))
         # reorder to make the matmul work (m lenfth becomes first dimensions)
         m_rhs = np.transpose(m_rhs,(2,0,1))
@@ -209,7 +209,7 @@ class HWP(object):
         MIU = .5*(tm_rhs[:,0,2] + np.cos(-2*(xi+alpha))*tm_rhs[:,1,2] + np.sin(-2*(xi+alpha))*tm_rhs[:,2,2])
         MIP = 0.5*(MIQ-1j*MIU)
         MIP_t = 0.5*(MIQ+1j*MIU)
-        return MII, MIP, MIP_t 
+        return MII, MIP, MIP_t
 
 class Beam(object):
     '''
@@ -289,7 +289,7 @@ class Beam(object):
             Identifier of beam. (default : None)
         symmetric : bool
             If set, beam is assumed azimuthally symmetric.
-        
+
         hwp : HWP class, Empty constructor
             An empty HWP with no characteristics, that are to be set afterwards
             by the setters
@@ -756,7 +756,7 @@ class Beam(object):
             self.hwp.choose_HWP_model(model_name=model_name)
         else:
 
-            self.hwp.stack_builder(thicknesses=thicknesses, 
+            self.hwp.stack_builder(thicknesses=thicknesses,
                 indices=indices, losses=losses, angles=angles)
 
         self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
@@ -772,7 +772,7 @@ class Beam(object):
             self.hwp.choose_HWP_model(model_name=model_name)
         else:
 
-            self.hwp.stack_builder(thicknesses=thicknesses, 
+            self.hwp.stack_builder(thicknesses=thicknesses,
                 indices=indices, losses=losses, angles=angles)
 
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
@@ -785,7 +785,7 @@ class Beam(object):
         if (self.hwp_precomp_mueller is None):
             self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
                 vartheta=np.radians(self.el))
-        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, alpha=alpha, 
+        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, alpha=alpha,
             hwp_params = self.hwp_precomp_mueller)
 
     def get_mueller_top_row_full(self, xi, psi, alpha):
@@ -793,7 +793,7 @@ class Beam(object):
         get the rotated Mueller matrix top row in the full HWP Mueller matrix case
         '''
         if (self.hwp_mueller is None):
-            self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq, 
+            self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
                 vartheta = np.radians(self.el))
 
         return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, alpha = alpha,
