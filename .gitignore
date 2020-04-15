@@ -2,4 +2,5 @@
 *.aux
 *.log
 *.synctex.gz
+tests/*
 .ipynb_checkpoints
