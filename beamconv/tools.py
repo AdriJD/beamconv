@@ -833,7 +833,7 @@ def tukey_window(n):
 
     window[:int(alpha * L / 2.) + 1] -= 0.5 * np.cos(2 * np.pi * x / alpha / L) + .5
     # Use symmetry of window.
-    window[-int(n/2.):] = np.flip(window[:int(n/2.)])
+    window[-int(n/2.):] = np.flip(window[:int(n/2.)], 0)
 
     return window
 
