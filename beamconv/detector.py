@@ -17,19 +17,19 @@ class HWP(object):
 
     def stack_builder(self, thicknesses, indices, losses, angles):
 
-        """
+        '''
         Creates a stack of materials, as defined in transfer_matrix.py
-        Inputs are:
+        Keyword arguments:
         thicknesses   - (float) thicknesses in mm
         indices       - ordinary and extraordinary index
         losses        - ratios of the imaginary part of the dielectric constant to the real part.
         angles        - (float) radian angle between (extraordinary) axis and stack axis.
-        """
+        '''
 
         if (thicknesses.size != angles.size or 2*thicknesses.size!=indices.size or 2*thicknesses.size!=losses.size):
             raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
 
-        #Make a list of materials, with a name that corresponds to their position in the stack
+        # Make a list of materials, with a name that corresponds to their position in the stack
         material_stack=[]
         for i in range(thicknesses.size):
 
@@ -46,6 +46,7 @@ class HWP(object):
     def choose_HWP_model(self, model_name):
         '''
         Set a particlar stack from a few predefined models
+        Keyword argument model_name - (string) Name of one of the predefined HWP models
         '''
 
         spider_sapphire = tm.material( 3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
@@ -119,7 +120,7 @@ class HWP(object):
             angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
 
 
-        elif (model_name == '3AR5BRstd'):#New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
+        elif (model_name == '3AR5BRstd'): #New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
@@ -128,7 +129,7 @@ class HWP(object):
                          spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
 
-        elif (model_name == '5BR'):#It's a kind of magic...
+        elif (model_name == '5BR'): #A 5BR layereed HWP with varphi = 0 over our two frequency bands
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
@@ -220,7 +221,7 @@ class Beam(object):
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
-                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=None,
+                 symmetric=False, hwp=HWP(), 
                  hwp_mueller=None):
         '''
         Initialize a detector beam.
@@ -293,9 +294,7 @@ class Beam(object):
         hwp : HWP class, Empty constructor
             An empty HWP with no characteristics, that are to be set afterwards
             by the setters
-        hwp_precomp_mueller : list, None'
-            T, rho, c, s of the unrotated one layer approximation of the Mueller
-            Matrix
+
         hwp_mueller : (4,4) array, None
             Full unrotated Mueller matrix of the stack for a given incidence angle
         '''
@@ -320,7 +319,6 @@ class Beam(object):
         self._idx = idx
         self.symmetric = symmetric
         self.hwp = hwp
-        self.hwp_precomp_mueller=hwp_precomp_mueller
         self.hwp_mueller = hwp_mueller
 
         self.__ghost = ghost
@@ -746,21 +744,6 @@ class Beam(object):
 
         return self.az, self.el, self.polang_truth
 
-    def set_HWP_values(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
-        '''
-        Set simple (T, rho, c, s) HWP parameters for the beam given a stack
-        '''
-        if(model_name is None and any(elem is None for elem in [thicknesses, indices, losses, angles])):
-            raise ValueError('You must give either a model or parameters for a stack !')
-        if (model_name !=None):
-            self.hwp.choose_HWP_model(model_name=model_name)
-        else:
-
-            self.hwp.stack_builder(thicknesses=thicknesses,
-                indices=indices, losses=losses, angles=angles)
-
-        self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
-                vartheta=np.radians(self.el))
 
     def set_hwp_mueller(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
         '''
@@ -778,26 +761,6 @@ class Beam(object):
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
                 vartheta=np.radians(self.el))
 
-    def get_Mueller_top_row(self, xi, psi, alpha):
-        '''
-        get the rotated Mueller matrix top row in the simple HWP Mueller matrix case
-        '''
-        if (self.hwp_precomp_mueller is None):
-            self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
-                vartheta=np.radians(self.el))
-        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, alpha=alpha,
-            hwp_params = self.hwp_precomp_mueller)
-
-    def get_mueller_top_row_full(self, xi, psi, alpha):
-        '''
-        get the rotated Mueller matrix top row in the full HWP Mueller matrix case
-        '''
-        if (self.hwp_mueller is None):
-            self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
-                vartheta = np.radians(self.el))
-
-        return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, alpha = alpha,
-            hwp_mueller = self.hwp_mueller)
 
 
 
