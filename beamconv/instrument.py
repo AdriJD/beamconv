@@ -3623,7 +3623,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # s2a4.
             spinmap_dict['s2a4'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
-            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)            
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)            
@@ -3632,16 +3631,14 @@ class ScanStrategy(Instrument, qp.QMap):
             # s0a2.
             spinmap_dict['s0a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
-            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
-                almE, almB, blmE, blmB, spin_values_pol, nside)
+                alm[0], alm[0] * 0, blmE, blmB, spin_values_pol, nside)            
             spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
 
             # s2a2.
             spinmap_dict['s2a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2')
-            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                                    
             spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
@@ -3650,7 +3647,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # s2a0.
             spinmap_dict['s2a0'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a0')
-            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                                                
             spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
