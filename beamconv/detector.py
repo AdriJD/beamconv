@@ -31,7 +31,8 @@ class HWP(object):
             angle between (extraordinary) axis and stack axis for each layer, in radians
         '''
 
-        if (thicknesses.size != angles.size or 2*thicknesses.size!=indices.size or 2*thicknesses.size!=losses.size):
+        if (thicknesses.size != angles.size or 2 * thicknesses.size != indices.size
+            or 2*thicknesses.size != losses.size):
             raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
 
         # Make a list of materials, with a name that corresponds to their position in the stack
@@ -57,9 +58,9 @@ class HWP(object):
             Name of one of the predefined HWP models
         '''
 
-        spider_sapphire = tm.material( 3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
+        spider_sapphire = tm.material(3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
         #Spider coatings
-        quartz = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
+        quartz = tm.material(1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
         circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
         hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
         #Optimization results coatings
@@ -216,7 +217,7 @@ class Beam(object):
             Whether the beam is a ghost or not (default : False)
         amplitude : scalar
             Total throughput of beam, i.e. integral of beam over the sphere.
-            ( \int d\omega B(\omega) Y_00(\omega) \equiv amplitude ). This
+            (int d omega B(omega) Y_00(omega) equiv amplitude ). This
             means that b00 = amplitude / sqrt(4 pi) (default : 1.)
         po_file : str, None
             Absolute or relative path to .npy file with blm array for the
@@ -243,11 +244,9 @@ class Beam(object):
             Identifier of beam. (default : None)
         symmetric : bool
             If set, beam is assumed azimuthally symmetric.
-
         hwp : HWP class, Empty constructor
             An empty HWP with no characteristics, that are to be set afterwards
             by the setters
-
         hwp_mueller : (4,4) array, None
             Full unrotated Mueller matrix of the stack for a given incidence angle
         '''
