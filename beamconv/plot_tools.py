@@ -44,8 +44,8 @@ def round_sig(x, sig=1):
 
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
-def plot_iqu(maps, write_dir, tag,
-             sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
+def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
+    sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each
     to disk.
@@ -105,5 +105,6 @@ def plot_iqu(maps, write_dir, tag,
         if mask is not None:
             map2plot[~mask] = np.nan
 
-        plot_map(map2plot, write_dir, tag+'_'+pol,
+        plot_func = zwargs.pop('plot_func', plot_func)
+        plot_map(map2plot, write_dir, tag+'_'+pol, plot_func=plot_func,
                 min=minn, max=maxx,  tight=tight, **zwargs)
