@@ -448,7 +448,8 @@ class Instrument(MPIBase):
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
-                           scatter=False, **kwargs):
+                           scatter=False, custom_lists=None, 
+                           **kwargs):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
@@ -473,6 +474,9 @@ class Instrument(MPIBase):
             (default : True)
         scatter : bool
             Scatter created pairs over ranks (default : False)
+        custom_lists: set lists of az and el positions for 
+                      the detectors on the focal plane 
+                      specified when running simulations     
         kwargs : {beam_opts}
 
         Notes
@@ -512,28 +516,60 @@ class Instrument(MPIBase):
             self.ndet = 2 * nrow * ncol # A and B detectors.
             idx = 0
 
-        azs = np.linspace(-fov/2., fov/2., ncol)
-        els = np.linspace(-fov/2., fov/2., nrow)
+        beams=[]   
 
-        beams = []
+        if custom_lists is not None: 
+            print('here!')
+            azs = np.array(custom_lists[0])
+            els = np.array(custom_lists[1])
+            det_pairs = np.array(custom_lists[2])
 
-        for az_idx in range(azs.size):
-            for el_idx in range(els.size):
+            for i in range(azs.size):
 
-                det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
+                det_str = 'r{:03d}c{:03d}'.format(i, i)
+                dead = kwargs.pop('dead', False)
 
-                beam_a = Beam(az=azs[az_idx], el=els[el_idx],
+                beam_a = Beam(az=azs[i], el=els[i],
                               name=det_str+'A', polang=polang,
-                              dead=dead, pol='A', idx=idx,
+                              dead=False, pol='A', idx=idx,
                               **kwargs)
+                
+                if not det_pairs[i]:
+                    dead = kwargs.pop('dead', True)
 
-                beam_b = Beam(az=azs[az_idx], el=els[el_idx],
+
+                beam_b = Beam(az=azs[i], el=els[i],
                               name=det_str+'B', polang=polang+90.,
                               dead=dead or no_pairs, pol='B',
-                              idx=idx+1, **kwargs)
+                              idx=idx+1, **kwargs)    
+                
 
                 beams.append([beam_a, beam_b])
-                idx += 2
+                idx += 2 
+
+        else:      
+            azs = np.linspace(-fov/2., fov/2., ncol)
+            els = np.linspace(-fov/2., fov/2., nrow)
+
+
+            for az_idx in range(azs.size):
+                for el_idx in range(els.size):
+
+                    det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
+
+                    beam_a = Beam(az=azs[az_idx], el=els[el_idx],
+                                  name=det_str+'A', polang=polang,
+                                  dead=dead, pol='A', idx=idx,
+                                  **kwargs)
+
+                    beam_b = Beam(az=azs[az_idx], el=els[el_idx],
+                                  name=det_str+'B', polang=polang+90.,
+                                  dead=dead or no_pairs, pol='B',
+                                  idx=idx+1, **kwargs)    
+                    
+
+                    beams.append([beam_a, beam_b])
+                    idx += 2
 
         if scatter:
             # If MPI, distribute beams over ranks.
