@@ -474,9 +474,6 @@ class Instrument(MPIBase):
             (default : True)
         scatter : bool
             Scatter created pairs over ranks (default : False)
-        custom_lists: set lists of az and el positions for 
-                      the detectors on the focal plane 
-                      specified when running simulations     
         kwargs : {beam_opts}
 
         Notes
@@ -559,7 +556,7 @@ class Instrument(MPIBase):
 
                     beam_a = Beam(az=azs[az_idx], el=els[el_idx],
                                   name=det_str+'A', polang=polang,
-                                  dead=dead, pol='A', idx=idx,
+                                  dead=False, pol='A', idx=idx,
                                   **kwargs)
 
                     beam_b = Beam(az=azs[az_idx], el=els[el_idx],
@@ -1328,11 +1325,17 @@ class ScanStrategy(Instrument, qp.QMap):
                      self._qp_version, qp.version()))
 
         # Set some useful qpoint/qmap options as default.
+        if vpol:
+            source_vpol = kwargs.pop('source_vpol', True)
+
         qmap_opts = dict(pol=True,
+                         vpol=False,
+                         source_vpol=source_vpol,
                          fast_math=False,
                          mean_aber=True,
                          accuracy='low',
-                         fast_pix=True)
+                         fast_pix=True,
+                         dim=3)
 
         for key in qmap_opts:
             kwargs.setdefault(key, qmap_opts[key])
@@ -1443,10 +1446,6 @@ class ScanStrategy(Instrument, qp.QMap):
             Rotation angles for stepped HWP. If not set,
             use 22.5 degree steps. If set, ignores
             start_ang.
-        varphi : float, 0.
-            If your HWP induces a phase shift of varphi between ingoing
-            and outgoing polarisation, adding its value to the dictionnary
-            ensures it will get substacted from hwp angles at bin_tod time
         '''
 
         self.hwp_dict['mode'] = mode
@@ -1649,7 +1648,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return subchunks
 
-    def allocate_maps(self, nside=256):
+    def allocate_maps(self, vpol, nside=256):
         '''
         Allocate space in memory for binned output.
 
@@ -1658,9 +1657,12 @@ class ScanStrategy(Instrument, qp.QMap):
         nside : int
             Nside of output (default : 256)
         '''
+        vec_val, proj_val = 3, 6
+        if vpol:
+            vec_val, proj_val = 4, 10
 
-        self.vec = np.zeros((3, 12*nside**2), dtype=float)
-        self.proj = np.zeros((6, 12*nside**2), dtype=float)
+        self.vec = np.zeros((vec_val, 12*nside**2), dtype=float)
+        self.proj = np.zeros((proj_val, 12*nside**2), dtype=float)
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None,
@@ -1736,7 +1738,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, filter_4fhwp=False, **kwargs):
+            preview_pointing=False, hwp_status='ideal',
+            filter_4fhwp=False, muell_mat_model='simple', **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1940,6 +1943,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
+                                            hwp_status=hwp_status,
+                                            muell_mat_model=muell_mat_model,
                                             **subchunk)
 
                         # Save memory by not copying if no pair.
@@ -1960,6 +1965,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                             save_tod=save_tod,
                                             save_point=save_point,
                                             skip_scan=preview_pointing,
+                                            hwp_status=hwp_status,
+                                            muell_mat_model=muell_mat_model,
                                             **subchunk)
 
                         if do_ctalk:
@@ -2192,6 +2199,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
         hwpang = kwargs.pop('hwpang', None)
+        hwp_status = kwargs.pop('hwp_status', None)
 
         if kwargs:
             raise TypeError("constant_el_scan() got unexpected "
@@ -2377,8 +2385,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return ctime
 
-    def satellite_scan(self, alpha=50., beta=50.,
-        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
+    def satellite_scan(self, alpha=90, beta=0,
+        alpha_period=15768000., beta_period=60., jitter_amp=0.0, return_all=False,
         **kwargs):
         '''
         A function to simulate satellite scanning strategy.
@@ -2957,7 +2965,8 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
-        save_point=False, skip_scan=False, **kwargs):
+        save_point=False, skip_scan=False, hwp_status='ideal',
+        muell_mat_model='simple', **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -3019,8 +3028,8 @@ class ScanStrategy(Instrument, qp.QMap):
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
                         return_point=save_point,
-                        skip_scan=skip_scan,
-                        **kwargs)
+                        skip_scan=skip_scan, hwp_status=hwp_status,
+                        muell_mat_model=muell_mat_model, **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
@@ -3079,7 +3088,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def scan(self, beam, add_to_tod=False, interp=False,
              return_tod=False, return_point=False, skip_scan=False,
-             **kwargs):
+             hwp_status='ideal', muell_mat_model='simple', **kwargs):
         '''
         Update boresight pointing with detector offset, and
         use it to bin spinmaps into a tod.
@@ -3245,81 +3254,112 @@ class ScanStrategy(Instrument, qp.QMap):
         pa *= -1
         pa += np.pi
 
-        # NOTE for now we should be in this block even if we are using
-        # a hwp_mueller matrix.
-        tod_c = np.zeros(tod_size, dtype=np.complex128)
-        
-        if interp:
-            pix = (ra, dec)
+        if (hwp_status=='ideal'):
+            # NOTE for now we should be in this block even if we are using
+            # a hwp_mueller matrix.
+            tod_c = np.zeros(tod_size, dtype=np.complex128)
             
-        # Check for HWP angle array.
-        if not hasattr(self, 'hwp_ang'):
-            hwp_ang = 0
-        else:
-            hwp_ang = self.hwp_ang
-       
-        # Find out if old or new HWP behaviour is desired.
-        if set(spinmaps.keys()) == set(['s0a0', 's2a4']):
-            # Old behaviour.            
-            self._scan_modulate_pa(tod_c, pix, pa,
-                                   spinmaps['s2a4']['maps'],
-                                   spinmaps['s2a4']['s_vals'],
-                                   reality=False, interp=interp)
+            if interp:
+                pix = (ra, dec)
+                
+            # Check for HWP angle array.
+            if not hasattr(self, 'hwp_ang'):
+                hwp_ang = 0
+            else:
+                hwp_ang = self.hwp_ang
+           
+            # Find out if old or new HWP behaviour is desired.
+            if set(spinmaps.keys()) == set(['s0a0', 's2a4']):
+                # Old behaviour.            
+                self._scan_modulate_pa(tod_c, pix, pa,
+                                       spinmaps['s2a4']['maps'],
+                                       spinmaps['s2a4']['s_vals'],
+                                       reality=False, interp=interp)
+
+                # Modulate by HWP angle and polarization angle.
+                expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+                tod_c *= expm2
+                tod = np.real(tod_c) # Note, shares memory with tod_c.
+
+                # Add unpolarized tod.
+                self._scan_modulate_pa(tod, pix, pa,
+                                       spinmaps['s0a0']['maps'],
+                                       spinmaps['s0a0']['s_vals'],
+                                       reality=True, interp=interp)
+
+            else:
+                # New behaviour.
+                self._scan_modulate_pa(tod_c, pix, pa,
+                                       spinmaps['s2a4']['maps'],
+                                       spinmaps['s2a4']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                # Modulate by HWP angle and polarization angle.
+                expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+                tod_c *= expm2
+
+                tod_c_tmp = np.zeros_like(tod_c)
+                self._scan_modulate_pa(tod_c_tmp, pix, pa,
+                                       spinmaps['s0a2']['maps'],
+                                       spinmaps['s0a2']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                expm2 = np.exp(1j * (2 * hwp_ang + 2 * np.radians(polang)))
+                tod_c_tmp *= expm2
+                tod_c += tod_c_tmp
+
+                tod_c_tmp *= 0.
+                self._scan_modulate_pa(tod_c_tmp, pix, pa,
+                                       spinmaps['s2a2']['maps'],
+                                       spinmaps['s2a2']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                expm2 = np.exp(1j * (2 * hwp_ang))
+                tod_c_tmp *= expm2
+                tod_c += tod_c_tmp
+                del tod_c_tmp
+                
+                self._scan_modulate_pa(tod_c, pix, pa,
+                                       spinmaps['s2a0']['maps'],
+                                       spinmaps['s2a0']['s_vals'],
+                                       reality=False, interp=interp)
+                
+                # Add unpolarized tod.                
+                tod = np.real(tod_c) # Note, shares memory with tod_c.
+                self._scan_modulate_pa(tod, pix, pa,
+                                       spinmaps['s0a0']['maps'],
+                                       spinmaps['s0a0']['s_vals'],
+                                       reality=True, interp=interp)
+                            
+        elif(hwp_status=='non-ideal'):
+
+            tod = np.zeros(tod_size, dtype=float)
+            tod_c = np.zeros(tod_size, dtype=np.complex128)
+            
+            for nidx, n in enumerate(s_vals_c):
+                if interp:
+                    tod_c += hp.get_interp_val(func_c[nidx], dec, ra)
+                else:
+                    tod_c += func_c[nidx,pix]
+            for n in s_vals:
+                if interp:
+                    tod += np.real(hp.get_interp_val(func[n], dec, ra))
+                else:
+                    tod += np.real(func[n,pix])
+
+            if not hasattr(self, 'hwp_ang'):
+                hwp_ang = 0
+            else:
+                hwp_ang = self.hwp_ang
 
             # Modulate by HWP angle and polarization angle.
-            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            tod_c *= expm2
-            tod = np.real(tod_c) # Note, shares memory with tod_c.
-
-            # Add unpolarized tod.
-            self._scan_modulate_pa(tod, pix, pa,
-                                   spinmaps['s0a0']['maps'],
-                                   spinmaps['s0a0']['s_vals'],
-                                   reality=True, interp=interp)
+            tod = np.real(self.instr_modulation(beam, hwp_ang=hwp_ang,
+                pa=pa, polang=polang, tod=tod, tod_c=tod_c,
+                muell_mat_model=muell_mat_model))
 
         else:
-            # New behaviour.
-            self._scan_modulate_pa(tod_c, pix, pa,
-                                   spinmaps['s2a4']['maps'],
-                                   spinmaps['s2a4']['s_vals'],
-                                   reality=False, interp=interp)
-            
-            # Modulate by HWP angle and polarization angle.
-            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            tod_c *= expm2
-
-            tod_c_tmp = np.zeros_like(tod_c)
-            self._scan_modulate_pa(tod_c_tmp, pix, pa,
-                                   spinmaps['s0a2']['maps'],
-                                   spinmaps['s0a2']['s_vals'],
-                                   reality=False, interp=interp)
-            
-            expm2 = np.exp(1j * (2 * hwp_ang + 2 * np.radians(polang)))
-            tod_c_tmp *= expm2
-            tod_c += tod_c_tmp
-
-            tod_c_tmp *= 0.
-            self._scan_modulate_pa(tod_c_tmp, pix, pa,
-                                   spinmaps['s2a2']['maps'],
-                                   spinmaps['s2a2']['s_vals'],
-                                   reality=False, interp=interp)
-            
-            expm2 = np.exp(1j * (2 * hwp_ang))
-            tod_c_tmp *= expm2
-            tod_c += tod_c_tmp
-            del tod_c_tmp
-            
-            self._scan_modulate_pa(tod_c, pix, pa,
-                                   spinmaps['s2a0']['maps'],
-                                   spinmaps['s2a0']['s_vals'],
-                                   reality=False, interp=interp)
-            
-            # Add unpolarized tod.                
-            tod = np.real(tod_c) # Note, shares memory with tod_c.
-            self._scan_modulate_pa(tod, pix, pa,
-                                   spinmaps['s0a0']['maps'],
-                                   spinmaps['s0a0']['s_vals'],
-                                   reality=True, interp=interp)
+            raise ValueError(
+                'HWP_type variable only accepts values `ideal` and `non-ideal`')
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3422,6 +3462,30 @@ class ScanStrategy(Instrument, qp.QMap):
 
             tod += scan
                                 
+    def instr_modulation(self, beam, hwp_ang, pa, polang, tod,
+                         tod_c, muell_mat_model):
+        '''
+        Compute tod modulation by single or multiple layer HWP
+        for a given beam, given the unmodulated tod, tod_c, and
+        the angles of the HWP, boresight, and detector
+        '''
+
+        if (beam.sensitive_freq==None):
+            raise ValueError('The beam does not have a defined frequency')
+        #angles in rad, freq in GHz, base IPPV
+        if (muell_mat_model=='simple'):
+            M_II, M_IP, M_IPt, MIV = beam.get_Mueller_top_row(
+                xi=np.radians(polang), psi=pa, alpha=hwp_ang)
+        elif (muell_mat_model=='full'):
+            M_II, M_IP, M_IPt, MIV = beam.get_mueller_top_row_full(
+                xi=np.radians(polang), psi=pa, alpha=hwp_ang)
+        else:
+            raise ValueError('Unknown model for the Mueller matrix !')
+
+        # BASE IPPV
+        tod = 2*(M_II*tod + M_IPt*tod_c +  M_IP*np.conj(tod_c) + MIV*tod)
+
+        return tod
 
     def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
                       symmetric=False):
@@ -3584,7 +3648,10 @@ class ScanStrategy(Instrument, qp.QMap):
             # Linear polarization needs -s,...,+s maps.
             spin_values_pol = np.arange(-max_spin, max_spin + 1)
 
-        almE, almB = alm[1:]
+        almE = alm[1]
+        almB = alm[2]
+        almV = alm[3]
+
             
         if hwp_mueller is not None:
 
@@ -3601,6 +3668,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # s2a4.
             spinmap_dict['s2a4'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
+            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)            
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)            
@@ -3609,14 +3677,16 @@ class ScanStrategy(Instrument, qp.QMap):
             # s0a2.
             spinmap_dict['s0a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
+            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
-                alm[0], alm[0] * 0, blmE, blmB, spin_values_pol, nside)            
+                almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
 
             # s2a2.
             spinmap_dict['s2a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2')
+            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                                    
             spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
@@ -3625,6 +3695,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # s2a0.
             spinmap_dict['s2a0'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a0')
+            # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                                                
             spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
@@ -3644,7 +3715,12 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s2a4'] = {}
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
-            spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol  
+
+            # Linearly and circularly polarized sky and beam
+            spinmap_dict['s2a2'] = []
+            spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
+                alm[3], blm[3],  spin_values_circ, nside) 
             
         return spinmap_dict
 
@@ -3948,7 +4024,7 @@ class ScanStrategy(Instrument, qp.QMap):
         q_off = tools.quat_left_mult(q_off, q_polang)
 
         if init:
-            self.init_dest(nside=self.nside_out, pol=True, reset=True)
+            self.init_dest(nside=self.nside_out, vpol=False, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
 
