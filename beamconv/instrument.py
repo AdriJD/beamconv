@@ -1676,6 +1676,8 @@ class ScanStrategy(Instrument, qp.QMap):
         alm : tuple
             Tuple containing (almI, almE, almB) as
             Healpix-formatted complex numpy arrays
+            or (almI, almE, almB, almV) if the map 
+            contains V polarization
         beam_a : <detector.Beam> object
             The A detector.
 
@@ -3496,7 +3498,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Arguments
         ---------
         alm : tuple of array-like
-            Sky alms (alm, almE, almB)
+            Sky alms (alm, almE, almB) or (alm, almE, almB, almV)
         beam : <detector.Beam> object
             If provided, create spinmaps for main beam and
             all ghosts (if present). 
@@ -3579,7 +3581,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Arguments
         ---------
         alm : tuple of array-like
-            Sky alms (alm, almE, almB)
+            Sky alms (alm, almE, almB) or (alm, almE, almB, almV)
         blm : tuple of array-like
             Beam alms (blmI, blmm2, blmp2) or (blmI, blmm2, blmp2, blmV)
         max_spin : int
@@ -3650,7 +3652,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
         almE = alm[1]
         almB = alm[2]
-        almV = alm[3]
+        blm_s0a0_v=None
+        
+        try:
+            almV = alm[3]
+            inputV = True
+        except IndexError:
+        #No almV in the input map.
+            pass
 
             
         if hwp_mueller is not None:
@@ -3662,9 +3671,15 @@ class ScanStrategy(Instrument, qp.QMap):
             blm_s0a0 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0')
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
+            if inputV:
+                blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v')
+                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
+                    almV, blm_s0a0_v, spin_values_unpol, nside)   
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
-            
+            if blm_s0a0_v is not None:
+                del blm_s0a0_v
+
             # s2a4.
             spinmap_dict['s2a4'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
@@ -3736,7 +3751,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Unrotated Mueller matrix of half-wave plate in complex basis.
             See `tools.mueller2spin`.
         mode : str
-            Pick between 's0a0', 's2a4', 's0a2', 's2a2' or 's2a0'.
+            Pick between 's0a0', 's0a0_v', s2a4', 's0a2', 's0a2_v', 's2a2' or 's2a0'.
             
         Returns
         -------
@@ -3766,6 +3781,15 @@ class ScanStrategy(Instrument, qp.QMap):
                 # No V beam.
                 pass
             return blm_s0a0
+
+        elif mode == 's0a0_v':
+            blm_s0a0_v = blm[0] * hwp_spin[0,3]
+            try:
+                blm_s0a0_v += blm[3] * hwp_spin[3,3]
+            except IndexError:
+                # No V beam.
+                pass
+            return blm_s0a0_v    
         
         elif mode == 's2a4':
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 4, eb=False)
@@ -3778,6 +3802,12 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2 *= hwp_spin[0,2]
             blmp2 *= hwp_spin[2,0]
             return blmm2, blmp2
+
+        elif mode == 's0a2_v':
+            blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
+            blmm2_v *= hwp_spin[3,2]
+            blmp2_v *= hwp_spin[2,3]
+            return blmm2_v, blmp2_v
 
         elif mode == 's2a2':
             blmm2 = blm[0]            
@@ -3971,7 +4001,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func_c
 
-    def bin_tod(self, beam, tod=None, flag=None, init=True,
+    def bin_tod(self, beam, tod=None, flag=None, init=True, vpol=False,
                 add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
         Take internally stored tod and boresight
@@ -4024,7 +4054,7 @@ class ScanStrategy(Instrument, qp.QMap):
         q_off = tools.quat_left_mult(q_off, q_polang)
 
         if init:
-            self.init_dest(nside=self.nside_out, vpol=False, pol=True, reset=True)
+            self.init_dest(nside=self.nside_out, vpol=vpol, pol=True, reset=True)
 
         q_off = q_off[np.newaxis]
 
