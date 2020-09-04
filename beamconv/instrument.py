@@ -3591,13 +3591,14 @@ class ScanStrategy(Instrument, qp.QMap):
 
         almE = alm[1]
         almB = alm[2]
-        blm_s0a0_v=None
+        inputV = True
         
         try:
             almV = alm[3]
-            inputV = True
         except IndexError:
         #No almV in the input map.
+            inputV = False
+            blm_s0a0_v=None
             pass
 
             
