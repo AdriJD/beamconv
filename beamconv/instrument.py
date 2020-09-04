@@ -3685,7 +3685,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
             try:
-                blm_s0a0 *= blm[3] * hwp_spin[3,0]
+                blm_s0a0 += blm[3] * hwp_spin[3,0]
             except IndexError:
                 # No V beam.
                 pass
