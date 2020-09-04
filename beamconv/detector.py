@@ -17,25 +17,19 @@ class HWP(object):
 
     def stack_builder(self, thicknesses, indices, losses, angles):
 
-        '''
+        """
         Creates a stack of materials, as defined in transfer_matrix.py
-        Arguments:
-        ------------
-        thicknesses : (N,1) array of floats 
-            thickness of each HWP layer in mm
-        indices     : (N,2) array of floats 
-            ordinary and extraordinary indices for each layer
-        losses      : (N,2) array of floats 
-            loss tangents in each layer.
-        angles      : (N,1) array of floats 
-            angle between (extraordinary) axis and stack axis for each layer, in radians
-        '''
+        Inputs are:
+        thicknesses   - (float) thicknesses in mm
+        indices       - ordinary and extraordinary index
+        losses        - ratios of the imaginary part of the dielectric constant to the real part.
+        angles        - (float) radian angle between (extraordinary) axis and stack axis.
+        """
 
-        if (thicknesses.size != angles.size or 2 * thicknesses.size != indices.size
-            or 2*thicknesses.size != losses.size):
+        if (thicknesses.size != angles.size or 2*thicknesses.size!=indices.size or 2*thicknesses.size!=losses.size):
             raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
 
-        # Make a list of materials, with a name that corresponds to their position in the stack
+        #Make a list of materials, with a name that corresponds to their position in the stack
         material_stack=[]
         for i in range(thicknesses.size):
 
@@ -52,15 +46,11 @@ class HWP(object):
     def choose_HWP_model(self, model_name):
         '''
         Set a particlar stack from a few predefined models
-        Argument 
-        ---------------
-        model_name  : (string) 
-            Name of one of the predefined HWP models
         '''
 
-        spider_sapphire = tm.material(3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
+        spider_sapphire = tm.material( 3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
         #Spider coatings
-        quartz = tm.material(1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
+        quartz = tm.material( 1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
         circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
         hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
         #Optimization results coatings
@@ -129,7 +119,7 @@ class HWP(object):
             angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
 
 
-        elif (model_name == '3AR5BRstd'): #New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
+        elif (model_name == '3AR5BRstd'):#New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
@@ -138,7 +128,7 @@ class HWP(object):
                          spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
             angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
 
-        elif (model_name == '5BR'): #A 5BR layereed HWP with varphi = 0 over our two frequency bands
+        elif (model_name == '5BR'):#It's a kind of magic...
 
             thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
                            3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
@@ -151,20 +141,76 @@ class HWP(object):
 
         self.stack = tm.Stack( thicknesses, materials, angles)
 
+    def compute4params(self, freq, vartheta):
+        '''
+        Compute the parameters for the unrotated Mueller Matrix
+        '''
+
+        Mueller = tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
+            rotation=0., reflected=False)
+
+        T = Mueller[0,0]
+        rho= Mueller[0,1]/ Mueller[0,0]
+        c =  Mueller[2,2]/ Mueller[0,0]
+        s =  Mueller[3,2]/ Mueller[0,0]
+        return np.array([T,rho,c,s])
+
     def compute_mueller(self, freq, vartheta):
         '''
         Compute the unrotated Mueller Matrix
-
-        Arguments
-        -------
-        freq : float
-            Frequency in GHz
-        vartheta : float
-            Incidence angle on HWP in radians
         '''
         return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
             rotation=0., reflected=False))
 
+
+    def topRowMuellerMatrix(self, psi=0.0, xi=0.0, alpha=0.0,
+                             hwp_params=None):
+        '''
+        Compute the top row of the full HWP+polang+boresight Mueller Matrix
+        '''
+        eta = 1. ## co-polar quantity (FREEZE)
+        delta = 0. ## cross-polar quantity (FREEZE)
+        gamma = (eta**2-delta**2)/(eta**2+delta**2) ## polarization efficienty (FREEZE)
+        H = 0.5*(eta**2+delta**2)
+        ## Ideal case: H = 0.5
+
+        T = hwp_params[0]
+        rho = hwp_params[1]
+        c = hwp_params[2]
+        s = hwp_params[3]
+
+        MII = H*T*(1+(gamma*rho*np.cos(2*(alpha+xi))))
+        MIQ = H*T*(rho*np.cos(2*(alpha+psi)) + (0.5*(1+c)*gamma*np.cos(2*(psi-xi)))
+            + (0.5*(1-c)*gamma*np.cos(2*(2*alpha+xi+psi))))
+        MIU = H*T*(rho*np.sin(2*(alpha+psi)) + (0.5*(1+c)*gamma*np.sin(2*(psi-xi)))
+            + (0.5*(1-c)*gamma*np.sin(2*(2*alpha+xi+psi))))
+        MIV = H*T*(s*gamma*np.sin(4*(alpha+xi)))
+
+        # IPPV base
+        MIP = 0.5*(MIQ-1j*MIU)
+        MIP_t = 0.5*(MIQ+1j*MIU)
+
+        #return MII, MIQ, MIU, MIV
+        return MII, MIP, MIP_t, MIV
+
+    def fullMuellerTopRow(self, psi=0.0, xi = 0.0, alpha=0.0,
+            hwp_mueller = None):
+
+        m = len(psi)#length of chunk
+        m_rhs = np.array(( (np.ones(m), np.zeros(m), np.zeros(m), np.zeros(m)),
+                           (np.zeros(m), np.cos(2.*psi+2.*alpha), np.sin(2.*psi+2.*alpha), np.zeros(m)),
+                           (np.zeros(m), -np.sin(2.*psi+2.*alpha),np.cos(2.*psi+2.*alpha), np.zeros(m)),
+                           (np.zeros(m), np.zeros(m), np.zeros(m), np.ones(m))))
+        # reorder to make the matmul work (m lenfth becomes first dimensions)
+        m_rhs = np.transpose(m_rhs,(2,0,1))
+        tm_rhs = np.matmul(hwp_mueller, m_rhs)
+        MII = .5*(tm_rhs[:,0,0] + np.cos(-2*(xi+alpha))*tm_rhs[:,1,0] + np.sin(-2*(xi+alpha))*tm_rhs[:,2,0])
+        MIQ = .5*(tm_rhs[:,0,1] + np.cos(-2*(xi+alpha))*tm_rhs[:,1,1] + np.sin(-2*(xi+alpha))*tm_rhs[:,2,1])
+        MIU = .5*(tm_rhs[:,0,2] + np.cos(-2*(xi+alpha))*tm_rhs[:,1,2] + np.sin(-2*(xi+alpha))*tm_rhs[:,2,2])
+        MIV = .5*(tm_rhs[:,0,2] + np.cos(-2*(xi+alpha))*tm_rhs[:,1,2] + np.sin(-2*(xi+alpha))*tm_rhs[:,2,3])
+        MIP = 0.5*(MIQ-1j*MIU)
+        MIP_t = 0.5*(MIQ+1j*MIU)
+        return MII, MIP, MIP_t, MIV
 
 class Beam(object):
     '''
@@ -175,7 +221,7 @@ class Beam(object):
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
-                 symmetric=False, hwp=HWP(), 
+                 symmetric=False, hwp=HWP(), hwp_precomp_mueller=None,
                  hwp_mueller=None):
         '''
         Initialize a detector beam.
@@ -217,7 +263,7 @@ class Beam(object):
             Whether the beam is a ghost or not (default : False)
         amplitude : scalar
             Total throughput of beam, i.e. integral of beam over the sphere.
-            (int d omega B(omega) Y_00(omega) equiv amplitude ). This
+            ( \int d\omega B(\omega) Y_00(\omega) \equiv amplitude ). This
             means that b00 = amplitude / sqrt(4 pi) (default : 1.)
         po_file : str, None
             Absolute or relative path to .npy file with blm array for the
@@ -244,9 +290,13 @@ class Beam(object):
             Identifier of beam. (default : None)
         symmetric : bool
             If set, beam is assumed azimuthally symmetric.
+
         hwp : HWP class, Empty constructor
             An empty HWP with no characteristics, that are to be set afterwards
             by the setters
+        hwp_precomp_mueller : list, None'
+            T, rho, c, s of the unrotated one layer approximation of the Mueller
+            Matrix
         hwp_mueller : (4,4) array, None
             Full unrotated Mueller matrix of the stack for a given incidence angle
         '''
@@ -271,6 +321,7 @@ class Beam(object):
         self._idx = idx
         self.symmetric = symmetric
         self.hwp = hwp
+        self.hwp_precomp_mueller=hwp_precomp_mueller
         self.hwp_mueller = hwp_mueller
 
         self.__ghost = ghost
@@ -696,26 +747,27 @@ class Beam(object):
 
         return self.az, self.el, self.polang_truth
 
+    def set_HWP_values(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
+        '''
+        Set simple (T, rho, c, s) HWP parameters for the beam given a stack
+        '''
+        if(model_name is None and any(elem is None for elem in [thicknesses, indices, losses, angles])):
+            raise ValueError('You must give either a model or parameters for a stack !')
+        if (model_name !=None):
+            self.hwp.choose_HWP_model(model_name=model_name)
+        else:
+
+            self.hwp.stack_builder(thicknesses=thicknesses,
+                indices=indices, losses=losses, angles=angles)
+
+        self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
+                vartheta=np.radians(self.el))
 
     def set_hwp_mueller(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
         '''
         Set HWP mueller matrix for the beam given a stack
-        Keyword arguments
-        -----------------
-        model_name  : string (None)
-            A preset hwp model: see HWP.choose_HWP_model() for details
-        thicknesses : (N,1) array of floats (None) 
-            thickness of each HWP layer in mm
-        indices     : (N,2) array of floats (None)
-            ordinary and extraordinary indices for each layer
-        losses      : (N,2) array of floats (None)
-            loss tangents in each layer.
-        angles      : (N,1) array of floats (None) 
-            angle between (extraordinary) axis and stack axis for each layer, in radians
         '''
-
-        if(model_name is None and any(elem is None for elem in 
-            [thicknesses, indices, losses, angles])):
+        if(model_name is None and any(elem is None for elem in [thicknesses, indices, losses, angles])):
             raise ValueError('You must give either a model or parameters for a stack !')
         if (model_name !=None):
             self.hwp.choose_HWP_model(model_name=model_name)
@@ -727,6 +779,26 @@ class Beam(object):
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
                 vartheta=np.radians(self.el))
 
+    def get_Mueller_top_row(self, xi, psi, alpha):
+        '''
+        get the rotated Mueller matrix top row in the simple HWP Mueller matrix case
+        '''
+        if (self.hwp_precomp_mueller is None):
+            self.hwp_precomp_mueller = self.hwp.compute4params(freq=self.sensitive_freq,
+                vartheta=np.radians(self.el))
+        return self.hwp.topRowMuellerMatrix(xi = xi, psi=psi, alpha=alpha,
+            hwp_params = self.hwp_precomp_mueller)
+
+    def get_mueller_top_row_full(self, xi, psi, alpha):
+        '''
+        get the rotated Mueller matrix top row in the full HWP Mueller matrix case
+        '''
+        if (self.hwp_mueller is None):
+            self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
+                vartheta = np.radians(self.el))
+
+        return self.hwp.fullMuellerTopRow(xi = xi, psi = psi, alpha = alpha,
+            hwp_mueller = self.hwp_mueller)
 
 
 
