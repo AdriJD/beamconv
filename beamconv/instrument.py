@@ -1649,7 +1649,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return subchunks
 
-    def allocate_maps(self, vpol=False, nside=256):
+    def allocate_maps(self, vpol=True, nside=256):
         '''
         Allocate space in memory for binned output.
 
@@ -1741,7 +1741,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, filter_4fhwp=False, vpol=False, **kwargs):
+            preview_pointing=False, filter_4fhwp=False, vpol=True, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -3562,6 +3562,25 @@ class ScanStrategy(Instrument, qp.QMap):
         crash_a = False
         crash_b = False
         i = 0
+        
+        try:
+            almV = alm[3]
+        except IndexError:
+        #No almV in the input map.
+            almV = None
+            blm_s0a0_v=None
+            pass
+
+        try:
+            blmV = blm[3]
+        except IndexError:
+        #No almV in the input map.
+            blmV = None
+            blm_s0a0_v=None
+            pass     
+
+        # fix this condition
+        # why are the test_offset_beam_pol crashing ?
         while i < 3 and not (crash_a or crash_b):
             crash_a = ~np.isfinite(np.sum(alm[i][:]))
             crash_b = ~np.isfinite(np.sum(blm[i][:]))
@@ -3575,10 +3594,16 @@ class ScanStrategy(Instrument, qp.QMap):
         lmax_beam = hp.Alm.getlmax(blm[0].size)
 
         if lmax_sky > lmax_beam:
-            alm = tools.trunc_alm(alm, lmax_beam)
+            alm = tools.trunc_alm(np.asarray([alm[0],alm[1],alm[2]]), lmax_beam)
+            if almV is not None:
+                almV = tools.trunc_alm(almV, lmax_beam)
+                alm = [alm[0],alm[1],alm[2],almV]
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
-            blm = tools.trunc_alm(blm, lmax_sky)
+            blm = tools.trunc_alm(np.asarray([blm[0],blm[1],blm[2]]), lmax_sky)
+            if almV is not None and blmV is not None:
+                blmV = tools.trunc_alm(blmV, lmax_beam)
+                blm = [blm[0],blm[1],blm[2],blmV]
             lmax = lmax_sky
         else:
             lmax = lmax_sky
@@ -3594,15 +3619,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         almE = alm[1]
         almB = alm[2]
-        inputV = True
-        
-        try:
-            almV = alm[3]
-        except IndexError:
-        #No almV in the input map.
-            inputV = False
-            blm_s0a0_v=None
-            pass
 
             
         if hwp_mueller is not None:
@@ -3614,7 +3630,7 @@ class ScanStrategy(Instrument, qp.QMap):
             blm_s0a0 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0')
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
-            if inputV:
+            if almV is not None:
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v')
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     almV, blm_s0a0_v, spin_values_unpol, nside)   
@@ -3638,6 +3654,11 @@ class ScanStrategy(Instrument, qp.QMap):
             # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
+            spinmap_dict['s0a2']['maps'] += ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
 
@@ -3668,7 +3689,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
             try:
-            spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
+                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm[3], spin_values_unpol, nside)
             except IndexError:
                 pass         
@@ -3950,7 +3971,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func_c
 
-    def bin_tod(self, beam, tod=None, flag=None, init=True, vpol=False,
+    def bin_tod(self, beam, tod=None, flag=None, init=True, vpol=True,
                 add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
         Take internally stored tod and boresight
