@@ -3699,22 +3699,22 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif mode == 's0a2':
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)
-            blmm2 *= hwp_spin[0,2]
-            blmp2 *= hwp_spin[2,0]
+            blmm2 *= hwp_spin[0,2] * np.sqrt(2)
+            blmp2 *= hwp_spin[2,0] * np.sqrt(2)
             return blmm2, blmp2
 
         elif mode == 's2a2':
             blmm2 = blm[0]            
             blmp2 = blmm2
             blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
-            blmm2 *= hwp_spin[0,1]
-            blmp2 *= hwp_spin[1,0]
+            blmm2 *= hwp_spin[0,1] * np.sqrt(2)
+            blmp2 *= hwp_spin[1,0] * np.sqrt(2)
             try:
                 blmm2_v = blm[3]
                 blmp2_v = blmm2_v
                 blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
-                blmm2_v *= hwp_spin[3,1]
-                blmp2_v *= hwp_spin[1,3]                
+                blmm2_v *= hwp_spin[3,1] * np.sqrt(2)
+                blmp2_v *= hwp_spin[1,3] * np.sqrt(2)   
                 blmm2 += blmm2_v
                 blmp2 += blmp2_v                
             except IndexError:
