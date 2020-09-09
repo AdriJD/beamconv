@@ -1649,7 +1649,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return subchunks
 
-    def allocate_maps(self, vpol, nside=256):
+    def allocate_maps(self, vpol=False, nside=256):
         '''
         Allocate space in memory for binned output.
 
@@ -1741,7 +1741,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, filter_4fhwp=False, **kwargs):
+            preview_pointing=False, filter_4fhwp=False, vpol=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1957,7 +1957,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_a = self.tod.copy()
                         elif binning:
-                            self.bin_tod(beam_a, add_to_global=True,
+                            self.bin_tod(beam_a, add_to_global=True, vpol=vpol,
                                 filter_4fhwp=filter_4fhwp, **subchunk)
 
                     if beam_b and not beam_b.dead:
@@ -1971,6 +1971,7 @@ class ScanStrategy(Instrument, qp.QMap):
                             tod_b = self.tod
                         elif binning:
                             self.bin_tod(beam_b, add_to_global=True,
+                                vpol=vpol,
                                 filter_4fhwp=filter_4fhwp, **subchunk)
 
                     if do_ctalk:
@@ -1984,9 +1985,11 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(beam_a, tod=tod_a,
                              add_to_global=True, filter_4fhwp=filter_4fhwp,
+                             vpol=vpol,
                              **subchunk)
                             self.bin_tod(beam_b, tod=tod_b,
                              add_to_global=True, filter_4fhwp=filter_4fhwp,
+                             vpol=vpol,
                              **subchunk)
 
     def _chunk2idx(self, **kwargs):
@@ -3664,6 +3667,11 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0'] = {}
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
+            try:
+            spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
+                    alm[3], blm[3], spin_values_unpol, nside)
+            except IndexError:
+                pass         
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             
             # Linearly polarized sky and beam.
@@ -3673,9 +3681,10 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol  
 
             # Linearly and circularly polarized sky and beam
-            spinmap_dict['s2a2'] = []
-            spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
-                alm[3], blm[3],  spin_values_circ, nside) 
+     
+            # spinmap_dict['s2a2'] = []
+            # spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
+            #     alm[3], blm[3],  spin_values_circ, nside) 
             
         return spinmap_dict
 
@@ -3994,7 +4003,7 @@ class ScanStrategy(Instrument, qp.QMap):
         q_off = tools.quat_left_mult(q_off, q_polang)
 
         if init:
-            self.init_dest(nside=self.nside_out, pol=True, reset=True)
+            self.init_dest(nside=self.nside_out, pol=True, vpol=vpol, reset=True)
 
         q_off = q_off[np.newaxis]
 
