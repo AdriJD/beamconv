@@ -26,8 +26,8 @@ class TestTools(unittest.TestCase):
             # Make m=0 modes real.
             alm[:lmax+1] = np.real(alm[:lmax+1])
             return alm
-
-        cls.alm = tuple([rand_alm(lmax) for i in range(3)])
+        #cls.alm = tuple([rand_alm(lmax) for i in range(3)])
+        cls.alm = tuple([rand_alm(lmax) for i in range(4)])
         cls.lmax = lmax
 
     def test_init(self):
@@ -156,10 +156,27 @@ class TestTools(unittest.TestCase):
         # Since we have a infinitely narrow Gaussian the convolved
         # maps should just match the input (up to healpix quadrature
         # wonkyness).
-        input_map = hp.alm2map(self.alm, nside, verbose=False) # I, Q, U
+
+        # fix an array of 4 alms
+        input_map = np.asarray(hp.alm2map([self.alm[0], self.alm[1], self.alm[2]], nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.)))
+
+        try:
+           inputV = hp.alm2map(self.alm[3], nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.)) 
+        except IndexError:
+            maps_smV = None
+            pass   
+
         zero_map = np.zeros_like(input_map[0])
-        np.testing.assert_array_almost_equal(input_map[0],
+
+        # do something about the scalar part including input_map[3]
+        if inputV:
+            np.testing.assert_array_almost_equal(input_map[0]+inputV,
                                              func[0], decimal=6)
+        else:
+             np.testing.assert_array_almost_equal(input_map[0],
+                                             func[0], decimal=6)   
         # s = 2 Pol map should be Q \pm i U
         np.testing.assert_array_almost_equal(input_map[1] + 1j * input_map[2],
                                              func_c[mmax + 2], decimal=6)
@@ -264,17 +281,32 @@ class TestTools(unittest.TestCase):
 
         # Construct TOD manually.
         polang = beam.polang
-        maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
+        maps_sm = np.asarray(hp.alm2map([self.alm[0], self.alm[1], self.alm[2]], nside, verbose=False,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
-        np.testing.assert_almost_equal(maps_sm[0],
+        try:
+           maps_smV = hp.alm2map(self.alm[3], nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.)) 
+        except IndexError:
+            maps_smV = None
+            pass   
+
+        if maps_smV is not None:
+            maps_smIV = maps_sm[0]+maps_smV
+            np.testing.assert_almost_equal(maps_smIV,
+                                       scs.spinmaps['main_beam']['s0a0']['maps'][0])
+        else:    
+            np.testing.assert_almost_equal(maps_sm[0],
                                        scs.spinmaps['main_beam']['s0a0']['maps'][0])
         q = np.real(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
         u = np.imag(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
         np.testing.assert_almost_equal(maps_sm[1], q)
         np.testing.assert_almost_equal(maps_sm[2], u)
 
-        tod_man = maps_sm[0][pix]
+        if maps_smV is not None:
+            tod_man = maps_smIV[pix]
+        else:    
+            tod_man = maps_sm[0][pix]
         tod_man += (maps_sm[1][pix] \
                     * np.cos(2 * np.radians(pa - polang - 2 * hwp_ang2)))
         tod_man += (maps_sm[2][pix] \
@@ -287,7 +319,7 @@ class TestTools(unittest.TestCase):
         Perform a (low resolution) pol only scan and see if TOD make sense.
         '''
 
-        alm = (self.alm[0] * 0, self.alm[1], self.alm[2])
+        alm = (self.alm[0] * 0, self.alm[1], self.alm[2], self.alm[3]*0)
 
         mlen = 10 * 60
         rot_period = 120
@@ -346,21 +378,38 @@ class TestTools(unittest.TestCase):
 
         # Construct TOD manually.
         polang = beam.polang
-        maps_sm = np.asarray(hp.alm2map(alm, nside, verbose=False,
+        maps_sm = np.asarray(hp.alm2map([alm[0],alm[1],alm[2]], nside, verbose=False,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
-        np.testing.assert_almost_equal(maps_sm[0],
+        try:
+            maps_smV = hp.alm2map(alm[3], nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.))
+        except IndexError:
+            maps_smV = None
+            pass
+        
+        if maps_smV is not None:
+            maps_smIV = maps_sm[0]+maps_smV
+            np.testing.assert_almost_equal(maps_smIV,
+                                       scs.spinmaps['main_beam']['s0a0']['maps'][0])
+        else:    
+            np.testing.assert_almost_equal(maps_sm[0],
                                        scs.spinmaps['main_beam']['s0a0']['maps'][0])
         q = np.real(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
         u = np.imag(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
         np.testing.assert_almost_equal(maps_sm[1], q)
         np.testing.assert_almost_equal(maps_sm[2], u)
 
-        tod_man = maps_sm[0][pix]
+        if maps_smV is not None:
+            tod_man = maps_smIV[pix]
+        else:    
+            tod_man = maps_sm[0][pix]
+
         tod_man += (maps_sm[1][pix] \
                     * np.cos(2 * np.radians(pa - polang - 2 * hwp_ang2)))
         tod_man += (maps_sm[2][pix] \
                     * np.sin(2 * np.radians(pa - polang - 2 * hwp_ang2)))
+ 
 
         np.testing.assert_almost_equal(tod2, tod_man)
 
@@ -386,7 +435,7 @@ class TestTools(unittest.TestCase):
                               lmax=self.lmax, fwhm=fwhm)
 
         # Allocate and assign parameters for mapmaking.
-        scs.allocate_maps(nside=nside)
+        scs.allocate_maps(nside=nside, vpol=True)
 
         # set instrument rotation.
         scs.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
@@ -449,7 +498,7 @@ class TestTools(unittest.TestCase):
         scs.add_to_focal_plane(Beam(**ghost_opts))
 
         # Allocate and assign parameters for mapmaking.
-        scs.allocate_maps(nside=nside)
+        scs.allocate_maps(nside=nside, vpol=False)
 
         # Set HWP rotation.
         scs.set_hwp_mod(mode='continuous', freq=3.)
@@ -510,7 +559,7 @@ class TestTools(unittest.TestCase):
         scs.add_to_focal_plane(Beam(**ghost_opts))
 
         # Allocate and assign parameters for mapmaking.
-        scs.allocate_maps(nside=nside)
+        scs.allocate_maps(nside=nside, vpol=False)
 
         # Set HWP rotation.
         scs.set_hwp_mod(mode='continuous', freq=3.)
@@ -589,7 +638,7 @@ class TestTools(unittest.TestCase):
                               lmax=self.lmax, fwhm=fwhm)
 
         # Allocate and assign parameters for mapmaking.
-        scs.allocate_maps(nside=nside)
+        scs.allocate_maps(nside=nside, vpol=False)
 
         # set instrument rotation.
         scs.set_instr_rot(period=rot_period, angles=[12, 14, 248, 293])
@@ -792,7 +841,7 @@ class TestTools(unittest.TestCase):
                               lmax=self.lmax, fwhm=fwhm)
 
         # Allocate and assign parameters for mapmaking.
-        scs.allocate_maps(nside=nside_out)
+        scs.allocate_maps(nside=nside_out, vpol=False)
 
         # set instrument rotation.
         scs.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
@@ -822,7 +871,7 @@ class TestTools(unittest.TestCase):
 
         # Now run again in default way.
         # Create new dest arrays.
-        scs.allocate_maps(nside=nside_out)
+        scs.allocate_maps(nside=nside_out, vpol=False)
 
         scs.reset_instr_rot()
         scs.reset_hwp_mod()
@@ -847,7 +896,7 @@ class TestTools(unittest.TestCase):
 
         # Run one more time with a ghost. Ghost should not change proj.
         # Create new dest arrays.
-        scs.allocate_maps(nside=nside_out)
+        scs.allocate_maps(nside=nside_out, vpol=False)
 
         alm = self.alm
         preview_pointing = False
@@ -942,7 +991,7 @@ class TestTools(unittest.TestCase):
 
         # convert beam coeff. back to spin representation.
         blmm2, blmp2 = tools.eb2spin(blmE, blmB)
-        ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+        ss.beams[0][0].blm = (blmI, blmm2, blmp2,)
 
         ss.reset_instr_rot()
         ss.reset_hwp_mod()
@@ -970,7 +1019,7 @@ class TestTools(unittest.TestCase):
         az_off = 20
         el_off = 0
 
-        alm = (self.alm[0]*0., self.alm[1], self.alm[2])
+        alm = (self.alm[0]*0., self.alm[1], self.alm[2], self.alm[3]*0)
 
         ss = ScanStrategy(mlen, sample_rate=sample_rate,
                           location=location)
@@ -1054,7 +1103,7 @@ class TestTools(unittest.TestCase):
         az_off = 20
         el_off = 40
 
-        alm = (self.alm[0], self.alm[1] * 0., self.alm[2] * 0.)
+        alm = (self.alm[0], self.alm[1] * 0., self.alm[2] * 0., self.alm[3]*0)
 
         ss = ScanStrategy(mlen, sample_rate=sample_rate,
                           location=location)
@@ -1165,13 +1214,18 @@ class TestTools(unittest.TestCase):
             return alm
 
         lmax = 4
-        alm = tuple([rand_alm(lmax) for i in range(3)])
+        ##########################################
+        # changed this 
+        alm = tuple([rand_alm(lmax) for i in range(4)])
 
         blmI = np.array([0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                         dtype=np.complex128)
         blmm2 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0],
                          dtype=np.complex128)
         blmp2 = np.zeros_like(blmm2)
+        ###########################################
+        # changed this
+        # blmV = np.zeros_like(blmI)
         blm = (blmI, blmm2, blmp2)
         nside = 32
         max_spin = 3
@@ -1256,21 +1310,40 @@ class TestTools(unittest.TestCase):
 
         # Construct TOD manually.
         polang = beam.polang
-        maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
+        maps_sm = np.asarray(hp.alm2map([alm[0],alm[1],alm[2]], nside, verbose=False,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
-        np.testing.assert_almost_equal(maps_sm[0],
+        try:
+            maps_smV = hp.alm2map(alm[3], nside, verbose=False,
+                                        fwhm=np.radians(beam.fwhm / 60.))
+        except IndexError:
+            maps_smV = None    
+
+        if maps_smV is not None:
+            maps_smIV = maps_sm[0]+maps_smV
+            np.testing.assert_almost_equal(maps_smIV,
+                                       scs.spinmaps['main_beam']['s0a0']['maps'][0])
+        else:    
+            np.testing.assert_almost_equal(maps_sm[0],
                                        scs.spinmaps['main_beam']['s0a0']['maps'][0])
         q = np.real(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
         u = np.imag(scs.spinmaps['main_beam']['s2a4']['maps'][mmax + 2])
+        # v = maps_sm[3]
         np.testing.assert_almost_equal(maps_sm[1], q)
         np.testing.assert_almost_equal(maps_sm[2], u)
-
-        tod_man = maps_sm[0][pix]
+        ############################################
+        
+        # np.testing.assert_almost_equal(maps_sm[3],
+        #                                scs.spinmaps['main_beam']['s0a0']['maps'][1])
+        if maps_smV is not None:
+            tod_man = maps_smIV[pix]
+        else:
+            tod_man = maps_sm[0][pix]
         tod_man += (maps_sm[1][pix] \
                     * np.cos(2 * np.radians(pa - polang - 2 * hwp_ang)))
         tod_man += (maps_sm[2][pix] \
                     * np.sin(2 * np.radians(pa - polang - 2 * hwp_ang)))
+        # tod_man = maps_sm[3][pix]
 
         np.testing.assert_almost_equal(tod, tod_man)
 
@@ -1305,7 +1378,7 @@ class TestTools(unittest.TestCase):
             beami[1].hwp_mueller = hwp_mueller            
         
         # Allocate and assign parameters for mapmaking.
-        scs.allocate_maps(nside=nside)
+        scs.allocate_maps(nside=nside, vpol=False)
 
         # set instrument rotation.
         scs.set_instr_rot(period=rot_period, angles=[68, 113, 248, 293])
