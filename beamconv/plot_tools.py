@@ -44,7 +44,71 @@ def round_sig(x, sig=1):
 
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
-def plot_iquv(maps, write_dir, tag,
+def plot_iqu(maps, write_dir, tag,
+             sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
+    '''
+    Plot a (set of I, Q, U) map(s) and write each
+    to disk.
+
+    Arguments
+    ---------
+    sym_limits : scalar, array-like
+        Colorbar limits assuming symemtric limits.
+        If array-like, assume limits for I, Q, U
+        maps
+    tight : bool
+        call savefig with bbox_inches = 'tight'
+    write_dir : str
+        Path to directory where map is saved
+    tag : str
+        Filename = <tag>_I/Q/U.png
+    udicts : list
+        a list of three dictionaries that are passed to i, q, and u map plotting
+        tools respectively, these are combined with kwargs which are shared
+        for all three plots
+        default: None
+
+    Keyword arguments
+    -----------------
+    kwargs : {plot_map_opts, healpy_plt_opts}
+    '''
+
+    dim1 = np.shape(maps)[0]
+    if dim1 != 3:
+        raise ValueError('maps should be a sequence of three or four arrays')
+
+    if not hasattr(sym_limits, "__iter__"):
+        sym_limits = [sym_limits] * dim1
+
+    if udicts is None:
+        udicts = [{}, {}, {}]
+
+    for pidx, (pol, udict) in enumerate(zip(['I', 'Q', 'U'], udicts)):
+
+        maxx = kwargs.pop('max', sym_limits[pidx])
+        try:
+            minn = -maxx
+        except TypeError:
+            minn = maxx
+
+        zwargs = kwargs.copy()
+        zwargs.update(udict)
+
+        map2plot = np.copy(maps[pidx])
+
+        if minn is None:
+            minn = round_sig(np.nanmin(map2plot), sig=1)
+
+        if maxx is None:
+            maxx = round_sig(np.nanmax(map2plot), sig=1)
+
+        if mask is not None:
+            map2plot[~mask] = np.nan
+
+        plot_map(map2plot, write_dir, tag+'_'+pol,
+                min=minn, max=maxx,  tight=tight, **zwargs)
+
+def plot_iquv(maps, write_dir, tag, vpol=False,
              sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each
@@ -81,16 +145,13 @@ def plot_iquv(maps, write_dir, tag,
         sym_limits = [sym_limits] * dim1
 
     if udicts is None:
-        udicts = [{}, {}, {}]
+        udicts = [{}, {}, {}, {}]
 
     name_list = ['I', 'Q', 'U']
     if vpol:
         name_list.append('V')
 
-    elif only_vpol:
-        name_list[0] = 'V'    
-
-    for pidx, (pol, udict) in enumerate(zip(name_list, udicts)):
+    for pidx, (pol, udict) in enumerate(zip(['I','Q','U','V'], udicts)):
 
         maxx = kwargs.pop('max', sym_limits[pidx])
         try:
