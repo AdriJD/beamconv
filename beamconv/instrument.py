@@ -3756,7 +3756,7 @@ class ScanStrategy(Instrument, qp.QMap):
             blm_s0a0_v = blm[0] * hwp_spin[0,3]
             try:
                 blm_s0a0_v += blm[3] * hwp_spin[3,3]
-                
+
             except IndexError:
                 # No V beam.
                 pass
@@ -4090,6 +4090,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             vec = self.vec
             proj = self.proj
+        print('I am in rank =', self.mpi_rank)    
 
         # Solve map on root process.
         if self.mpi_rank == 0:
