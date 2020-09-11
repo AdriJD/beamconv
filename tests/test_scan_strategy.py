@@ -358,11 +358,11 @@ class TestTools(unittest.TestCase):
         beam = scs.beams[0][0]
   
         try:
-            scs.init_detpair([self.alm[0],self.alm[1],self.alm[2],self.alm[3]], beam, nside_spin=nside,
-                                   max_spin=mmax)
+            scs.init_detpair([self.alm[0]*0,self.alm[1],self.alm[2],self.alm[3]*0], beam, nside_spin=nside,
+                                    max_spin=mmax)
         except IndexError:                 
-            scs.init_detpair(self.alm, beam, nside_spin=nside,
-                                   max_spin=mmax)
+            scs.init_detpair([self.alm[0]*0,self.alm[1],self.alm[2]], beam, nside_spin=nside,
+                                    max_spin=mmax)
             pass
 
         scs.partition_mission()
