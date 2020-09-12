@@ -151,7 +151,7 @@ def plot_iquv(maps, write_dir, tag, vpol=False,
     if vpol:
         name_list.append('V')
 
-    for pidx, (pol, udict) in enumerate(zip(['I','Q','U','V'], udicts)):
+    for pidx, (pol, udict) in enumerate(zip(name_list, udicts)):
 
         maxx = kwargs.pop('max', sym_limits[pidx])
         try:
