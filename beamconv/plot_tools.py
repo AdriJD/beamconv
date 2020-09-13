@@ -138,18 +138,19 @@ def plot_iquv(maps, write_dir, tag, vpol=False,
     '''
 
     dim1 = np.shape(maps)[0]
+    name_list = ['I', 'Q', 'U']
+    
     if dim1 != 3 and dim1 !=4:
         raise ValueError('maps should be a sequence of three or four arrays')
 
     if not hasattr(sym_limits, "__iter__"):
         sym_limits = [sym_limits] * dim1
 
-    if udicts is None:
-        udicts = [{}, {}, {}, {}]
-
-    name_list = ['I', 'Q', 'U']
-    if vpol:
-        name_list.append('V')
+    if udicts is None and dim1 == 3:
+        udicts = [{}, {}, {}]
+    elif udicts is None and dim1 == 4:
+        udicts = [{}, {}, {}, {}] 
+        name_list.append('V')   
 
     for pidx, (pol, udict) in enumerate(zip(name_list, udicts)):
 
