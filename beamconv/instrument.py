@@ -3616,6 +3616,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
+            blm_s0a0_v = None
 
             # s0a0.
             spinmap_dict['s0a0'] = {}
