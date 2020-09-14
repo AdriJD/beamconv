@@ -484,6 +484,7 @@ class Beam(object):
                 ext = '.npy'
             blm = np.load(os.path.join(pname+ext), allow_pickle=True)
 
+
         except IOError:
             if not ext:
                 # Assume .fits file instead
@@ -527,7 +528,7 @@ class Beam(object):
         # If tuple turn to (3, ) or (1, ..) array.
         blm = np.atleast_2d(blm)
 
-        if blm.shape[0] == 3 and self.cross_pol:
+        if blm.shape[0] == 3 or blm.shape[0] == 4 and self.cross_pol:
             cross_pol = True
         else:
             cross_pol = False
@@ -543,7 +544,10 @@ class Beam(object):
                 # Scale beam if needed
                 blm *= self.amplitude
 
-            self.blm = blm[0], blm[1], blm[2]
+            if np.shape(blm)[0] == 4: 
+                self.blm = blm[0], blm[1], blm[2], blm[3]
+            else:    
+                self.blm = blm[0], blm[1], blm[2]
 
         else:
             # Assume co-polarized beam
