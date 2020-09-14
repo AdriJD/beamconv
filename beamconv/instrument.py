@@ -1660,8 +1660,8 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         vec_val, proj_val = 3, 6
         if solve_vmap:
-            vec_val =+ 1
-            proj_val =+ 4
+            vec_val += 1
+            proj_val += 4
 
         self.vec = np.zeros((vec_val, 12*nside**2), dtype=float)
         self.proj = np.zeros((proj_val, 12*nside**2), dtype=float)
@@ -1712,6 +1712,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 if gidx == 0:
                     if not hasattr(ghost_a, 'blm'):
                         ghost_a.gen_gaussian_blm()
+                        print('In ghosts shape blms=', np.shape(ghost_a.gen_gaussian_blm()))
 
                 else:
                     if not hasattr(ghost_a, 'blm'):
@@ -1730,7 +1731,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
                             beam_b.ghosts[gidx].reuse_blm(
                                 beam_a.ghosts[0])
-
+        print('in init spinmaps alm=', np.shape(alm))
+        print('nans in alms=', np.isnan(alm))
+        print('in init spinmaps blm=', np.shape(beam_a.blm))
 
         self.init_spinmaps(alm, beam_a, **kwargs)
 
@@ -2994,6 +2997,7 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         Returns ValueError when `beam` is a ghost.
         '''
+        print('in scan detector beam shape', np.shape(beam.blm))
 
         if beam.ghost:
             raise ValueError('_scan_detector() called with ghost.')
@@ -3565,11 +3569,13 @@ class ScanStrategy(Instrument, qp.QMap):
         
         if np.shape(alm)[0] == 4:
             almV = alm[3]
-            input_V = True          
+            input_V = True  
         
         if np.shape(blm)[0] == 4:
             blmV = blm[3]
             solve_vmap = True
+        print('init_spinmaps blm shape=', np.shape(blm))        
+
  
         # fix this condition
         # why are the test_offset_beam_pol crashing ?
@@ -3586,13 +3592,13 @@ class ScanStrategy(Instrument, qp.QMap):
         lmax_beam = hp.Alm.getlmax(blm[0].size)
 
         if lmax_sky > lmax_beam:
-            alm = tools.trunc_alm(np.asarray([alm[0],alm[1],alm[2]]), lmax_beam)
+            alm = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
             if input_V:
                 almV = tools.trunc_alm(almV, lmax_beam)
                 alm = [alm[0],alm[1],alm[2],almV]
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
-            blm = tools.trunc_alm(np.asarray([blm[0],blm[1],blm[2]]), lmax_sky)
+            blm = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
             if solve_vmap:
                 blmV = tools.trunc_alm(blmV, lmax_beam)
                 blm = [blm[0],blm[1],blm[2],blmV]
@@ -3700,6 +3706,9 @@ class ScanStrategy(Instrument, qp.QMap):
             # spinmap_dict['s2a2'] = []
             # spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
             #     alm[3], blm[3],  spin_values_circ, nside) 
+        print('inside init spinmaps alm nans', np.isnan(alm))
+        print('inside init spinmaps blm nans', np.isnan(blm))
+    
             
         return spinmap_dict
 
@@ -3738,6 +3747,7 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
         if np.shape(blm)[0] == 4:
             solve_vmap = True
+        print('inside blmxhwp shape of blm', np.shape(blm))    
 
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
@@ -3961,7 +3971,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func_c
 
-    def bin_tod(self, beam, tod=None, flag=None, init=True,
+    def bin_tod(self, beam, tod=None, flag=None, init=True, solve_vmap=False,
                 add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
         Take internally stored tod and boresight
@@ -3993,10 +4003,12 @@ class ScanStrategy(Instrument, qp.QMap):
         kwargs : {chunk_opts}
         '''
         blm = beam.blm
-
         if np.shape(blm)[0] == 4:
             solve_vmap = True
 
+        print('bin_tod shape blm',np.shape(blm))
+
+    
         # HWP does not depend on particular detector.
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])
 
@@ -4018,7 +4030,7 @@ class ScanStrategy(Instrument, qp.QMap):
         q_off = tools.quat_left_mult(q_off, q_polang)
 
         if init:
-            self.init_dest(nside=self.nside_out, pol=True, vpol=False, reset=True)
+            self.init_dest(nside=self.nside_out, pol=True, vpol=solve_vmap, reset=True)
 
         q_off = q_off[np.newaxis]
 
@@ -4046,6 +4058,10 @@ class ScanStrategy(Instrument, qp.QMap):
             flag = flag[np.newaxis]
 
         self.from_tod(q_off, tod=tod, flag=flag)
+        print('shape tod=', np.shape(tod))
+
+        print('bin_tod global maps shape',np.shape(self.vec))
+        print('bin_tod local maps', np.shape(self.depo['vec']))
 
         if add_to_global:
             # Add local maps to global maps.
