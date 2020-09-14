@@ -108,7 +108,7 @@ def plot_iqu(maps, write_dir, tag,
         plot_map(map2plot, write_dir, tag+'_'+pol,
                 min=minn, max=maxx,  tight=tight, **zwargs)
 
-def plot_iquv(maps, write_dir, tag, vpol=False,
+def plot_iquv(maps, write_dir, tag,
              sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each
