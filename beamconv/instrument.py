@@ -783,6 +783,7 @@ class Instrument(MPIBase):
 
                 pkl_file = open(bfile, 'rb')
                 beam_opts = pickle.load(pkl_file)
+
                 pkl_file.close()
 
                 if isinstance(beam_opts, dict):
@@ -790,6 +791,7 @@ class Instrument(MPIBase):
 
                     beam_opts_a = beam_opts
                     beam_opts_b = copy.deepcopy(beam_opts)
+
 
                     if beam_opts.get('name'):
                         beam_opts_a['name'] += 'A'
@@ -803,6 +805,7 @@ class Instrument(MPIBase):
 
                     beam_opts_a = beam_opts[0]
                     beam_opts_b = beam_opts[1]
+
 
                 # Overrule options with given kwargs
                 beam_opts_a.update(kwargs)
@@ -829,7 +832,9 @@ class Instrument(MPIBase):
                 beam_a = Beam(pol='A', **beam_opts_a)
                 beam_b = Beam(pol='B', **beam_opts_b)
 
+
                 beams.append([beam_a, beam_b])
+                print('shape beam a ', np.shape(beam_a))
 
             ndet = len(beams) * 2
         else:
@@ -856,6 +861,8 @@ class Instrument(MPIBase):
             self.ndet = ndet
         else:
             self.ndet += ndet
+
+
 
     def create_crosstalk_ghosts(self, azs, els,
             beams=None, ghost_tag='crosstalk_ghost', rand_stdev=0., **kwargs):
@@ -4112,10 +4119,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill
+            print('nans in solve_for_map',np.isnan(maps))
         else:
             maps = None
             cond = None
 
+        
         if return_proj:
             return maps, cond, proj
 
