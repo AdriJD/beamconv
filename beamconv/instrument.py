@@ -519,7 +519,6 @@ class Instrument(MPIBase):
         beams=[]   
 
         if custom_lists is not None: 
-            print('here!')
             azs = np.array(custom_lists[0])
             els = np.array(custom_lists[1])
             det_pairs = np.array(custom_lists[2])
@@ -834,7 +833,6 @@ class Instrument(MPIBase):
 
 
                 beams.append([beam_a, beam_b])
-                print('shape beam a ', np.shape(beam_a))
 
             ndet = len(beams) * 2
         else:
@@ -1719,8 +1717,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 if gidx == 0:
                     if not hasattr(ghost_a, 'blm'):
                         ghost_a.gen_gaussian_blm()
-                        print('In ghosts shape blms=', np.shape(ghost_a.gen_gaussian_blm()))
-
                 else:
                     if not hasattr(ghost_a, 'blm'):
                         ghost_a.reuse_blm(beam_a.ghosts[0])
@@ -1738,9 +1734,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
                             beam_b.ghosts[gidx].reuse_blm(
                                 beam_a.ghosts[0])
-        print('in init spinmaps alm=', np.shape(alm))
-        print('nans in alms=', np.isnan(alm))
-        print('in init spinmaps blm=', np.shape(beam_a.blm))
 
         self.init_spinmaps(alm, beam_a, solve_vmap=solve_vmap, **kwargs)
 
@@ -3011,8 +3004,6 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         Returns ValueError when `beam` is a ghost.
         '''
-        print('in scan detector beam shape', np.shape(beam.blm)[0])
-
         if beam.ghost:
             raise ValueError('_scan_detector() called with ghost.')
 
@@ -3589,12 +3580,7 @@ class ScanStrategy(Instrument, qp.QMap):
         
         if np.shape(blm)[0] != 4 and beam_v:
             raise ValueError("There is no V beam component")
-
-        print('init_spinmaps blm shape=', np.shape(blm)) 
-
-        # if solve_vmap and not beam_v:
-        #     raise SystemError('You can not solve for V map \
-        #                         have a v beam')                     
+                 
  
         # break the condition 
         while i < np.shape(alm)[0] and not crash_a:
@@ -3731,8 +3717,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # spinmap_dict['s2a2'] = []
             # spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
             #     alm[3], blm[3],  spin_values_circ, nside) 
-        print('inside init spinmaps alm nans', np.isnan(alm))
-        print('inside init spinmaps blm nans', np.isnan(blm))
     
             
         return spinmap_dict
@@ -3770,8 +3754,6 @@ class ScanStrategy(Instrument, qp.QMap):
         this way we can use the blms and avoid going back
         to real space.        
         '''
-        print('inside blmxhwp shape of blm', np.shape(blm))    
-
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
             if beam_v and solve_vmap:
@@ -4033,9 +4015,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if solve_vmap and beam_v:
             vpol=True
 
-
-        print('tod in bin_tod',np.isnan(self.tod))
-
     
         # HWP does not depend on particular detector.
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])
@@ -4086,13 +4065,6 @@ class ScanStrategy(Instrument, qp.QMap):
             flag = flag[np.newaxis]
 
         self.from_tod(q_off, tod=tod, flag=flag)
-        print('shape tod=', np.shape(tod))
-
-        print('bin_tod global vec nans',np.isnan(self.vec))
-        print('bin_tod local vec nans', np.isnan(self.depo['vec']))
-
-        print('bin_tod global proj nans',np.isnan(self.proj))
-        print('bin_tod local proj nans', np.isnan(self.depo['proj']))
 
         if add_to_global:
             # Add local maps to global maps.
@@ -4127,19 +4099,16 @@ class ScanStrategy(Instrument, qp.QMap):
             # Collect the binned maps on the root process.
             vec = self.reduce_array(self.vec)
             proj = self.reduce_array(self.proj)
-            print('vecnan1',np.isnan(vec))
-            print('projnan1',np.isnan(proj))
 
         else:
             vec = self.vec
             proj = self.proj
-            print('vecnan2',np.isnan(vec))
-            print('projnan2',np.isnan(proj))
 
-        if np.shape(vec)[0] == 4:
-            method='cho'
-        else:
-            method='exact'    
+
+        # if np.shape(vec)[0] == 4:
+        #     method='cho'
+        # else:
+        #     method='exact'    
 
         # Solve map on root process.
         if self.mpi_rank == 0:
@@ -4148,11 +4117,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 filterwarnings('ignore', category=RuntimeWarning)
 
                 maps = self.solve_map(vec=vec, proj=proj,
-                                      copy=True, fill=fill, method=method)
-                print('mapsnan after solve_map', np.isnan(maps))
-
+                                      copy=True, fill=fill)
                 cond = self.proj_cond(proj=proj)
-                print('condnans after solve_map', np.isnan(cond))
             cond[cond == np.inf] = fill
         else:
             maps = None
