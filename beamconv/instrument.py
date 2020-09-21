@@ -4108,10 +4108,10 @@ class ScanStrategy(Instrument, qp.QMap):
             proj = self.proj
 
 
-        # if np.shape(vec)[0] == 4:
-        #     method='cho'
-        # else:
-        #     method='exact'    
+        if np.shape(vec)[0] == 4:
+            method='cho'
+        else:
+            method='exact'    
 
         # Solve map on root process.
         if self.mpi_rank == 0:
@@ -4121,7 +4121,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 maps = self.solve_map(vec=vec, proj=proj,
                                       copy=True, fill=fill,
-                                      method='cho')
+                                      method=method)
                 cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill
         else:
