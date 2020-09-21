@@ -3625,6 +3625,8 @@ class ScanStrategy(Instrument, qp.QMap):
         almE = alm[1]
         almB = alm[2]
 
+        blmV=blm[0]
+
             
         if hwp_mueller is not None:
 
@@ -3701,7 +3703,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 alm[0], blm[0], spin_values_unpol, nside)
             if input_V and beam_v and solve_vmap:
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
-                    alm[3], blm[3], spin_values_unpol, nside)
+                    alm[3], blmV, spin_values_unpol, nside)
       
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             
@@ -3754,16 +3756,17 @@ class ScanStrategy(Instrument, qp.QMap):
         this way we can use the blms and avoid going back
         to real space.        
         '''
+        blmV = blm[0]
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
             if beam_v and solve_vmap:
-                blm_s0a0 += blm[3] * hwp_spin[3,0]
+                blm_s0a0 += blmV * hwp_spin[3,0]
             return blm_s0a0
 
         elif mode == 's0a0_v':
             blm_s0a0_v = blm[0] * hwp_spin[0,3]
             if beam_v:
-                blm_s0a0_v += blm[3] * hwp_spin[3,3]
+                blm_s0a0_v += blmV * hwp_spin[3,3]
 
             return blm_s0a0_v    
         
@@ -3792,7 +3795,7 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2 *= hwp_spin[0,1]
             blmp2 *= hwp_spin[1,0]
             if beam_v and solve_vmap:
-                blmm2_v = blm[3]
+                blmm2_v = blmV
                 blmp2_v = blmm2_v
                 blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
                 blmm2_v *= hwp_spin[3,1]
@@ -4117,7 +4120,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 filterwarnings('ignore', category=RuntimeWarning)
 
                 maps = self.solve_map(vec=vec, proj=proj,
-                                      copy=True, fill=fill)
+                                      copy=True, fill=fill,
+                                      method='cho')
                 cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill
         else:
