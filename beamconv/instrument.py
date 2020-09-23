@@ -1709,10 +1709,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # We give the ghosts identical Gaussian beams if they
         # have no blm.
+
         if beam_a.ghosts:
 
             for gidx in range(beam_a.ghost_count):
                 ghost_a = beam_a.ghosts[gidx]
+
 
                 if gidx == 0:
                     if not hasattr(ghost_a, 'blm'):
@@ -3335,6 +3337,10 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s0a0']['maps'],
                                    spinmaps['s0a0']['s_vals'],
                                    reality=True, interp=interp)
+            self._scan_modulate_pa(tod, pix, pa,
+                                   spinmaps['s0a0_v']['maps'],
+                                   spinmaps['s0a0_v']['s_vals'],
+                                   reality=True, interp=interp)
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3518,8 +3524,9 @@ class ScanStrategy(Instrument, qp.QMap):
                             blm, max_s, nside_spin, symmetric=ghost.symmetric,
                             hwp_mueller=ghost.hwp_mueller, solve_vmap=solve_vmap,
                             input_V=input_V, beam_v=beam_v)
-
                 self.spinmaps['ghosts'][u] = spinmap_dict
+
+     
 
     @staticmethod
     def _init_spinmaps(alm, blm, max_spin, nside,
@@ -3607,7 +3614,7 @@ class ScanStrategy(Instrument, qp.QMap):
         elif lmax_beam > lmax_sky:
             blm = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
             if solve_vmap:
-                blmV = tools.trunc_alm(blmV, lmax_beam)
+                blmV = tools.trunc_alm(blm[3], lmax_beam)
                 blm = [blm[0],blm[1],blm[2],blmV]
             lmax = lmax_sky
         else:
@@ -3619,13 +3626,11 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             # Intensity only needs s >= 0 maps.
             spin_values_unpol = np.arange(max_spin + 1)
-            # Linear polarization needs -s,...,+s maps.
+
             spin_values_pol = np.arange(-max_spin, max_spin + 1)
 
         almE = alm[1]
         almB = alm[2]
-
-        blmV=blm[0]
 
             
         if hwp_mueller is not None:
@@ -3639,13 +3644,17 @@ class ScanStrategy(Instrument, qp.QMap):
                                     beam_v=beam_v, solve_vmap=solve_vmap)
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
-            if solve_vmap and input_V:
-                blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v', 
-                                                    beam_v=beam_v)
-                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
-                    almV, blm_s0a0_v, spin_values_unpol, nside)   
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
+
+            if solve_vmap and input_V:
+                spinmap_dict['s0a0_v'] = {}
+                blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v', 
+                                                    beam_v=beam_v)
+                spinmap_dict['s0a0_v']['maps'] = ScanStrategy._spinmaps_real(
+                    alm[3], blm_s0a0_v, spin_values_unpol, nside)   
+                spinmap_dict['s0a0_v']['s_vals'] = spin_values_unpol
+            
             if blm_s0a0_v is not None:
                 del blm_s0a0_v
 
@@ -3691,7 +3700,8 @@ class ScanStrategy(Instrument, qp.QMap):
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                                                
             spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
-            spinmap_dict['s2a0']['s_vals'] = spin_values_pol   
+            spinmap_dict['s2a0']['s_vals'] = spin_values_pol 
+
             
         else:
             # Old default behaviour.
@@ -3701,12 +3711,14 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0'] = {}
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
-            if input_V and beam_v and solve_vmap:
-                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
-                    alm[3], blmV, spin_values_unpol, nside)
-      
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
-            
+
+        
+            spinmap_dict['s0a0_v'] = {}
+            spinmap_dict['s0a0_v']['maps'] = ScanStrategy._spinmaps_real(
+                alm[3], blm[3], spin_values_unpol, nside)
+            spinmap_dict['s0a0_v']['s_vals'] = spin_values_unpol
+        
             # Linearly polarized sky and beam.
             spinmap_dict['s2a4'] = {}
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
@@ -3756,17 +3768,17 @@ class ScanStrategy(Instrument, qp.QMap):
         this way we can use the blms and avoid going back
         to real space.        
         '''
-        blmV = blm[0]
+   
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
             if beam_v and solve_vmap:
-                blm_s0a0 += blmV * hwp_spin[3,0]
+                blm_s0a0 += blm[3] * hwp_spin[3,0]
             return blm_s0a0
 
         elif mode == 's0a0_v':
             blm_s0a0_v = blm[0] * hwp_spin[0,3]
             if beam_v:
-                blm_s0a0_v += blmV * hwp_spin[3,3]
+                blm_s0a0_v += blm[3] * hwp_spin[3,3]
 
             return blm_s0a0_v    
         
@@ -3795,7 +3807,7 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2 *= hwp_spin[0,1]
             blmp2 *= hwp_spin[1,0]
             if beam_v and solve_vmap:
-                blmm2_v = blmV
+                blmm2_v = blm[3]
                 blmp2_v = blmm2_v
                 blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
                 blmm2_v *= hwp_spin[3,1]
@@ -4107,11 +4119,10 @@ class ScanStrategy(Instrument, qp.QMap):
             vec = self.vec
             proj = self.proj
 
-
-        if np.shape(vec)[0] == 4:
-            method='cho'
-        else:
-            method='exact'    
+        # if np.shape(vec)[0] == 4:
+        #     method='cho'
+        # else:
+        #     method='exact'    
 
         # Solve map on root process.
         if self.mpi_rank == 0:
@@ -4120,8 +4131,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 filterwarnings('ignore', category=RuntimeWarning)
 
                 maps = self.solve_map(vec=vec, proj=proj,
-                                      copy=True, fill=fill,
-                                      method=method)
+                                      copy=True, fill=fill)
                 cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill
         else:
