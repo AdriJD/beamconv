@@ -1654,7 +1654,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return subchunks
 
-    def allocate_maps(self, solve_vmap=False, beam_v=False, nside=256):
+    def allocate_maps(self, solve_vmap=False, nside=256):
         '''
         Allocate space in memory for binned output.
 
@@ -1664,7 +1664,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Nside of output (default : 256)
         '''
         vec_val, proj_val = 3, 6
-        if solve_vmap and beam_v:
+        if solve_vmap:
             vec_val += 1
             proj_val += 4
 
@@ -1673,7 +1673,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None, 
-                    solve_vmap=False, beam_v=False, input_V=False, **kwargs):
+                    beam_v=False, input_V=False, **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
         for a detector pair and all its ghosts.
@@ -1737,7 +1737,7 @@ class ScanStrategy(Instrument, qp.QMap):
                             beam_b.ghosts[gidx].reuse_blm(
                                 beam_a.ghosts[0])
 
-        self.init_spinmaps(alm, beam_a, solve_vmap=solve_vmap, input_V=input_V, 
+        self.init_spinmaps(alm, beam_a, input_V=input_V, 
                             beam_v=beam_v, **kwargs)
 
         # free blm attributes
@@ -1891,7 +1891,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
-                                solve_vmap=solve_vmap,
                                 input_V=input_V, beam_v=beam_v,
                                 **spinmaps_opts)
 
@@ -3450,7 +3449,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                 
 
     def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
-                      symmetric=False, solve_vmap=False, input_V=False, beam_v=False):
+                      symmetric=False, input_V=False, beam_v=False):
         '''
         Compute appropriate spinmaps for beam and
         all its ghosts.
@@ -3494,7 +3493,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # calculate spinmaps for main beam
         spinmap_dict = self._init_spinmaps(alm,
                     blm, max_s, nside_spin, symmetric=beam.symmetric,
-                    hwp_mueller=beam.hwp_mueller, solve_vmap=solve_vmap, input_V=input_V,
+                    hwp_mueller=beam.hwp_mueller, input_V=input_V,
                     beam_v=beam_v)
 
         # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
@@ -3528,7 +3527,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 spinmap_dict = self._init_spinmaps(alm,
                             blm, max_s, nside_spin, symmetric=ghost.symmetric,
-                            hwp_mueller=ghost.hwp_mueller, solve_vmap=solve_vmap,
+                            hwp_mueller=ghost.hwp_mueller,
                             input_V=input_V, beam_v=beam_v)
                 self.spinmaps['ghosts'][u] = spinmap_dict
 
@@ -3537,8 +3536,7 @@ class ScanStrategy(Instrument, qp.QMap):
     @staticmethod
     def _init_spinmaps(alm, blm, max_spin, nside,
                        symmetric=False, hwp_mueller=None,
-                       solve_vmap=False, input_V=False, 
-                       beam_v=False):
+                       input_V=False, beam_v=False):
         '''
         Compute convolution of map with different spin modes
         of the beam. 
@@ -3617,7 +3615,7 @@ class ScanStrategy(Instrument, qp.QMap):
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
             blm = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
-            if solve_vmap:
+            if beam_v:
                 blmV = tools.trunc_alm(blm[3], lmax_beam)
                 blm = [blm[0],blm[1],blm[2],blmV]
             lmax = lmax_sky
@@ -3645,14 +3643,14 @@ class ScanStrategy(Instrument, qp.QMap):
             # s0a0.
             spinmap_dict['s0a0'] = {}
             blm_s0a0 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0',
-                                    beam_v=beam_v, solve_vmap=solve_vmap)
+                                    beam_v=beam_v)
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
 
-            print('solve_map and input_V', solve_vmap, input_V)
-            if solve_vmap and input_V:
+            print('solve_map and input_V',input_V)
+            if input_V:
                 spinmap_dict['s0a0_v'] = {}
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v', 
                                                     beam_v=beam_v)
@@ -3681,7 +3679,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
 
-            if solve_vmap:
+            if input_V:
                 blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
                 blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
                 spinmap_dict['s0a2']['maps'] += ScanStrategy._spinmaps_complex(
@@ -3691,7 +3689,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # s2a2.
             spinmap_dict['s2a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2',
-                                beam_v=beam_v, solve_vmap=solve_vmap)
+                                beam_v=beam_v)
             # Switch, for new datamodel.
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                                    
             spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
@@ -3742,7 +3740,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return spinmap_dict
 
     @staticmethod
-    def blmxhwp(blm, hwp_spin, mode, beam_v=False, solve_vmap=False):
+    def blmxhwp(blm, hwp_spin, mode, beam_v=False):
         '''
         
         Arguments
@@ -3777,7 +3775,7 @@ class ScanStrategy(Instrument, qp.QMap):
    
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
-            if beam_v and solve_vmap:
+            if beam_v:
                 blm_s0a0 += blm[3] * hwp_spin[3,0]
             return blm_s0a0
 
@@ -3812,7 +3810,7 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
             blmm2 *= hwp_spin[0,1]
             blmp2 *= hwp_spin[1,0]
-            if beam_v and solve_vmap:
+            if beam_v:
                 blmm2_v = blm[3]
                 blmp2_v = blmm2_v
                 blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
@@ -4002,7 +4000,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return func_c
 
     def bin_tod(self, beam, tod=None, flag=None, init=True, solve_vmap=False,
-                beam_v=False, add_to_global=True, filter_4fhwp=False, **kwargs):
+                add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -4033,7 +4031,7 @@ class ScanStrategy(Instrument, qp.QMap):
         kwargs : {chunk_opts}
         '''
         vpol = False
-        if solve_vmap and beam_v:
+        if solve_vmap:
             vpol=True
 
     
