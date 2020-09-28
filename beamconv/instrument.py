@@ -1673,7 +1673,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None, 
-                    beam_v=False, input_V=False, **kwargs):
+                    beam_v=False, input_v=False, **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
         for a detector pair and all its ghosts.
@@ -1737,7 +1737,7 @@ class ScanStrategy(Instrument, qp.QMap):
                             beam_b.ghosts[gidx].reuse_blm(
                                 beam_a.ghosts[0])
 
-        self.init_spinmaps(alm, beam_a, input_V=input_V, 
+        self.init_spinmaps(alm, beam_a, input_v=input_v, 
                             beam_v=beam_v, **kwargs)
 
         # free blm attributes
@@ -1749,7 +1749,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, solve_vmap=False,
-            input_V=False, beam_v=False, **kwargs):
+            input_v=False, beam_v=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1891,7 +1891,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
-                                input_V=input_V, beam_v=beam_v,
+                                input_v=input_v, beam_v=beam_v,
                                 **spinmaps_opts)
 
             if not hasattr(self, 'chunks'):
@@ -3337,14 +3337,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s0a0']['maps'],
                                    spinmaps['s0a0']['s_vals'],
                                    reality=True, interp=interp)
-            try:
-                self._scan_modulate_pa(tod, pix, pa,
-                                       spinmaps['s0a0_v']['maps'],
-                                       spinmaps['s0a0_v']['s_vals'],
-                                       reality=True, interp=interp)
-            except:
-                print("There is no mode s0a0_v created")
-                pass   
+
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3449,7 +3442,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                 
 
     def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
-                      symmetric=False, input_V=False, beam_v=False):
+                      symmetric=False, input_v=False, beam_v=False):
         '''
         Compute appropriate spinmaps for beam and
         all its ghosts.
@@ -3490,10 +3483,12 @@ class ScanStrategy(Instrument, qp.QMap):
         max_s = min(beam.mmax, max_spin)
         blm = beam.blm # main beam
 
+        print('in init_spinmaps', beam.hwp_mueller)
+
         # calculate spinmaps for main beam
         spinmap_dict = self._init_spinmaps(alm,
                     blm, max_s, nside_spin, symmetric=beam.symmetric,
-                    hwp_mueller=beam.hwp_mueller, input_V=input_V,
+                    hwp_mueller=beam.hwp_mueller, input_v=input_v,
                     beam_v=beam_v)
 
         # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
@@ -3528,7 +3523,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 spinmap_dict = self._init_spinmaps(alm,
                             blm, max_s, nside_spin, symmetric=ghost.symmetric,
                             hwp_mueller=ghost.hwp_mueller,
-                            input_V=input_V, beam_v=beam_v)
+                            input_v=input_v, beam_v=beam_v)
                 self.spinmaps['ghosts'][u] = spinmap_dict
 
      
@@ -3536,7 +3531,7 @@ class ScanStrategy(Instrument, qp.QMap):
     @staticmethod
     def _init_spinmaps(alm, blm, max_spin, nside,
                        symmetric=False, hwp_mueller=None,
-                       input_V=False, beam_v=False):
+                       input_v=False, beam_v=False):
         '''
         Compute convolution of map with different spin modes
         of the beam. 
@@ -3584,7 +3579,7 @@ class ScanStrategy(Instrument, qp.QMap):
         crash_b = False
         i = 0
         
-        if np.shape(alm)[0] != 4 and input_V:
+        if np.shape(alm)[0] != 4 and input_v:
             raise ValueError("There is no V sky component") 
         
         if np.shape(blm)[0] != 4 and beam_v:
@@ -3609,7 +3604,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if lmax_sky > lmax_beam:
             alm = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
-            if input_V:
+            if input_v:
                 almV = tools.trunc_alm(almV, lmax_beam)
                 alm = [alm[0],alm[1],alm[2],almV]
             lmax = lmax_beam
@@ -3638,6 +3633,8 @@ class ScanStrategy(Instrument, qp.QMap):
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
+            print('in init_spinmaps mii=mvv', hwp_mueller[0,0]==hwp_mueller[3,3])
+            print('in init_spinmaps mii=mqq random test', hwp_mueller[0,0]==hwp_mueller[1,1])
             blm_s0a0_v = None
 
             # s0a0.
@@ -3646,18 +3643,16 @@ class ScanStrategy(Instrument, qp.QMap):
                                     beam_v=beam_v)
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
-            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
-            del blm_s0a0
 
-            print('solve_map and input_V',input_V)
-            if input_V:
-                spinmap_dict['s0a0_v'] = {}
+            print('solve_map and input_v',input_v)
+            if input_v:
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v', 
                                                     beam_v=beam_v)
-                spinmap_dict['s0a0_v']['maps'] = ScanStrategy._spinmaps_real(
+                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm_s0a0_v, spin_values_unpol, nside)   
-                spinmap_dict['s0a0_v']['s_vals'] = spin_values_unpol
+                spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             
+            del blm_s0a0
             if blm_s0a0_v is not None:
                 del blm_s0a0_v
 
@@ -3679,7 +3674,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
 
-            if input_V:
+            if input_v:
                 blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
                 blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
                 spinmap_dict['s0a2']['maps'] += ScanStrategy._spinmaps_complex(
@@ -3714,14 +3709,14 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0'] = {}
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
-            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+            # spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
 
-            if beam_v and input_V:
+            if beam_v and input_v:
         
-                spinmap_dict['s0a0_v'] = {}
-                spinmap_dict['s0a0_v']['maps'] = ScanStrategy._spinmaps_real(
+                # spinmap_dict['s0a0_v'] = {}
+                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm[3], spin_values_unpol, nside)
-                spinmap_dict['s0a0_v']['s_vals'] = spin_values_unpol
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
         
             # Linearly polarized sky and beam.
             spinmap_dict['s2a4'] = {}
@@ -4083,6 +4078,10 @@ class ScanStrategy(Instrument, qp.QMap):
             flag = flag[np.newaxis]
         elif flag:
             flag = flag[np.newaxis]
+
+
+        print('in bin tod before from_tod global maps', self.proj[0]==self.proj[9])
+        print('in bin tod before from_tod global maps random check', self.proj[0]==self.proj[3])    
 
         self.from_tod(q_off, tod=tod, flag=flag)
 
