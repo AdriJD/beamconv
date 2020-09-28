@@ -1662,6 +1662,10 @@ class ScanStrategy(Instrument, qp.QMap):
         -----------------
         nside : int
             Nside of output (default : 256)
+        solve_vmap : boolean
+                    allocate memory to output I,Q,U,V
+                    maps if set to True and I,Q,U maps
+                    if set to False    
         '''
         vec_val, proj_val = 3, 6
         if solve_vmap:
@@ -1687,6 +1691,12 @@ class ScanStrategy(Instrument, qp.QMap):
             contains V polarization
         beam_a : <detector.Beam> object
             The A detector.
+        beam_v : bool
+                include the 4th blm component if 
+                it exists                    
+        input_v : bool
+                include the 4th alm component if 
+                it exists 
 
         Keyword arguments
         -----------------
@@ -1802,6 +1812,14 @@ class ScanStrategy(Instrument, qp.QMap):
         filter_4fhwp : bool
             Only use TOD modes modulated at 4 x the HWP frequency.
             Only allowed with spinning HWP. (default : False)
+        solve_vmap: bool
+            If True account for an output V map
+        input_v : bool
+                include the 4th alm component if 
+                it exists 
+        beam_v : bool
+                include the 4th alm component if 
+                it exists                 
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
@@ -3464,6 +3482,12 @@ class ScanStrategy(Instrument, qp.QMap):
         symmetric : bool
             If set, only use s=0 (intensity) and s=2 (lin. pol).
             `max_spin` kwarg is ignored (default : False)
+        input_v : bool
+            include the 4th alm component if 
+            it exists 
+        beam_v : bool
+            include the 4th blm component if 
+            it exists         
 
         Notes
         -----
@@ -3554,6 +3578,12 @@ class ScanStrategy(Instrument, qp.QMap):
             `max_spin` kwarg is ignored (default : False).
         hwp_mueller : (4, 4) array, None
             Unrotated Mueller matrix of half-wave plate.
+        input_v : bool
+            include the 4th alm component if 
+            it exists 
+        beam_v : bool
+            include the 4th blm component if 
+            it exists         
     
         returns
         -------
@@ -3747,6 +3777,9 @@ class ScanStrategy(Instrument, qp.QMap):
             See `tools.mueller2spin`.
         mode : str
             Pick between 's0a0', 's0a0_v', s2a4', 's0a2', 's0a2_v', 's2a2' or 's2a0'.
+        beam_v : bool
+            include the 4th blm component if 
+            it exists     
             
         Returns
         -------
@@ -4017,6 +4050,9 @@ class ScanStrategy(Instrument, qp.QMap):
             If False, do not use flagging. (default : None)
         init : bool
             Call `init_dest()` before binning. (default : True)
+        solve_vmap: bool
+            If True account for V maps when initializing the 
+            output destination map        
         add_to_global : bool
             Add local maps to maps allocated by `allocate_maps`.
             (default : True)
