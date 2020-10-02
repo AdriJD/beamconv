@@ -1692,11 +1692,9 @@ class ScanStrategy(Instrument, qp.QMap):
         beam_a : <detector.Beam> object
             The A detector.
         beam_v : bool
-                include the 4th blm component if 
-                it exists                    
+                include the 4th blm component                    
         input_v : bool
-                include the 4th alm component if 
-                it exists 
+                include the 4th alm component 
 
         Keyword arguments
         -----------------
@@ -1813,7 +1811,8 @@ class ScanStrategy(Instrument, qp.QMap):
             Only use TOD modes modulated at 4 x the HWP frequency.
             Only allowed with spinning HWP. (default : False)
         solve_vmap: bool
-            If True account for an output V map
+            If True account for an output V map when allocating 
+            memory and binning the TOD
         input_v : bool
                 include the 4th alm component if 
                 it exists 
@@ -3483,11 +3482,9 @@ class ScanStrategy(Instrument, qp.QMap):
             If set, only use s=0 (intensity) and s=2 (lin. pol).
             `max_spin` kwarg is ignored (default : False)
         input_v : bool
-            include the 4th alm component if 
-            it exists 
+            include the 4th alm component 
         beam_v : bool
-            include the 4th blm component if 
-            it exists         
+            include the 4th blm component 
 
         Notes
         -----
@@ -3778,8 +3775,8 @@ class ScanStrategy(Instrument, qp.QMap):
         mode : str
             Pick between 's0a0', 's0a0_v', s2a4', 's0a2', 's0a2_v', 's2a2' or 's2a0'.
         beam_v : bool
-            include the 4th blm component if 
-            it exists     
+            include the 4th blm component when constructing the spinmaps 
+              
             
         Returns
         -------
@@ -4027,6 +4024,65 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func_c
 
+    def get_mueller(self, beam, hwp_params=[1,0,-1,0], polang=0.0, instang=0.0, 
+                    poleff=1.0, hwp_ang=0.0):
+        '''
+        A function that returns the A/B/C/D functions for a given detector to be 
+        used for the map-making process
+        
+        Arguments
+        ---------
+
+        beam : <detector.Beam> object
+            The main beam of the detector. 
+
+        Keyword arguments
+        -----------------
+        
+        hwp_params: array of float values
+                [T,rho,c,s] for the given HWP model. Default to ideal 
+                parameters [1,0,-1,0]
+        polang: float
+                polarization angle of the detector
+        instang: float
+                instrument angle, default set to 0.0 
+        poleff: float
+                polarization efficiency for different
+                detectors. Default: 1.0   
+        hwp_ang: float
+                The hwp_ang. Default:
+        '''  
+
+        # get the angles and hwp parameters
+        hwp_ang = np.radians(self.hwp_dict['angle'])
+        polang = beam.polang
+        hwp_params = beam.hwp_mueller  
+        
+        # define the normalized hwp parameters
+        rho_t = hwp_params[0,1] / hwp_params[0,0]
+        c_t = hwp_params[2,2] / hwp_params[0,0]
+        s_t = hwp_params[3,2] / hwp_params[0,0]
+
+        # SPIDER_150 HWP parameters
+        # rho_t, c_t, s_t = 0.00447, -0.98056, 0.19618
+
+
+        # define A,B,C,D functions
+        A = 1 + poleff * rho_t * np.cos(2 * hwp_ang + 2 * polang)
+        B = (rho_t * np.cos(2 * instang + 2 * hwp_ang) + 
+            0.5 * (1 + c_t) * poleff * np.cos(2 * instang - 2 * polang) + 
+            0.5 * (1 - c_t) * poleff * np.cos(2 * instang + 4 * hwp_ang + 
+            2 * polang)) 
+        C = (rho_t * np.sin(2 * instang + 2 * hwp_ang) + \
+            0.5 * (1 + c_t) * poleff * np.sin(2 * instang - 2 * polang) + 
+            0.5 * (1 - c_t) * poleff * np.sin(2 * instang + 4 * hwp_ang + 
+            2 * polang))
+        D = s_t * poleff * np.sin(2 * hwp_ang + 2 * polang)  
+
+        self.mueller_params = np.asarray([A,B,C,D])  
+
+
+
     def bin_tod(self, beam, tod=None, flag=None, init=True, solve_vmap=False,
                 add_to_global=True, filter_4fhwp=False, **kwargs):
         '''
@@ -4062,12 +4118,15 @@ class ScanStrategy(Instrument, qp.QMap):
         kwargs : {chunk_opts}
         '''
         vpol = False
+        self.mueller_params = None
+        
         if solve_vmap:
             vpol=True
+            self.get_mueller(beam=beam)
 
     
         # HWP does not depend on particular detector.
-        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])     
 
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
 
@@ -4105,7 +4164,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Note that qpoint wants (,nsamples) shaped tod array.
         tod = tod[np.newaxis]
-        print('todshape',np.shape(tod))
 
         if flag is False:
             flag  = None
@@ -4115,11 +4173,8 @@ class ScanStrategy(Instrument, qp.QMap):
         elif flag:
             flag = flag[np.newaxis]
 
-
-        print('in bin tod before from_tod global maps', self.proj[0]==self.proj[9])
-        print('in bin tod before from_tod global maps random check', self.proj[0]==self.proj[3])    
-
-        self.from_tod(q_off, tod=tod, flag=flag)
+        print('self.mueller', self.mueller_params)
+        self.from_tod(q_off, tod=tod, flag=flag, mueller=self.mueller_params)
 
         if add_to_global:
             # Add local maps to global maps.
