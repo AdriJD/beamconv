@@ -1757,7 +1757,8 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, solve_vmap=False,
-            input_v=False, beam_v=False, **kwargs):
+            input_v=False, beam_v=False, det_nonidealities=False, 
+            **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1984,8 +1985,8 @@ class ScanStrategy(Instrument, qp.QMap):
                             tod_a = self.tod.copy()
                         elif binning:
                             self.bin_tod(beam_a, add_to_global=True, solve_vmap=solve_vmap,
-                                beam_v=beam_v,
-                                filter_4fhwp=filter_4fhwp, **subchunk)
+                                filter_4fhwp=filter_4fhwp, det_nonidealities=det_nonidealities, 
+                                **subchunk)
 
                     if beam_b and not beam_b.dead:
                         self._scan_detector(beam_b, interp=interp,
@@ -1998,8 +1999,8 @@ class ScanStrategy(Instrument, qp.QMap):
                             tod_b = self.tod
                         elif binning:
                             self.bin_tod(beam_b, add_to_global=True, solve_vmap=solve_vmap,
-                                beam_v=beam_v,
-                                filter_4fhwp=filter_4fhwp, **subchunk)
+                                filter_4fhwp=filter_4fhwp, det_nonidealities=det_nonidealities, 
+                                **subchunk)
 
                     if do_ctalk:
                         tools.cross_talk(tod_a, tod_b, ctalk=ctalk)
@@ -2012,11 +2013,11 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(beam_a, tod=tod_a, solve_vmap=solve_vmap,
                              add_to_global=True, filter_4fhwp=filter_4fhwp,
-                             beam_v=beam_v,
+                             det_nonidealities=det_nonidealities,
                              **subchunk)
                             self.bin_tod(beam_b, tod=tod_b, solve_vmap=solve_vmap,
                              add_to_global=True, filter_4fhwp=filter_4fhwp,
-                             beam_v=beam_v,
+                             det_nonidealities=det_nonidealities,
                              **subchunk)
 
     def _chunk2idx(self, **kwargs):
@@ -4057,6 +4058,9 @@ class ScanStrategy(Instrument, qp.QMap):
         hwp_ang = np.radians(self.hwp_dict['angle'])
         polang = beam.polang
         hwp_params = beam.hwp_mueller  
+
+        #try with
+        #polang = beam.polang_truth
         
         # define the normalized hwp parameters
         rho_t = hwp_params[0,1] / hwp_params[0,0]
@@ -4084,7 +4088,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
     def bin_tod(self, beam, tod=None, flag=None, init=True, solve_vmap=False,
-                add_to_global=True, filter_4fhwp=False, **kwargs):
+                add_to_global=True, filter_4fhwp=False, det_nonidealities=False,
+                **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -4121,9 +4126,8 @@ class ScanStrategy(Instrument, qp.QMap):
         self.mueller_params = None
         
         if solve_vmap:
-            vpol=True
-            self.get_mueller(beam=beam)
-
+            vpol = True
+            det_nonidealities = True
     
         # HWP does not depend on particular detector.
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])     
@@ -4173,7 +4177,9 @@ class ScanStrategy(Instrument, qp.QMap):
         elif flag:
             flag = flag[np.newaxis]
 
-        print('self.mueller', self.mueller_params)
+        if det_nonidealities:
+            self.get_mueller(beam=beam)
+
         self.from_tod(q_off, tod=tod, flag=flag, mueller=self.mueller_params)
 
         if add_to_global:
