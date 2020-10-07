@@ -2413,8 +2413,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return ctime
 
-    def satellite_scan(self, alpha=90., beta=0.,
-        alpha_period=182.5*24*60*60, beta_period=60., jitter_amp=0.0, return_all=False,
+    def satellite_scan(self, alpha=0., beta=90.,
+        alpha_period=60., beta_period=182.5*24*60*60, jitter_amp=0.0, return_all=False,
         **kwargs):
         '''
         A function to simulate satellite scanning strategy.
@@ -2451,7 +2451,7 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         See Wallis et al., 2017, MNRAS, 466, 425.
         '''
-
+        print('ab', alpha, beta)
         deg_per_day = 360.9863
         dt = 1 / float(self.fsamp)
         nsamp = self.ctime.size # ctime determines chunk size
@@ -3633,7 +3633,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if lmax_sky > lmax_beam:
             alm = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
             if input_v:
-                almV = tools.trunc_alm(almV, lmax_beam)
+                almV = tools.trunc_alm(alm[3], lmax_beam)
                 alm = [alm[0],alm[1],alm[2],almV]
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
