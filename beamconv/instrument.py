@@ -539,7 +539,7 @@ class Instrument(MPIBase):
 
                 beam_b = Beam(az=azs[i], el=els[i],
                               name=det_str+'B', polang=polang+90.,
-                              dead=dead or no_pairs, pol='B',
+                              dead=dead, pol='B',
                               idx=idx+1, **kwargs)    
                 
 
@@ -2413,8 +2413,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return ctime
 
-    def satellite_scan(self, alpha=0., beta=90.,
-        alpha_period=60., beta_period=182.5*24*60*60, jitter_amp=0.0, return_all=False,
+    def satellite_scan(self, alpha=50., beta=50.,
+        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
         **kwargs):
         '''
         A function to simulate satellite scanning strategy.
@@ -2451,7 +2451,6 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         See Wallis et al., 2017, MNRAS, 466, 425.
         '''
-        print('ab', alpha, beta)
         deg_per_day = 360.9863
         dt = 1 / float(self.fsamp)
         nsamp = self.ctime.size # ctime determines chunk size
@@ -3505,8 +3504,6 @@ class ScanStrategy(Instrument, qp.QMap):
         max_s = min(beam.mmax, max_spin)
         blm = beam.blm # main beam
 
-        print('in init_spinmaps', beam.hwp_mueller)
-
         # calculate spinmaps for main beam
         spinmap_dict = self._init_spinmaps(alm,
                     blm, max_s, nside_spin, symmetric=beam.symmetric,
@@ -3631,16 +3628,16 @@ class ScanStrategy(Instrument, qp.QMap):
         lmax_beam = hp.Alm.getlmax(blm[0].size)
 
         if lmax_sky > lmax_beam:
-            alm = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
+            alms = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
             if input_v:
                 almV = tools.trunc_alm(alm[3], lmax_beam)
-                alm = [alm[0],alm[1],alm[2],almV]
+                alm = [alms[0],alms[1],alms[2],almV]
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
-            blm = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
+            blms = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
             if beam_v:
                 blmV = tools.trunc_alm(blm[3], lmax_beam)
-                blm = [blm[0],blm[1],blm[2],blmV]
+                blm = [blms[0],blms[1],blms[2],blmV]
             lmax = lmax_sky
         else:
             lmax = lmax_sky
@@ -3661,8 +3658,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
-            print('in init_spinmaps mii=mvv', hwp_mueller[0,0]==hwp_mueller[3,3])
-            print('in init_spinmaps mii=mqq random test', hwp_mueller[0,0]==hwp_mueller[1,1])
             blm_s0a0_v = None
 
             # s0a0.
@@ -3678,7 +3673,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                                     beam_v=beam_v)
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm_s0a0_v, spin_values_unpol, nside)   
-                spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             
             del blm_s0a0
             if blm_s0a0_v is not None:
@@ -4055,9 +4050,11 @@ class ScanStrategy(Instrument, qp.QMap):
         '''  
 
         # get the angles and hwp parameters
-        hwp_ang = np.radians(self.hwp_dict['angle'])
+        hwp_ang = self.hwp_dict['angle']
         polang = beam.polang
         hwp_params = beam.hwp_mueller  
+        # instang = self.rot_dict['angle']
+ 
 
         #try with
         #polang = beam.polang_truth
@@ -4073,13 +4070,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # define A,B,C,D functions
         A = 1 + poleff * rho_t * np.cos(2 * hwp_ang + 2 * polang)
-        B = (rho_t * np.cos(2 * instang + 2 * hwp_ang) + 
-            0.5 * (1 + c_t) * poleff * np.cos(2 * instang - 2 * polang) + 
-            0.5 * (1 - c_t) * poleff * np.cos(2 * instang + 4 * hwp_ang + 
+        B = (rho_t * np.cos(2 * hwp_ang) + 
+            0.5 * (1 + c_t) * poleff * np.cos(2 * polang) +
+            0.5 * (1 - c_t) * poleff * np.cos(4 * hwp_ang + 
             2 * polang)) 
-        C = (rho_t * np.sin(2 * instang + 2 * hwp_ang) + \
-            0.5 * (1 + c_t) * poleff * np.sin(2 * instang - 2 * polang) + 
-            0.5 * (1 - c_t) * poleff * np.sin(2 * instang + 4 * hwp_ang + 
+        C = (rho_t * np.sin(2 * instang + 2 * hwp_ang) - 
+            0.5 * (1 + c_t) * poleff * np.sin(2 * polang) + 
+            0.5 * (1 - c_t) * poleff * np.sin(4 * hwp_ang + 
             2 * polang))
         D = s_t * poleff * np.sin(2 * hwp_ang + 2 * polang)  
 
