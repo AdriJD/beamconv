@@ -288,12 +288,16 @@ class Instrument(MPIBase):
             self.lat = None
             self.lon = None
 
+        elif location == 'planck':
+            self.lat = None
+            self.lon = None
+
         if lat:
             self.lat = lat
         if lon:
             self.lon = lon
 
-        if (location != 'space') and (not self.lat or not self.lon):
+        if (location not in ['space', 'planck']) and (not self.lat or not self.lon):
             raise ValueError('Specify location of telescope')
 
         self.beams = []
@@ -448,7 +452,7 @@ class Instrument(MPIBase):
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
-                           scatter=False, custom_lists=None, 
+                           scatter=False, custom_lists=None,
                            **kwargs):
         '''
         Create Beam objects for orthogonally polarized
@@ -474,9 +478,9 @@ class Instrument(MPIBase):
             (default : True)
         scatter : bool
             Scatter created pairs over ranks (default : False)
-        custom_lists: set lists of az and el positions for 
-                      the detectors on the focal plane 
-                      specified when running simulations     
+        custom_lists: set lists of az and el positions for
+                      the detectors on the focal plane
+                      specified when running simulations
         kwargs : {beam_opts}
 
         Notes
@@ -516,9 +520,9 @@ class Instrument(MPIBase):
             self.ndet = 2 * nrow * ncol # A and B detectors.
             idx = 0
 
-        beams=[]   
+        beams=[]
 
-        if custom_lists is not None: 
+        if custom_lists is not None:
             print('here!')
             azs = np.array(custom_lists[0])
             els = np.array(custom_lists[1])
@@ -533,7 +537,7 @@ class Instrument(MPIBase):
                               name=det_str+'A', polang=polang,
                               dead=False, pol='A', idx=idx,
                               **kwargs)
-                
+
                 if not det_pairs[i]:
                     dead = kwargs.pop('dead', True)
 
@@ -541,13 +545,13 @@ class Instrument(MPIBase):
                 beam_b = Beam(az=azs[i], el=els[i],
                               name=det_str+'B', polang=polang+90.,
                               dead=dead or no_pairs, pol='B',
-                              idx=idx+1, **kwargs)    
-                
+                              idx=idx+1, **kwargs)
+
 
                 beams.append([beam_a, beam_b])
-                idx += 2 
+                idx += 2
 
-        else:      
+        else:
             azs = np.linspace(-fov/2., fov/2., ncol)
             els = np.linspace(-fov/2., fov/2., nrow)
 
@@ -565,8 +569,8 @@ class Instrument(MPIBase):
                     beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                                   name=det_str+'B', polang=polang+90.,
                                   dead=dead or no_pairs, pol='B',
-                                  idx=idx+1, **kwargs)    
-                    
+                                  idx=idx+1, **kwargs)
+
 
                     beams.append([beam_a, beam_b])
                     idx += 2
@@ -2503,7 +2507,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def parse_schedule_file(self, schedule_file=None):
+    def parse_ces_schedule_file(self, schedule_file=None):
         '''
         Read a text file with standard input and generate arrays that can be
         circulated between
@@ -2556,7 +2560,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return np.arange(N), az0s, az1s, els, t0s, t1s
 
 
-    def partition_schedule_file(self, filename='', chunksize=None):
+    def partition_ces_schedule_file(self, filename='', chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
         of nsample / chunksize (final chunk can be
@@ -2582,7 +2586,7 @@ class ScanStrategy(Instrument, qp.QMap):
         done_chunking = False
         nsamp = self.nsamp
 
-        nces, az0s, az1s, els, t0s, t1s = self.parse_schedule_file(filename)
+        nces, az0s, az1s, els, t0s, t1s = self.parse_ces_schedule_file(filename)
         az0i, az1i, eli, t0i, t1i = [], [], [], [], []
 
         for i, (t0, t1) in enumerate(zip(t0s, t1s)):
@@ -2651,6 +2655,166 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return chunks
 
+    def parse_planck_schedule_file(self, filename='planck_scan_data',
+            ring1=300, ring2=400):
+        '''
+        Read a text file with standard input and generate arrays that can be
+        circulated between
+
+        Keyword arguments
+        -----------------
+        schedule_file : file path (string)
+
+        Returns
+        -------
+        nces : ndarray (int)
+            A monotonically increasing array of integers corresponding
+            to scan number
+        az0s : ndarray (float)
+            Lower limit on azimuthal range
+        az1s : ndarray (float)
+            Upper limit on azimuthal range
+        els : ndarray (float)
+            Boresight elevation value for the scan
+        t0s : ndarray (float)
+            Start times for each scan (unix time)
+        t1s : ndarray (float)
+            End times for each scan (unix time)
+        '''
+
+        # def mjd2ctime(mjd):
+
+        #     return (mjd - 40587.) * 86400.0
+
+        # if schedule_file is None:
+
+        #     ### Placeholder while we debug the rest of the code
+        #     t0s = mjd2ctime(np.array([58484.000694, 58484.056944, 58484.132639]))
+        #     t1s = mjd2ctime(np.array([58484.055556, 58484.131250, 58484.186806]))
+        #     az0s = np.array([214.98, 202.93, 215.67])
+        #     az1s = np.array([250.28, 249.60, 250.24])
+        #     els = np.array([53.09, 59.63, 52.40])
+
+        # else:
+
+        with open('{}.pkl'.format(filename), 'rb') as handle:
+            data = pickle.load(handle)
+
+        try:
+            ras = data['ras']
+            decs = data['decs']
+            rings = data['rings']
+            t0s = data['ctime']
+
+        except:
+            print('Unable to read file')
+            raise
+
+        return rings, ras, decs, t0s
+
+    def partition_planck_schedule_file(self, filename='planck_scan_data',
+            chunksize=None):
+        '''
+        Divide up the mission in equal-sized chunks
+        of nsample / chunksize (final chunk can be
+        smaller).
+
+        Keyword arguments
+        ---------
+        chunksize : interp
+            Chunk size in samples. If left None, use
+            full mission length (default : None)
+
+        Returns
+        -------
+        chunks : list of dicts
+            Dictionary with start, end indices and index of each
+            chunk.
+        '''
+
+        chunks = []
+        ctime_starts = []
+        chunknum = 0
+        samplenum = 0
+        done_chunking = False
+        nsamp = self.nsamp
+
+        rings, ras, decs, t0s = self.parse_planck_schedule_file(filename)
+
+        # if self.mpi_rank == 0:
+
+        #     print('Partitioning mission')
+        #     print(np.shape(ras))
+        #     print(np.shape(decs))
+        #     print(np.shape(rings))
+        #     print(np.shape(t0s))
+        #     print(rings)
+
+        ra0i, dec0i, t0i, t1i = [], [], [], []
+
+        for i, (ringi, t0, t1) in enumerate(zip(rings, t0s, t0s[1:])):
+
+            # if self.mpi_rank == 0:
+            #     print('Ring {}/{}'.format(ringi, len(rings)))
+
+            if done_chunking:
+                break
+
+            nsamp_full_ring = (t1 - t0) * self.fsamp
+            if not chunksize or chunksize >= nsamp_full_ring:
+                #print('Chunk larger than nsamp_full_ring')
+                chunksize2use = int(nsamp_full_ring)
+                nchunks = 1
+            else:
+                #print('nsamp_full_ring | chunksize')
+                #print('{} | {}'.format(nsamp_full_ring, chunksize))
+                chunksize2use = int(chunksize)
+                nchunks = int(np.ceil(nsamp_full_ring / float(chunksize2use)))
+
+            start = samplenum
+            tstart = t0
+            for cidx in range(nchunks):
+                end = start + chunksize2use
+                if cidx == nchunks-1:
+                    end =  start + nsamp_full_ring
+
+                chunks.append(dict(start=int(start), end=int(end),
+                    cidx=int(chunknum + cidx)))
+
+                ra0i.append(ras[i])
+                dec0i.append(decs[i])
+                t0i.append(t0)
+                t1i.append(t1)
+
+                ctime_starts.append(tstart)
+
+                start += chunksize2use
+                tstart += float(chunksize2use) / self.fsamp
+
+                if start >= nsamp:
+                    done_chunking=True
+                    break
+
+            if done_chunking:
+                # chunknum += nchunks
+                chunknum += cidx+1
+            else:
+                # chunknum += cidx+1
+                chunknum += nchunks
+
+            samplenum = end
+
+        self.chunks = chunks
+        self.ctime_starts = ctime_starts
+
+        # Assigning attributes that will be used by schedule_ctime and planck_scan
+        self.ras = ra0i
+        self.decs = dec0i
+        self.t0s = t0i
+        self.t1s = t1i
+
+        return chunks
+
     def schedule_ctime(self, **kwargs):
         '''
         A function to produce unix time (ctime) for a given chunk
@@ -2681,7 +2845,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def schedule_scan(self, scan_speed=2.5,
-            return_all=False, az_prf='triangle', **kwargs):
+        return_all=False, az_prf='triangle', **kwargs):
         '''
 
         Reads in a schedule file following a certain format and procuces
@@ -2797,6 +2961,142 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if return_all:
             return az, el, self.lon, self.lat, q_bore
+        else:
+            return q_bore
+
+    def planck_scan(self, ring_num=300, return_all=False, **kwargs):
+
+        '''
+
+        Creates a pointing stream that is consistent with the Planck
+        scan strategy. Uses a schedule file with great circle information
+        per ring to generate boresight pointing timeline.
+
+        Keyword arguments
+        -----------------
+        ring_num : int
+            The ring number
+
+        scan_speed : float [deg/s]
+            Scan speed in deg/s
+
+        Returns
+        -------
+        (az, el, lon, lat,) q_bore : array-like
+            Depending on return_all
+
+        '''
+
+        nsamp = self.ctime.size # ctime determines chunk size
+
+        # The idx to the last ring t0 before ctime[0]
+        idx_ring = kwargs.pop('cidx')
+
+        t0_ring = self.t0s[idx_ring]
+        t1_ring = self.t1s[idx_ring]
+        dt = self.ctime[0] - t0_ring
+
+        # idx = np.ceil(dt / self.fsamp)
+        ras = self.ras[idx_ring]
+        decs = self.decs[idx_ring]
+
+        # if self.mpi_rank == 0:
+        #     print(ras)
+        #     print(decs)
+        #     print(idx_ring)
+
+        npt = len(ras)
+
+        assert(len(ras) == len(decs)), 'ras and decs should have equal length'
+
+        # flag0 = np.zeros(el0.size, dtype=bool)
+
+        nsamp4ring = (t1_ring - t0_ring) * self.fsamp
+        nsamp_per_ring = int(60.0 * self.fsamp)
+        # phase = np.remainder(dt / float(self.fsamp), float(nsamp_per_period))
+        nmult = np.ceil(float(nsamp) / nsamp_per_ring)
+
+        t = np.linspace(t0_ring, t1_ring, nsamp4ring)
+        ra = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), ras)
+        dec = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), decs)
+
+        # import matplotlib
+        # matplotlib.use('Agg')
+        # import matplotlib.pyplot as plt
+
+
+        # plt.plot(t, ra)
+        # plt.savefig('rai.png')
+        # plt.close()
+
+        # plt.plot(np.linspace(0, 60, npt), ras)
+        # plt.savefig('ras.png')
+        # plt.close()
+
+        # plt.plot(t, dec)
+        # plt.savefig('deci.png')
+        # plt.close()
+
+        # plt.plot(np.linspace(0, 60, npt), decs)
+        # plt.savefig('decs.png')
+        # plt.close()
+
+        # raise
+
+        #ra = np.degrees(ra)
+        #dec = np.degrees(dec)
+
+
+        pa = np.zeros_like(ra)
+
+        if self.mpi:
+            # Calculate boresight quaternion in parallel
+            chunk_size = nsamp
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = divmod(chunk_size,
+                                        self.mpi_size)
+            sub_size += quot
+
+            if remainder:
+                # give first ranks one extra quaternion
+                sub_size[:int(remainder)] += 1
+
+            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            sub_end = sub_start + sub_size[self.mpi_rank]
+
+            q_bore = np.empty(chunk_size * 4, dtype=float)
+
+            # if self.mpi_rank == 0:
+            #     print(ra)
+            #     print(dec)
+            #     print(np.shape(ra))
+            #     print(np.shape(dec))
+            #     print(sub_start)
+            #     print(sub_end)
+
+            # calculate section of q_bore
+            q_boresub = self.radecpa2quat(ra[sub_start:sub_end],
+                                    dec[sub_start:sub_end],
+                                    pa[sub_start:sub_end])
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # for the flattened quat array
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+
+            # combine all sections on all ranks
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            q_bore = q_bore.reshape(chunk_size, 4)
+
+        else:
+            q_bore = self.radecpa2quat(ra, dec, pa)
+
+        self.flag = np.zeros(chunk_size, dtype=bool)
+
+        if return_all:
+            return ra, dec, pa, q_bore
         else:
             return q_bore
 
@@ -3187,13 +3487,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # Skip all other scanning.
             return
-        
+
         beam_type = 'main_beam' if not beam.ghost else 'ghosts'
         if beam_type == 'ghosts':
             spinmaps = self.spinmaps[beam_type][beam.ghost_idx]
         else:
             spinmaps = self.spinmaps[beam_type]
-        
+
         # Do some sanity checks on spinmaps.
         for conv_type in spinmaps:
             maps = spinmaps[conv_type]['maps']
@@ -3248,19 +3548,19 @@ class ScanStrategy(Instrument, qp.QMap):
         # NOTE for now we should be in this block even if we are using
         # a hwp_mueller matrix.
         tod_c = np.zeros(tod_size, dtype=np.complex128)
-        
+
         if interp:
             pix = (ra, dec)
-            
+
         # Check for HWP angle array.
         if not hasattr(self, 'hwp_ang'):
             hwp_ang = 0
         else:
             hwp_ang = self.hwp_ang
-       
+
         # Find out if old or new HWP behaviour is desired.
         if set(spinmaps.keys()) == set(['s0a0', 's2a4']):
-            # Old behaviour.            
+            # Old behaviour.
             self._scan_modulate_pa(tod_c, pix, pa,
                                    spinmaps['s2a4']['maps'],
                                    spinmaps['s2a4']['s_vals'],
@@ -3283,7 +3583,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s2a4']['maps'],
                                    spinmaps['s2a4']['s_vals'],
                                    reality=False, interp=interp)
-            
+
             # Modulate by HWP angle and polarization angle.
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             tod_c *= expm2
@@ -3293,7 +3593,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s0a2']['maps'],
                                    spinmaps['s0a2']['s_vals'],
                                    reality=False, interp=interp)
-            
+
             expm2 = np.exp(1j * (2 * hwp_ang + 2 * np.radians(polang)))
             tod_c_tmp *= expm2
             tod_c += tod_c_tmp
@@ -3303,18 +3603,18 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s2a2']['maps'],
                                    spinmaps['s2a2']['s_vals'],
                                    reality=False, interp=interp)
-            
+
             expm2 = np.exp(1j * (2 * hwp_ang))
             tod_c_tmp *= expm2
             tod_c += tod_c_tmp
             del tod_c_tmp
-            
+
             self._scan_modulate_pa(tod_c, pix, pa,
                                    spinmaps['s2a0']['maps'],
                                    spinmaps['s2a0']['s_vals'],
                                    reality=False, interp=interp)
-            
-            # Add unpolarized tod.                
+
+            # Add unpolarized tod.
             tod = np.real(tod_c) # Note, shares memory with tod_c.
             self._scan_modulate_pa(tod, pix, pa,
                                    spinmaps['s0a0']['maps'],
@@ -3388,23 +3688,23 @@ class ScanStrategy(Instrument, qp.QMap):
         if reality and s_vals.min() < 0:
             raise ValueError('Negative spin not allowed when reality '
                              'symmetry is used')
-        
+
         # Use recursion of exponent if spin values are spaced by 1.
         if np.array_equal(s_vals, np.arange(s_vals[0], s_vals[-1] + 1)):
             recursion = True
             expmipa = np.exp(-1j * pa) # Used for recursion
-            expmipas = np.exp(-1j * pa * s_vals[0]) 
+            expmipas = np.exp(-1j * pa * s_vals[0])
         else:
             recursion = False
 
         for sidx, spin in enumerate(s_vals):
 
             if recursion and sidx != 0:
-                # Already initialized for first spin.                
+                # Already initialized for first spin.
                 expmipas *= expmipa
             else:
                 expmipas = np.exp(-1j * pa * spin)
-                
+
             if interp:
                 ra, dec = pix
                 scan = hp.get_interp_val(maps[sidx], dec, ra)
@@ -3421,7 +3721,7 @@ class ScanStrategy(Instrument, qp.QMap):
                     scan *= 2
 
             tod += scan
-                                
+
 
     def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
                       symmetric=False):
@@ -3435,8 +3735,8 @@ class ScanStrategy(Instrument, qp.QMap):
             Sky alms (alm, almE, almB)
         beam : <detector.Beam> object
             If provided, create spinmaps for main beam and
-            all ghosts (if present). 
-        
+            all ghosts (if present).
+
         Keyword arguments
         -----------------
         max_spin : int, optional
@@ -3456,9 +3756,9 @@ class ScanStrategy(Instrument, qp.QMap):
             possible ghosts.
 
         The `ghost_idx` attribute decides whether ghosts have
-        distinct beams. See `Beam.__init__()`.                
+        distinct beams. See `Beam.__init__()`.
         '''
-        
+
         self.spinmaps = {'main_beam' : {},
                          'ghosts': []}
 
@@ -3510,7 +3810,7 @@ class ScanStrategy(Instrument, qp.QMap):
                        symmetric=False, hwp_mueller=None):
         '''
         Compute convolution of map with different spin modes
-        of the beam. 
+        of the beam.
 
         Arguments
         ---------
@@ -3530,7 +3830,7 @@ class ScanStrategy(Instrument, qp.QMap):
             `max_spin` kwarg is ignored (default : False).
         hwp_mueller : (4, 4) array, None
             Unrotated Mueller matrix of half-wave plate.
-    
+
         returns
         -------
         spinmap_dict : dict of dicts
@@ -3549,7 +3849,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Output.
         spinmap_dict = {}
-        
+
         # Check for nans in alms. E.g from a nan pixel in original maps.
         crash_a = False
         crash_b = False
@@ -3585,7 +3885,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spin_values_pol = np.arange(-max_spin, max_spin + 1)
 
         almE, almB = alm[1:]
-            
+
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
@@ -3597,61 +3897,61 @@ class ScanStrategy(Instrument, qp.QMap):
                 alm[0], blm_s0a0, spin_values_unpol, nside)
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
-            
+
             # s2a4.
             spinmap_dict['s2a4'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)            
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
-                almE, almB, blmE, blmB, spin_values_pol, nside)            
-            spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol
 
             # s0a2.
             spinmap_dict['s0a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
-                alm[0], alm[0] * 0, blmE, blmB, spin_values_pol, nside)            
-            spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
+                alm[0], alm[0] * 0, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s0a2']['s_vals'] = spin_values_pol
 
             # s2a2.
             spinmap_dict['s2a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2')
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)                                    
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
             spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
-            spinmap_dict['s2a2']['s_vals'] = spin_values_pol   
+            spinmap_dict['s2a2']['s_vals'] = spin_values_pol
 
             # s2a0.
             spinmap_dict['s2a0'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a0')
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)                                                
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
             spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
-            spinmap_dict['s2a0']['s_vals'] = spin_values_pol   
-            
+            spinmap_dict['s2a0']['s_vals'] = spin_values_pol
+
         else:
             # Old default behaviour.
             blmE, blmB = tools.spin2eb(blm[1], blm[2])
-            
-            # Unpolarized sky and beam.            
+
+            # Unpolarized sky and beam.
             spinmap_dict['s0a0'] = {}
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
-            
+
             # Linearly polarized sky and beam.
             spinmap_dict['s2a4'] = {}
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
-            spinmap_dict['s2a4']['s_vals'] = spin_values_pol   
-            
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol
+
         return spinmap_dict
 
     @staticmethod
     def blmxhwp(blm, hwp_spin, mode):
         '''
-        
+
         Arguments
         ---------
         blm : sequence of arrays
@@ -3661,7 +3961,7 @@ class ScanStrategy(Instrument, qp.QMap):
             See `tools.mueller2spin`.
         mode : str
             Pick between 's0a0', 's2a4', 's0a2', 's2a2' or 's2a0'.
-            
+
         Returns
         -------
         blmxhwp : array or tuple of arrays
@@ -3679,7 +3979,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Multiplying the two fields in real space, we
         effecitively convolve the two in harmonic space,
         this way we can use the blms and avoid going back
-        to real space.        
+        to real space.
         '''
 
         if mode == 's0a0':
@@ -3690,7 +3990,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # No V beam.
                 pass
             return blm_s0a0
-        
+
         elif mode == 's2a4':
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 4, eb=False)
             blmm2 *= hwp_spin[1,2]
@@ -3704,7 +4004,7 @@ class ScanStrategy(Instrument, qp.QMap):
             return blmm2, blmp2
 
         elif mode == 's2a2':
-            blmm2 = blm[0]            
+            blmm2 = blm[0]
             blmp2 = blmm2
             blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
             blmm2 *= hwp_spin[0,1] * np.sqrt(2)
@@ -3712,11 +4012,11 @@ class ScanStrategy(Instrument, qp.QMap):
             try:
                 blmm2_v = blm[3]
                 blmp2_v = blmm2_v
-                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
+                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)
                 blmm2_v *= hwp_spin[3,1] * np.sqrt(2)
-                blmp2_v *= hwp_spin[1,3] * np.sqrt(2)   
+                blmp2_v *= hwp_spin[1,3] * np.sqrt(2)
                 blmm2 += blmm2_v
-                blmp2 += blmp2_v                
+                blmp2 += blmp2_v
             except IndexError:
                 pass
             return blmm2, blmp2
@@ -3741,12 +4041,12 @@ class ScanStrategy(Instrument, qp.QMap):
             # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
             # For s2a2, unpol2pol for Bi, Bv
             # For s2a0, no shift required.
-            
+
     @staticmethod
     def _spinmaps_real(alm, blm, spin_values, nside):
         '''
-        Return spinmaps for a "real-valued" spin field with 
-        spin-weighted spherical harmonic coefficients given 
+        Return spinmaps for a "real-valued" spin field with
+        spin-weighted spherical harmonic coefficients given
         by sflm = alm * bls.
 
         Arguments
@@ -3774,7 +4074,7 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         We only consider non-negative spin values here because for
         a real spin field sf we have sf^* = -sf, or, in terms of the
-        harmonic coefficients: sflm^* = -sfl-m (-1)^(s+m). We can 
+        harmonic coefficients: sflm^* = -sfl-m (-1)^(s+m). We can
         therefore reconstruct the fields for negative s if needed.
         '''
 
@@ -3819,7 +4119,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def _spinmaps_complex(almE, almB, blmE, blmB, spin_values, nside):
         '''
         Return spinmaps for a complex spin field with harmonic
-        coefficients given by sflm = 2alm -2bls. Where 2alm and 
+        coefficients given by sflm = 2alm -2bls. Where 2alm and
         -2bls are the harmonic coefficients of two (real) spin
         fields.
 
@@ -3844,8 +4144,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Notes
         -----
-        A complex spin field is one that does not obey the reality 
-        condition for spin fields: sf^* != -sf, or, equivalently, 
+        A complex spin field is one that does not obey the reality
+        condition for spin fields: sf^* != -sf, or, equivalently,
         sflm^* != -sfl-m (-1)^(s+m). This means that the spin 0 output
         map is complex and that the s < 0 output maps are not generally
         given by the complex conjugate of the s > 0 maps.
@@ -3866,17 +4166,17 @@ class ScanStrategy(Instrument, qp.QMap):
             if s >= 0:
 
                 ps_flm_p, ps_flm_m = tools.spin2eb(
-                    hp.almxfl(almm2, np.conj(bellm2) * (-1) ** abs(s)),                    
+                    hp.almxfl(almm2, np.conj(bellm2) * (-1) ** abs(s)),
                     hp.almxfl(almp2, bellm2),
                     spin = abs(s))
-                
+
             if s <= 0:
 
                 ms_flm_p, ms_flm_m = tools.spin2eb(
-                    hp.almxfl(almp2, np.conj(bellp2) * (-1) ** abs(s)),                    
+                    hp.almxfl(almp2, np.conj(bellp2) * (-1) ** abs(s)),
                     hp.almxfl(almm2, bellp2),
                     spin = abs(s))
-                
+
             if s == 0:
                 # The (-1) factor for spin 0 is explained in HEALPix doc.
                 spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),

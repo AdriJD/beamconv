@@ -108,3 +108,75 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
         plot_func = zwargs.pop('plot_func', plot_func)
         plot_map(map2plot, write_dir, tag+'_'+pol, plot_func=plot_func,
                 min=minn, max=maxx,  tight=tight, **zwargs)
+
+def plot_iquv(maps, write_dir, tag, plot_func=hp.mollview,
+    sym_limits=None,
+    symmetric = True,
+    mask=None, tight=False, dpi=150, udicts=None, **kwargs):
+    '''
+    Plot a (set of I, Q, U, V) map(s) and write each
+    to disk.
+
+    Arguments
+    ---------
+    sym_limits : scalar, array-like
+        Colorbar limits assuming symemtric limits.
+        If array-like, assume limits for I, Q, U, V
+        maps
+    tight : bool
+        call savefig with bbox_inches = 'tight'
+    write_dir : str
+        Path to directory where map is saved
+    tag : str
+        Filename = <tag>_I/Q/U/V.png
+    udicts : list
+        a list of three dictionaries that are passed to i, q, and u map plotting
+        tools respectively, these are combined with kwargs which are shared
+        for all three plots
+        default: None
+
+    Keyword arguments
+    -----------------
+    kwargs : {plot_map_opts, healpy_plt_opts}
+    '''
+
+    dim1 = np.shape(maps)[0]
+    if dim1 != 4:
+        raise ValueError('maps should be a sequence of four arrays')
+
+    if not hasattr(sym_limits, "__iter__"):
+        sym_limits = [sym_limits] * 4
+
+    if udicts is None:
+        udicts = [{}, {}, {}]
+
+    for pidx, (pol, udict) in enumerate(zip(['I', 'Q', 'U', 'V'], udicts)):
+
+        if symmetric:
+            maxx = kwargs.pop('max', sym_limits[pidx])
+            try:
+                minn = -maxx
+            except TypeError:
+                minn = maxx
+
+        else:
+            maxx = kwargs.pop('max', 0)
+            minn = kwargs.pop('min', -60)
+
+        zwargs = kwargs.copy()
+        zwargs.update(udict)
+
+        map2plot = np.copy(maps[pidx])
+
+        if not symmetric and (minn is None):
+            minn = round_sig(np.nanmin(map2plot), sig=1)
+
+        if not symmetric and (maxx is None):
+            maxx = round_sig(np.nanmax(map2plot), sig=1)
+
+        if mask is not None:
+            map2plot[~mask] = np.nan
+
+        plot_func = zwargs.pop('plot_func', plot_func)
+        plot_map(map2plot, write_dir, tag+'_'+pol, plot_func=plot_func,
+                min=minn, max=maxx,  tight=tight, **zwargs)
