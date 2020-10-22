@@ -3279,6 +3279,7 @@ class ScanStrategy(Instrument, qp.QMap):
         pa *= -1
         pa += np.pi
 
+
         # NOTE for now we should be in this block even if we are using
         # a hwp_mueller matrix.
         tod_c = np.zeros(tod_size, dtype=np.complex128)
@@ -3300,8 +3301,14 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s2a4']['s_vals'],
                                    reality=False, interp=interp)
 
+            # if np.degrees(hwp_ang)<180:
+            #     instang = 2*hwp_ang
+            # else:
+            #     instang= 2*(hwp_ang-np.radians(180))
             # Modulate by HWP angle and polarization angle.
-            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * np.radians(instang)))
+            #expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * instang))
+
             tod_c *= expm2
             tod = np.real(tod_c) # Note, shares memory with tod_c.
 
@@ -3320,6 +3327,7 @@ class ScanStrategy(Instrument, qp.QMap):
             
             # Modulate by HWP angle and polarization angle.
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+            #expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * instang))
             tod_c *= expm2
 
             tod_c_tmp = np.zeros_like(tod_c)
@@ -3667,7 +3675,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
 
-            print('solve_map and input_v',input_v)
+            # print('solve_map and input_v',input_v)
             if input_v:
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v', 
                                                     beam_v=beam_v)
@@ -3793,7 +3801,7 @@ class ScanStrategy(Instrument, qp.QMap):
         this way we can use the blms and avoid going back
         to real space.        
         '''
-   
+
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
             if beam_v:
@@ -4050,19 +4058,27 @@ class ScanStrategy(Instrument, qp.QMap):
         '''  
 
         # get the angles and hwp parameters
-        hwp_ang = self.hwp_dict['angle']
-        polang = beam.polang
+        hwp_ang = np.radians(self.hwp_dict['angle'])
+        polang = np.radians(beam.polang_truth)
         hwp_params = beam.hwp_mueller  
-        # instang = self.rot_dict['angle']
- 
+        # if np.degrees(hwp_ang)<180:
+        #     instang = 2*hwp_ang
+        # else:
+        #     instang= 2*(hwp_ang-np.radians(180))
+        # instang = np.radians(self.rot_dict['angle'])
 
         #try with
         #polang = beam.polang_truth
+        # try with 
+        #polang = self.az
         
         # define the normalized hwp parameters
         rho_t = hwp_params[0,1] / hwp_params[0,0]
         c_t = hwp_params[2,2] / hwp_params[0,0]
-        s_t = hwp_params[3,2] / hwp_params[0,0]
+        # s_t = hwp_params[3,2] / hwp_params[0,0]
+        s_t = 1
+        # rho_t = 0
+        # c_t = -1
 
         # SPIDER_150 HWP parameters
         # rho_t, c_t, s_t = 0.00447, -0.98056, 0.19618
@@ -4070,13 +4086,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # define A,B,C,D functions
         A = 1 + poleff * rho_t * np.cos(2 * hwp_ang + 2 * polang)
-        B = (rho_t * np.cos(2 * hwp_ang) + 
-            0.5 * (1 + c_t) * poleff * np.cos(2 * polang) +
-            0.5 * (1 - c_t) * poleff * np.cos(4 * hwp_ang + 
+        B = (rho_t * np.cos(2 * hwp_ang + 2 * instang) + 
+            0.5 * (1 + c_t) * poleff * np.cos(2 * instang - 2 * polang) +
+            0.5 * (1 - c_t) * poleff * np.cos(2 * instang + 4 * hwp_ang + 
             2 * polang)) 
-        C = (rho_t * np.sin(2 * instang + 2 * hwp_ang) - 
-            0.5 * (1 + c_t) * poleff * np.sin(2 * polang) + 
-            0.5 * (1 - c_t) * poleff * np.sin(4 * hwp_ang + 
+        C = (rho_t * np.sin(2 * hwp_ang + 2 * instang) + 
+            0.5 * (1 + c_t) * poleff * np.sin(2 * instang - 2 * polang) + 
+            0.5 * (1 - c_t) * poleff * np.sin(2 * instang + 4 * hwp_ang + 
             2 * polang))
         D = s_t * poleff * np.sin(2 * hwp_ang + 2 * polang)  
 
@@ -4177,7 +4193,17 @@ class ScanStrategy(Instrument, qp.QMap):
         if det_nonidealities:
             self.get_mueller(beam=beam)
 
+        # print('A,B,C,D', self.mueller_params)
         self.from_tod(q_off, tod=tod, flag=flag, mueller=self.mueller_params)
+
+        jn=True
+        if jn and solve_vmap:
+            D=self.mueller_params[3]
+            self.depo['proj'][3] = D*self.depo['proj'][0]
+            self.depo['proj'][6] = D*self.depo['proj'][1]
+            self.depo['proj'][8] = D*self.depo['proj'][2]
+            self.depo['proj'][9] = D**2*self.depo['proj'][0]
+            self.depo['vec'][3] = D*self.depo['vec'][0]
 
         if add_to_global:
             # Add local maps to global maps.
