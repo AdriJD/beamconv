@@ -47,8 +47,8 @@ def round_sig(x, sig=1):
 def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
-    Plot a (set of I, Q, U) map(s) and write each
-    to disk.
+    Plot a (set of I, Q, U) map(s) and write each to disk.
+    If a list with 4 maps is provided, assume the fourth component is Stokes V.
 
     Arguments
     ---------
@@ -73,17 +73,24 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     kwargs : {plot_map_opts, healpy_plt_opts}
     '''
 
+
     dim1 = np.shape(maps)[0]
-    if dim1 != 3:
-        raise ValueError('maps should be a sequence of three arrays')
+    stokes = ['I', 'Q', 'U']
+
+    if dim1 != 3 and dim1 !=4:
+        raise ValueError('maps should be a sequence of three or four arrays')
 
     if not hasattr(sym_limits, "__iter__"):
         sym_limits = [sym_limits] * 3
 
-    if udicts is None:
+    if udicts is None and dim1 == 3:
         udicts = [{}, {}, {}]
+    elif udicts is None and dim1 == 4:
+        udicts = [{}, {}, {}, {}]
+        stokes.append('V')
 
-    for pidx, (pol, udict) in enumerate(zip(['I', 'Q', 'U'], udicts)):
+
+    for pidx, (st, udict) in enumerate(zip(stokes, udicts)):
 
         maxx = kwargs.pop('max', sym_limits[pidx])
         try:
@@ -106,5 +113,5 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
             map2plot[~mask] = np.nan
 
         plot_func = zwargs.pop('plot_func', plot_func)
-        plot_map(map2plot, write_dir, tag+'_'+pol, plot_func=plot_func,
+        plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
                 min=minn, max=maxx,  tight=tight, **zwargs)
