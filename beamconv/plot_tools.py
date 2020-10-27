@@ -45,7 +45,8 @@ def round_sig(x, sig=1):
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
 def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
-    sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
+    sym_limits=None, limits=None, symmetric=True,
+    mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each to disk.
     If a list with 4 maps is provided, assume the fourth component is Stokes V.
@@ -80,8 +81,12 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     if dim1 != 3 and dim1 !=4:
         raise ValueError('maps should be a sequence of three or four arrays')
 
-    if not hasattr(sym_limits, "__iter__"):
+    limits_set = False
+    if not hasattr(sym_limits, "__iter__") and symmetric:
         sym_limits = [sym_limits] * 3
+        limits_set = True
+    elif not symmetric and hasattr(limits, "__iter__"):
+        limits_set = True
 
     if udicts is None and dim1 == 3:
         udicts = [{}, {}, {}]
@@ -89,14 +94,24 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
         udicts = [{}, {}, {}, {}]
         stokes.append('V')
 
-
+    maxx, minn = None, None
     for pidx, (st, udict) in enumerate(zip(stokes, udicts)):
 
-        maxx = kwargs.pop('max', sym_limits[pidx])
-        try:
-            minn = -maxx
-        except TypeError:
-            minn = maxx
+        if limits_set and symmetric:
+            minn = -sym_limits[pidx]
+            maxx = sym_limits[pidx]
+        elif limits_set:
+            minn = limits[pidx][0]
+            maxx = limits[pidx][1]
+        elif (maxx is None) and (minn is None):
+            maxx = kwargs.pop('max', 10)
+            minn = kwargs.pop('min', -10)
+
+            # else:
+            #     try:
+            #         minn = -maxx
+            #     except TypeError:
+            #         minn = maxx
 
         zwargs = kwargs.copy()
         zwargs.update(udict)
