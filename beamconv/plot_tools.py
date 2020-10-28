@@ -107,18 +107,6 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
             maxx = kwargs.pop('max', 10)
             minn = kwargs.pop('min', -10)
 
-
-        print(limits_set)
-        print(symmetric)
-        print('minn/maxx')
-        print(minn)
-        print(maxx)
-            # else:
-            #     try:
-            #         minn = -maxx
-            #     except TypeError:
-            #         minn = maxx
-
         zwargs = kwargs.copy()
         zwargs.update(udict)
 
