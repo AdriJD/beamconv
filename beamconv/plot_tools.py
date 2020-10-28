@@ -85,7 +85,7 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     if not hasattr(sym_limits, "__iter__") and symmetric:
         sym_limits = [sym_limits] * 3
         limits_set = True
-    elif not symmetric and hasattr(limits, "__iter__"):
+    elif hasattr(sym_limits, "__iter__") or hasattr(limits, "__iter__"):
         limits_set = True
 
     if udicts is None and dim1 == 3:
@@ -107,6 +107,12 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
             maxx = kwargs.pop('max', 10)
             minn = kwargs.pop('min', -10)
 
+
+        print(limits_set)
+        print(symmetric)
+        print('minn/maxx')
+        print(minn)
+        print(maxx)
             # else:
             #     try:
             #         minn = -maxx
