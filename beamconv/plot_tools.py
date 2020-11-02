@@ -6,7 +6,7 @@ import numpy as np
 import healpy as hp
 
 def plot_map(map_arr, write_dir, tag,
-             plot_func=hp.mollview, tight=False, dpi=150, **kwargs):
+    plot_func=hp.mollview, tight=False, dpi=150, transparent=False, **kwargs):
     '''
     Plot map using one of the healpy plotting
     functions and write to disk.
@@ -37,7 +37,8 @@ def plot_map(map_arr, write_dir, tag,
         filterwarnings('ignore', category=RuntimeWarning)
 
         plot_func(map_arr, **kwargs)
-        plt.savefig(filename+'.png', bbox_inches=bbox_inches, dpi=dpi)
+        plt.savefig(filename+'.png', bbox_inches=bbox_inches, dpi=dpi,
+            transparent=transparent)
     plt.close()
 
 def round_sig(x, sig=1):
@@ -123,4 +124,4 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
 
         plot_func = zwargs.pop('plot_func', plot_func)
         plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
-                min=minn, max=maxx,  tight=tight, **zwargs)
+                min=minn, max=maxx, tight=tight, **zwargs)
