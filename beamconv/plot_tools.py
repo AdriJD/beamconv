@@ -46,7 +46,7 @@ def round_sig(x, sig=1):
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
 def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
-    sym_limits=None, limits=None, symmetric=True,
+    no_limits=False, limits=None, sym_limits=None, symmetric=False,
     mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each to disk.
@@ -83,11 +83,36 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
         raise ValueError('maps should be a sequence of three or four arrays')
 
     limits_set = False
-    if not hasattr(sym_limits, "__iter__") and symmetric:
+    if hasattr(sym_limits, "__iter__"):
+        symmetric, limits_set = True, True
+
+
+    print('limits')
+    print(sym_limits)
+    print(limits)
+    # if (not hasattr(sym_limits, "__iter__")) and symmetric:
+    #     print('a')
+
+    #     if symmetric:
+    #         sym_limits = [sym_limits] * 3
+    #     limits_set = True
+
+    # elif hasattr(sym_limits, "__iter__") or hasattr(limits, "__iter__"):
+    #     print('b')
+    #     limits_set = True
+
+    if hasattr(limits, "__iter__"):
+        print('a')
+        limits_set = True
+        symmetric = False
+
+    elif (not hasattr(sym_limits, "__iter__")) and sym_limits is not None and symmetric:
+        print('b')
         sym_limits = [sym_limits] * 3
         limits_set = True
-    elif hasattr(sym_limits, "__iter__") or hasattr(limits, "__iter__"):
-        limits_set = True
+
+    print(limits_set)
+    print(sym_limits)
 
     if udicts is None and dim1 == 3:
         udicts = [{}, {}, {}]
@@ -99,9 +124,11 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     for pidx, (st, udict) in enumerate(zip(stokes, udicts)):
 
         if limits_set and symmetric:
+            print(sym_limits)
             minn = -sym_limits[pidx]
             maxx = sym_limits[pidx]
         elif limits_set:
+            print(sym_limits)
             minn = limits[pidx][0]
             maxx = limits[pidx][1]
         elif (maxx is None) and (minn is None):
@@ -123,5 +150,9 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
             map2plot[~mask] = np.nan
 
         plot_func = zwargs.pop('plot_func', plot_func)
-        plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
+        if no_limits:
+            plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
+                tight=tight, **zwargs)
+        else:
+            plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
                 min=minn, max=maxx, tight=tight, **zwargs)
