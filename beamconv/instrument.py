@@ -1821,7 +1821,10 @@ class ScanStrategy(Instrument, qp.QMap):
                 it exists 
         beam_v : bool
                 include the 4th alm component if 
-                it exists                 
+                it exists   
+        only_vbeam: bool
+                set blmI,blmQ,blmU to zero if True 
+                must be used with beam_v             
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
@@ -3669,6 +3672,9 @@ class ScanStrategy(Instrument, qp.QMap):
             include the 4th alm component 
         beam_v : bool
             include the 4th blm component 
+        only_vbeam: bool
+            set blmI,blmQ,blmU to zero if True
+            Must be used with beam_v    
 
         Notes
         -----
@@ -3764,7 +3770,9 @@ class ScanStrategy(Instrument, qp.QMap):
             it exists 
         beam_v : bool
             include the 4th blm component if 
-            it exists         
+            it exists  
+        only_vbeam: bool
+            set blmI,blmQ,blmU to zero if True           
     
         returns
         -------
@@ -4268,15 +4276,14 @@ class ScanStrategy(Instrument, qp.QMap):
         # define the normalized hwp parameters
         rho_t = hwp_params[0,1] / hwp_params[0,0]
         c_t = hwp_params[2,2] / hwp_params[0,0]
-        # s_t = hwp_params[3,2] / hwp_params[0,0]
+        s_t = hwp_params[3,2] / hwp_params[0,0]
 
         # try with perfect circular coupling
-        s_t = 1
+        # s_t = 1
 
         # SPIDER_150 HWP parameters
         # rho_t, c_t, s_t = 0.00447, -0.98056, 0.19618
-        instang = 0
-        polang = 0
+     
         # define A,B,C,D functions
         A = 1 + poleff * rho_t * np.cos(2 * hwp_ang + 2 * polang)
         B = (rho_t * np.cos(2 * hwp_ang + 2 * instang) + 
