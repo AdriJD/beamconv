@@ -1677,7 +1677,8 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None, 
-                    beam_v=False, input_v=False, **kwargs):
+                    beam_v=False, input_v=False, 
+                    only_vbeam=False, **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
         for a detector pair and all its ghosts.
@@ -1746,7 +1747,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                 beam_a.ghosts[0])
 
         self.init_spinmaps(alm, beam_a, input_v=input_v, 
-                            beam_v=beam_v, **kwargs)
+                            beam_v=beam_v, only_vbeam=only_vbeam,
+                            **kwargs)
 
         # free blm attributes
         beam_a.delete_blm(del_ghosts_blm=True)
@@ -1758,7 +1760,7 @@ class ScanStrategy(Instrument, qp.QMap):
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, solve_vmap=False,
             input_v=False, beam_v=False, det_nonidealities=False, 
-            **kwargs):
+            jn=False, only_vbeam=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1890,6 +1892,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             beam_a = beampair[0]
             beam_b = beampair[1]
+            
 
             if verbose == 2:
                 print('\n[rank {:03d}]: working on: \n{} \n{}'.format(
@@ -1910,7 +1913,7 @@ class ScanStrategy(Instrument, qp.QMap):
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
                                 input_v=input_v, beam_v=beam_v,
-                                **spinmaps_opts)
+                                only_vbeam=only_vbeam, **spinmaps_opts)
 
             if not hasattr(self, 'chunks'):
                 # Assume no chunking is needed and use full mission length.
@@ -1934,7 +1937,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Note, not used if memmap is not initialized.
                 if bidx > 0:
                     ces_opts.update(dict(use_precomputed=True))
-
+                
                 self.constant_el_scan(**ces_opts)
 
                 # If needed, allocate arrays for data.
@@ -1986,7 +1989,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         elif binning:
                             self.bin_tod(beam_a, add_to_global=True, solve_vmap=solve_vmap,
                                 filter_4fhwp=filter_4fhwp, det_nonidealities=det_nonidealities, 
-                                **subchunk)
+                                jn=jn, **subchunk)
 
                     if beam_b and not beam_b.dead:
                         self._scan_detector(beam_b, interp=interp,
@@ -2000,7 +2003,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         elif binning:
                             self.bin_tod(beam_b, add_to_global=True, solve_vmap=solve_vmap,
                                 filter_4fhwp=filter_4fhwp, det_nonidealities=det_nonidealities, 
-                                **subchunk)
+                                jn=jn, **subchunk)
 
                     if do_ctalk:
                         tools.cross_talk(tod_a, tod_b, ctalk=ctalk)
@@ -2013,11 +2016,11 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(beam_a, tod=tod_a, solve_vmap=solve_vmap,
                              add_to_global=True, filter_4fhwp=filter_4fhwp,
-                             det_nonidealities=det_nonidealities,
+                             det_nonidealities=det_nonidealities, jn=jn,
                              **subchunk)
                             self.bin_tod(beam_b, tod=tod_b, solve_vmap=solve_vmap,
                              add_to_global=True, filter_4fhwp=filter_4fhwp,
-                             det_nonidealities=det_nonidealities,
+                             det_nonidealities=det_nonidealities, jn=jn,
                              **subchunk)
 
     def _chunk2idx(self, **kwargs):
@@ -2239,6 +2242,14 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, **q_bore_kwargs)
 
             return
+
+        # if self.planck_pointing:
+        #     self.ctime = self.t1s-self.t0s 
+        #     az,el = self.radec2azel(self.ras,self.decs)
+        #     self.q_bore = self.azel2bore(az,el)
+
+        #     return
+
 
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
@@ -2589,6 +2600,161 @@ class ScanStrategy(Instrument, qp.QMap):
         N = len(az0s)
 
         return np.arange(N), az0s, az1s, els, t0s, t1s
+
+
+    def parse_planck_pointing(self, schedule_file=None):
+        '''
+        Read a text file with standard input and generate arrays that can be
+        circulated between
+
+        Keyword arguments
+        -----------------
+        schedule_file : file path (string)
+
+        Returns
+        -------
+        nces : ndarray (int)
+            A monotonically increasing array of integers corresponding
+            to scan number
+        ra : ndarray (float)
+            Ra range values
+        dec : ndarray (float)
+            Declination range values
+        pa : ndarray (float)
+            Position angles for the scan
+        t0s : ndarray (float)
+            Start times for each scan (unix time)
+        t1s : ndarray (float)
+            End times for each scan (unix time)
+        '''
+
+        if schedule_file is None:
+
+            raise ValueError("You haven't specified pointing options")
+
+        else:
+
+            try:
+                from astropy.io import fits
+            except:
+                raise ImportError('Module astropy was not found')    
+
+            hdul = fits.open(schedule_file)
+            vel = hdul[4].data
+            pos = hdul[5].data
+
+            
+            x_vel,y_vel,z_vel = vel['X_VEL'], vel['Y_VEL'], vel['Z_VEL'] 
+            x_pos,y_pos,z_pos = pos['X_POS'], pos['Y_POS'], pos['Z_POS'] 
+
+            vec_pos = np.array([x_pos, y_pos, z_pos]).T
+            ra, dec = hp.vec2ang(vec_pos,latlon=False)
+            vec_vel = np.array([x_vel, y_vel, z_vel]).T
+            vel_ra, vel_dec = hp.vec2ang(vec_vel)
+
+            az, el = self.radec2azel(ra, dec)
+            az_speed, el_speed = self.radec2azel(vel_ra, vel_dec)
+
+
+        N = len(theta)
+
+        return np.arange(N), ra, dec, pa, t0s, t1s
+
+
+    def partition_planck_pointing(self, filename='', chunksize=None):
+        '''
+        Divide up the mission in equal-sized chunks
+        of nsample / chunksize (final chunk can be
+        smaller).
+
+        Keyword arguments
+        ---------
+        chunksize : interp
+            Chunk size in samples. If left None, use
+            full mission length (default : None)
+
+        Returns
+        -------
+        chunks : list of dicts
+            Dictionary with start, end indices and index of each
+            chunk.
+        '''
+
+        chunks = []
+        ctime_starts = []
+        chunknum = 0
+        samplenum = 0
+        done_chunking = False
+        nsamp = self.nsamp
+
+        nces, ras, decs, pas, t0s, t1s = self.parse_schedule_file(filename)
+        ra_i, dec_i, pa_i, t0i, t1i = [], [], [], [], []
+
+        for i, (t0, t1) in enumerate(zip(t0s, t1s)):
+            print('CES {}/{}'.format(i, len(t0s)))
+            print('Chunksize = {}'.format(chunksize))
+
+            if done_chunking:
+                break
+
+            nsamp_full_ces = (t1 - t0) * self.fsamp
+            if not chunksize or chunksize >= nsamp_full_ces:
+                print('Chunk larger than nsamp_full_ces')
+                chunksize2use = int(nsamp_full_ces)
+                nchunks = 1
+            else:
+                print('nsamp_full_ces | chunksize')
+                print('{} | {}'.format(nsamp_full_ces, chunksize))
+                chunksize2use = int(chunksize)
+                nchunks = int(np.ceil(nsamp_full_ces / float(chunksize2use)))
+
+            start = samplenum
+            tstart = t0
+            for cidx in range(nchunks):
+                end = start + chunksize2use
+                if cidx == nchunks-1:
+                    end =  start + nsamp_full_ces
+
+                chunks.append(dict(start=int(start), end=int(end),
+                    cidx=int(chunknum + cidx)))
+
+                az0i.append(ra_i[i])
+                az1i.append(dec_i[i])
+                eli.append(pa_i[i])
+                t0i.append(t0s[i])
+                t1i.append(t1s[i])
+
+                ctime_starts.append(tstart)
+
+                start += chunksize2use
+                tstart += float(chunksize2use) / self.fsamp
+
+                if start >= nsamp:
+                    done_chunking=True
+                    break
+
+            if done_chunking:
+                # chunknum += nchunks
+                chunknum += cidx+1
+            else:
+                # chunknum += cidx+1
+                chunknum += nchunks
+
+            samplenum = end
+
+        self.chunks = chunks
+        self.ctime_starts = ctime_starts
+
+        # Assigning attributes that will be used by schedule_ctime and
+        # schedule_scan
+        self.ras = ra_i
+        self.decs = dec_i
+        self.pas = pa_i
+        self.t0s = t0i
+        self.t1s = t1i
+
+
+        return chunks    
 
 
     def partition_schedule_file(self, filename='', chunksize=None):
@@ -2991,6 +3157,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pix'] = pix
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
+
     def _scan_detector(self, beam, interp=False, save_tod=False,
         save_point=False, skip_scan=False, **kwargs):
         '''
@@ -3200,6 +3367,8 @@ class ScanStrategy(Instrument, qp.QMap):
         el_off = beam.el
         polang = beam.polang_truth # True polang for scanning.
         q_off = self.det_offset(az_off, el_off, 0)
+        if not beam.ghost:
+            beam.q_off_azel = q_off
 
         # Rotate offset given rot_dict. We rotate the centroid
         # around the boresight. It's q_bore * q_rot * q_off.
@@ -3273,13 +3442,22 @@ class ScanStrategy(Instrument, qp.QMap):
             # Expose pixel indices for test centroid.
             self.pix = pix
 
+        # if planck_pointing:
+        #     self.partition_planck_file()
+        #     pix = self.radec2pix(ra=self.ras, dec=self.decs, nside=self.nside_out)
+        #     pa = self.pas   
+        #     az, el = self.radec2azel()
+        #     q_bore = self.azel2bore()
+        #     if not beam.ghost:
+        #         beam.q_off = q_off
+
         np.radians(pa, out=pa)
 
         # We convert from healpix convention to IAU convention...
         pa *= -1
         pa += np.pi
 
-
+        self.pa = pa
         # NOTE for now we should be in this block even if we are using
         # a hwp_mueller matrix.
         tod_c = np.zeros(tod_size, dtype=np.complex128)
@@ -3301,12 +3479,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s2a4']['s_vals'],
                                    reality=False, interp=interp)
 
-            # if np.degrees(hwp_ang)<180:
-            #     instang = 2*hwp_ang
-            # else:
-            #     instang= 2*(hwp_ang-np.radians(180))
-            # Modulate by HWP angle and polarization angle.
-            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * np.radians(instang)))
+
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
             #expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * instang))
 
             tod_c *= expm2
@@ -3317,6 +3491,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s0a0']['maps'],
                                    spinmaps['s0a0']['s_vals'],
                                    reality=True, interp=interp)
+            # print('tod', tod[np.where(tod!=0)])
 
         else:
             # New behaviour.
@@ -3467,7 +3642,8 @@ class ScanStrategy(Instrument, qp.QMap):
                                 
 
     def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
-                      symmetric=False, input_v=False, beam_v=False):
+                      symmetric=False, input_v=False, beam_v=False,
+                      only_vbeam=False):
         '''
         Compute appropriate spinmaps for beam and
         all its ghosts.
@@ -3511,12 +3687,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
         max_s = min(beam.mmax, max_spin)
         blm = beam.blm # main beam
-
         # calculate spinmaps for main beam
+        # print('blmv in init spinmaps', blm[3][np.where(blm[3])])
+
         spinmap_dict = self._init_spinmaps(alm,
                     blm, max_s, nside_spin, symmetric=beam.symmetric,
                     hwp_mueller=beam.hwp_mueller, input_v=input_v,
-                    beam_v=beam_v)
+                    beam_v=beam_v,only_vbeam=only_vbeam)
 
         # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
         # s refers to spin value under psi, a to spin value under HWP rot.
@@ -3550,7 +3727,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 spinmap_dict = self._init_spinmaps(alm,
                             blm, max_s, nside_spin, symmetric=ghost.symmetric,
                             hwp_mueller=ghost.hwp_mueller,
-                            input_v=input_v, beam_v=beam_v)
+                            input_v=input_v, beam_v=beam_v,
+                            only_vbeam=only_vbeam)
                 self.spinmaps['ghosts'][u] = spinmap_dict
 
      
@@ -3558,7 +3736,7 @@ class ScanStrategy(Instrument, qp.QMap):
     @staticmethod
     def _init_spinmaps(alm, blm, max_spin, nside,
                        symmetric=False, hwp_mueller=None,
-                       input_v=False, beam_v=False):
+                       input_v=False, beam_v=False, only_vbeam=False):
         '''
         Compute convolution of map with different spin modes
         of the beam. 
@@ -3603,7 +3781,6 @@ class ScanStrategy(Instrument, qp.QMap):
         Uses min value of max_spin and the mmax of blm as azimuthal
         band-limit.
         '''
-
         # Output.
         spinmap_dict = {}
         
@@ -3611,14 +3788,12 @@ class ScanStrategy(Instrument, qp.QMap):
         crash_a = False
         crash_b = False
         i = 0
-        
         if np.shape(alm)[0] != 4 and input_v:
             raise ValueError("There is no V sky component") 
         
         if np.shape(blm)[0] != 4 and beam_v:
             raise ValueError("There is no V beam component")
                  
- 
         # break the condition 
         while i < np.shape(alm)[0] and not crash_a:
             crash_a = ~np.isfinite(np.sum(alm[i][:]))
@@ -3626,7 +3801,6 @@ class ScanStrategy(Instrument, qp.QMap):
         while i < np.shape(blm)[0] and not crash_b:
             crash_b = ~np.isfinite(np.sum(blm[i][:]))  
             i +=1
-
         if crash_a or crash_b:
             name = 'alm' if crash_a else 'blm'
             raise ValueError('{}[{}] contains nan/inf.'.format(name, i-1))
@@ -3634,22 +3808,27 @@ class ScanStrategy(Instrument, qp.QMap):
         # Match up bandlimits beam and sky.
         lmax_sky = hp.Alm.getlmax(alm[0].size)
         lmax_beam = hp.Alm.getlmax(blm[0].size)
-
         if lmax_sky > lmax_beam:
+            # print('case1')
             alms = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
             if input_v:
                 almV = tools.trunc_alm(alm[3], lmax_beam)
                 alm = [alms[0],alms[1],alms[2],almV]
+            else:
+                alm = [alms[0],alms[1],alms[2]]    
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
+            # print('case2')
             blms = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
             if beam_v:
-                blmV = tools.trunc_alm(blm[3], lmax_beam)
+                blmV = tools.trunc_alm(blm[3], lmax_sky)
                 blm = [blms[0],blms[1],blms[2],blmV]
+            else:
+                blm = [blms[0],blms[1],blms[2]]    
             lmax = lmax_sky
         else:
+            # print('case3')
             lmax = lmax_sky
-
         if symmetric:
             spin_values_unpol = np.array([0], dtype=int)
             spin_values_pol = np.array([2], dtype=int)
@@ -3662,7 +3841,19 @@ class ScanStrategy(Instrument, qp.QMap):
         almE = alm[1]
         almB = alm[2]
 
-            
+        if only_vbeam:
+
+            blm_copy = (blm[0].copy(), blm[1].copy(), blm[2].copy(), blm[3].copy())
+            blm_copy[0][:] *= 0
+            blm_copy[1][:] *= 0
+            blm_copy[2][:] *= 0 
+            blm = blm_copy
+        
+        # print('blmI',blm[0][np.where(blm[0]!=0)])
+        # print('blmQ',blm[1][np.where(blm[1]!=0)])
+        # print('blmU',blm[2][np.where(blm[2]!=0)])
+        # print('blmV',blm[3][np.where(blm[3]!=0)])
+
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
@@ -3743,10 +3934,10 @@ class ScanStrategy(Instrument, qp.QMap):
             # spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
 
             if beam_v and input_v:
-        
                 # spinmap_dict['s0a0_v'] = {}
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm[3], spin_values_unpol, nside)
+                
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
         
             # Linearly polarized sky and beam.
@@ -3762,7 +3953,6 @@ class ScanStrategy(Instrument, qp.QMap):
             # spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
             #     alm[3], blm[3],  spin_values_circ, nside) 
     
-            
         return spinmap_dict
 
     @staticmethod
@@ -3801,7 +3991,6 @@ class ScanStrategy(Instrument, qp.QMap):
         this way we can use the blms and avoid going back
         to real space.        
         '''
-
         if mode == 's0a0':
             blm_s0a0 = blm[0] * hwp_spin[0,0]
             if beam_v:
@@ -3825,8 +4014,11 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)
             blmm2 *= hwp_spin[0,2]
             blmp2 *= hwp_spin[2,0]
+            blmm2 *= hwp_spin[0,2] * np.sqrt(2)
+            blmp2 *= hwp_spin[2,0] * np.sqrt(2)
             return blmm2, blmp2
 
+        # does this mode need * sqrt(2) ?
         elif mode == 's0a2_v':
             blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
             blmm2_v *= hwp_spin[3,2]
@@ -3839,14 +4031,18 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
             blmm2 *= hwp_spin[0,1]
             blmp2 *= hwp_spin[1,0]
+            blmm2 *= hwp_spin[0,1] * np.sqrt(2)
+            blmp2 *= hwp_spin[1,0] * np.sqrt(2)
             if beam_v:
                 blmm2_v = blm[3]
                 blmp2_v = blmm2_v
                 blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
                 blmm2_v *= hwp_spin[3,1]
                 blmp2_v *= hwp_spin[1,3]                
+                blmm2_v *= hwp_spin[3,1] * np.sqrt(2)
+                blmp2_v *= hwp_spin[1,3] * np.sqrt(2)   
                 blmm2 += blmm2_v
-                blmp2 += blmp2_v                
+                blmp2 += blmp2_v               
         
             return blmm2, blmp2
 
@@ -4059,31 +4255,28 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # get the angles and hwp parameters
         hwp_ang = np.radians(self.hwp_dict['angle'])
-        polang = np.radians(beam.polang_truth)
-        hwp_params = beam.hwp_mueller  
-        # if np.degrees(hwp_ang)<180:
-        #     instang = 2*hwp_ang
-        # else:
-        #     instang= 2*(hwp_ang-np.radians(180))
-        # instang = np.radians(self.rot_dict['angle'])
+        # polang = np.radians(beam.polang)
+        
+        try:
+            hwp_params = beam.hwp_mueller  
+        except ValueError:
+            hwp_params = np.asarray([1,0,0,0],[0,1,0,0],
+                                    [0,0,-1,0],[0,0,0,-1])
+            pass
 
-        #try with
-        #polang = beam.polang_truth
-        # try with 
-        #polang = self.az
         
         # define the normalized hwp parameters
         rho_t = hwp_params[0,1] / hwp_params[0,0]
         c_t = hwp_params[2,2] / hwp_params[0,0]
         # s_t = hwp_params[3,2] / hwp_params[0,0]
+
+        # try with perfect circular coupling
         s_t = 1
-        # rho_t = 0
-        # c_t = -1
 
         # SPIDER_150 HWP parameters
         # rho_t, c_t, s_t = 0.00447, -0.98056, 0.19618
-
-
+        instang = 0
+        polang = 0
         # define A,B,C,D functions
         A = 1 + poleff * rho_t * np.cos(2 * hwp_ang + 2 * polang)
         B = (rho_t * np.cos(2 * hwp_ang + 2 * instang) + 
@@ -4102,7 +4295,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def bin_tod(self, beam, tod=None, flag=None, init=True, solve_vmap=False,
                 add_to_global=True, filter_4fhwp=False, det_nonidealities=False,
-                **kwargs):
+                jn=False,**kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -4136,11 +4329,10 @@ class ScanStrategy(Instrument, qp.QMap):
         kwargs : {chunk_opts}
         '''
         vpol = False
-        self.mueller_params = None
+        self.mueller_params = np.array([1,1,0,1])
         
         if solve_vmap:
             vpol = True
-            det_nonidealities = True
     
         # HWP does not depend on particular detector.
         q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])     
@@ -4149,18 +4341,20 @@ class ScanStrategy(Instrument, qp.QMap):
 
         self.init_point(q_bore=self.q_bore[qidx_start:qidx_end],
                         ctime=self.ctime[qidx_start:qidx_end],
-                        q_hwp=q_hwp)
+                        q_hwp=None)
+
 
         # Use q_off quat with polang (and instr. ang) included.
         polang = beam.polang # Possibly offset polang for binning.
 
         # Get detector offset quaternion that includes boresight rotation.
-        q_off = beam.q_off
 
+        q_off = beam.q_off
         # Add polang to q_off as first rotation. Note minus sign.
         polang = -np.radians(polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
+
 
         if init:
             self.init_dest(nside=self.nside_out, pol=True, vpol=vpol, reset=True)
@@ -4196,7 +4390,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # print('A,B,C,D', self.mueller_params)
         self.from_tod(q_off, tod=tod, flag=flag, mueller=self.mueller_params)
 
-        jn=True
+
         if jn and solve_vmap:
             D=self.mueller_params[3]
             self.depo['proj'][3] = D*self.depo['proj'][0]
@@ -4249,10 +4443,14 @@ class ScanStrategy(Instrument, qp.QMap):
         #     method='exact'    
 
         # Solve map on root process.
+
         if self.mpi_rank == 0:
             # Suppress warnings from numpy linalg.
             with catch_warnings(record=True) as w:
                 filterwarnings('ignore', category=RuntimeWarning)
+
+                # print('in solve_for_map vec',vec[:,755908])
+                # print('in solve_for_map proj',proj[:,755908])
 
                 maps = self.solve_map(vec=vec, proj=proj,
                                       copy=True, fill=fill)
