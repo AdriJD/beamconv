@@ -162,8 +162,6 @@ class HWP(object):
         vartheta : float
             Incidence angle on HWP in radians
         '''
-        print('Mueller matrix in compute_mueller=',tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
-            rotation=0., reflected=False))
         return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
             rotation=0., reflected=False))
 
