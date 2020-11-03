@@ -86,33 +86,13 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     if hasattr(sym_limits, "__iter__"):
         symmetric, limits_set = True, True
 
-
-    print('limits')
-    print(sym_limits)
-    print(limits)
-    # if (not hasattr(sym_limits, "__iter__")) and symmetric:
-    #     print('a')
-
-    #     if symmetric:
-    #         sym_limits = [sym_limits] * 3
-    #     limits_set = True
-
-    # elif hasattr(sym_limits, "__iter__") or hasattr(limits, "__iter__"):
-    #     print('b')
-    #     limits_set = True
-
     if hasattr(limits, "__iter__"):
-        print('a')
         limits_set = True
         symmetric = False
 
     elif (not hasattr(sym_limits, "__iter__")) and sym_limits is not None and symmetric:
-        print('b')
         sym_limits = [sym_limits] * 3
         limits_set = True
-
-    print(limits_set)
-    print(sym_limits)
 
     if udicts is None and dim1 == 3:
         udicts = [{}, {}, {}]
@@ -124,11 +104,9 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     for pidx, (st, udict) in enumerate(zip(stokes, udicts)):
 
         if limits_set and symmetric:
-            print(sym_limits)
             minn = -sym_limits[pidx]
             maxx = sym_limits[pidx]
         elif limits_set:
-            print(sym_limits)
             minn = limits[pidx][0]
             maxx = limits[pidx][1]
         elif (maxx is None) and (minn is None):
