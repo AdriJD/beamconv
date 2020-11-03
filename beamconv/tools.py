@@ -351,10 +351,10 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
         blmm2 *= expsig2
         blmp2 *= expsig2
 
-    # hack to run test_scan_strategy.py with V beam
-    # ********* erase later and create a proper V beam ***********
+    # create a fake Gaussian blmV for testing purposes
+    blmV = blm
 
-    return blm, blmm2, blmp2
+    return blm, blmm2, blmp2, blmV
 
 def get_pol_beam(blm_q, blm_u, **kwargs):
     '''
