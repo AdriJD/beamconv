@@ -556,7 +556,6 @@ class Beam(object):
                 blm *= self.amplitude
 
             # Create spin \pm 2 components
-            print('we have a problem')
             self.blm = tools.get_copol_blm(blm, **kwargs)
 
     def create_ghost(self, tag='ghost', **kwargs):
@@ -729,8 +728,6 @@ class Beam(object):
             self.hwp.stack_builder(thicknesses=thicknesses,
                 indices=indices, losses=losses, angles=angles)
 
-        print('mueller in set_hwp_mueller=',self.hwp.compute_mueller(freq=self.sensitive_freq,
-                vartheta=np.radians(self.el)))
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
                 vartheta=np.radians(self.el))
 
