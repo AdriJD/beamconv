@@ -4348,7 +4348,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         self.init_point(q_bore=self.q_bore[qidx_start:qidx_end],
                         ctime=self.ctime[qidx_start:qidx_end],
-                        q_hwp=None)
+                        q_hwp=q_hwp)
 
 
         # Use q_off quat with polang (and instr. ang) included.
