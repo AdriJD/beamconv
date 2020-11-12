@@ -519,7 +519,6 @@ class Instrument(MPIBase):
         beams=[]   
 
         if custom_lists is not None: 
-            print('here!')
             azs = np.array(custom_lists[0])
             els = np.array(custom_lists[1])
             det_pairs = np.array(custom_lists[2])
