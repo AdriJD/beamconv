@@ -4309,7 +4309,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
         if init:
-            self.init_dest(nside=self.nside_out, pol=True, vpol=vpol, reset=True)
+            self.init_dest(nside=self.nside_out, pol=True, vpol=False, reset=True)
 
         q_off = q_off[np.newaxis]
 
