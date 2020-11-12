@@ -3983,8 +3983,8 @@ class ScanStrategy(Instrument, qp.QMap):
         # does this mode need * sqrt(2) ?
         elif mode == 's0a2_v':
             blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
-            blmm2_v *= hwp_spin[3,2]
-            blmp2_v *= hwp_spin[2,3]
+            blmm2_v *= hwp_spin[3,2] * np.sqrt(2)
+            blmp2_v *= hwp_spin[2,3] * np.sqrt(2)
             return blmm2_v, blmp2_v
 
         elif mode == 's2a2':
