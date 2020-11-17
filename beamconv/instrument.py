@@ -448,8 +448,7 @@ class Instrument(MPIBase):
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
                            no_pairs=False, combine=True,
-                           scatter=False, custom_lists=None, 
-                           **kwargs):
+                           scatter=False, **kwargs):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
@@ -473,10 +472,7 @@ class Instrument(MPIBase):
             beams with them
             (default : True)
         scatter : bool
-            Scatter created pairs over ranks (default : False)
-        custom_lists: set lists of az and el positions for 
-                      the detectors on the focal plane 
-                      specified when running simulations     
+            Scatter created pairs over ranks (default : False)   
         kwargs : {beam_opts}
 
         Notes
@@ -517,58 +513,29 @@ class Instrument(MPIBase):
             idx = 0
 
         beams=[]   
+   
+        azs = np.linspace(-fov/2., fov/2., ncol)
+        els = np.linspace(-fov/2., fov/2., nrow)
 
-        if custom_lists is not None: 
-            azs = np.array(custom_lists[0])
-            els = np.array(custom_lists[1])
-            det_pairs = np.array(custom_lists[2])
 
-            for i in range(azs.size):
+        for az_idx in range(azs.size):
+            for el_idx in range(els.size):
 
-                det_str = 'r{:03d}c{:03d}'.format(i, i)
-                dead = kwargs.pop('dead', False)
+                det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
 
-                beam_a = Beam(az=azs[i], el=els[i],
+                beam_a = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'A', polang=polang,
-                              dead=False, pol='A', idx=idx,
+                              dead=dead, pol='A', idx=idx,
                               **kwargs)
-                
-                if not det_pairs[i]:
-                    dead = kwargs.pop('dead', True)
 
-
-                beam_b = Beam(az=azs[i], el=els[i],
+                beam_b = Beam(az=azs[az_idx], el=els[el_idx],
                               name=det_str+'B', polang=polang+90.,
-                              dead=dead, pol='B',
+                              dead=dead or no_pairs, pol='B',
                               idx=idx+1, **kwargs)    
                 
 
                 beams.append([beam_a, beam_b])
-                idx += 2 
-
-        else:      
-            azs = np.linspace(-fov/2., fov/2., ncol)
-            els = np.linspace(-fov/2., fov/2., nrow)
-
-
-            for az_idx in range(azs.size):
-                for el_idx in range(els.size):
-
-                    det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
-
-                    beam_a = Beam(az=azs[az_idx], el=els[el_idx],
-                                  name=det_str+'A', polang=polang,
-                                  dead=dead, pol='A', idx=idx,
-                                  **kwargs)
-
-                    beam_b = Beam(az=azs[az_idx], el=els[el_idx],
-                                  name=det_str+'B', polang=polang+90.,
-                                  dead=dead or no_pairs, pol='B',
-                                  idx=idx+1, **kwargs)    
-                    
-
-                    beams.append([beam_a, beam_b])
-                    idx += 2
+                idx += 2
 
         if scatter:
             # If MPI, distribute beams over ranks.
@@ -1807,7 +1774,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 include the 4th alm component if 
                 it exists 
         beam_v : bool
-                include the 4th alm component if 
+                include the 4th blm component if 
                 it exists               
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
@@ -2224,13 +2191,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
 
-        # if self.planck_pointing:
-        #     self.ctime = self.t1s-self.t0s 
-        #     az,el = self.radec2azel(self.ras,self.decs)
-        #     self.q_bore = self.azel2bore(az,el)
-
-        #     return
-
 
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
@@ -2581,161 +2541,6 @@ class ScanStrategy(Instrument, qp.QMap):
         N = len(az0s)
 
         return np.arange(N), az0s, az1s, els, t0s, t1s
-
-
-    def parse_planck_pointing(self, schedule_file=None):
-        '''
-        Read a text file with standard input and generate arrays that can be
-        circulated between
-
-        Keyword arguments
-        -----------------
-        schedule_file : file path (string)
-
-        Returns
-        -------
-        nces : ndarray (int)
-            A monotonically increasing array of integers corresponding
-            to scan number
-        ra : ndarray (float)
-            Ra range values
-        dec : ndarray (float)
-            Declination range values
-        pa : ndarray (float)
-            Position angles for the scan
-        t0s : ndarray (float)
-            Start times for each scan (unix time)
-        t1s : ndarray (float)
-            End times for each scan (unix time)
-        '''
-
-        if schedule_file is None:
-
-            raise ValueError("You haven't specified pointing options")
-
-        else:
-
-            try:
-                from astropy.io import fits
-            except:
-                raise ImportError('Module astropy was not found')    
-
-            hdul = fits.open(schedule_file)
-            vel = hdul[4].data
-            pos = hdul[5].data
-
-            
-            x_vel,y_vel,z_vel = vel['X_VEL'], vel['Y_VEL'], vel['Z_VEL'] 
-            x_pos,y_pos,z_pos = pos['X_POS'], pos['Y_POS'], pos['Z_POS'] 
-
-            vec_pos = np.array([x_pos, y_pos, z_pos]).T
-            ra, dec = hp.vec2ang(vec_pos,latlon=False)
-            vec_vel = np.array([x_vel, y_vel, z_vel]).T
-            vel_ra, vel_dec = hp.vec2ang(vec_vel)
-
-            az, el = self.radec2azel(ra, dec)
-            az_speed, el_speed = self.radec2azel(vel_ra, vel_dec)
-
-
-        N = len(theta)
-
-        return np.arange(N), ra, dec, pa, t0s, t1s
-
-
-    def partition_planck_pointing(self, filename='', chunksize=None):
-        '''
-        Divide up the mission in equal-sized chunks
-        of nsample / chunksize (final chunk can be
-        smaller).
-
-        Keyword arguments
-        ---------
-        chunksize : interp
-            Chunk size in samples. If left None, use
-            full mission length (default : None)
-
-        Returns
-        -------
-        chunks : list of dicts
-            Dictionary with start, end indices and index of each
-            chunk.
-        '''
-
-        chunks = []
-        ctime_starts = []
-        chunknum = 0
-        samplenum = 0
-        done_chunking = False
-        nsamp = self.nsamp
-
-        nces, ras, decs, pas, t0s, t1s = self.parse_schedule_file(filename)
-        ra_i, dec_i, pa_i, t0i, t1i = [], [], [], [], []
-
-        for i, (t0, t1) in enumerate(zip(t0s, t1s)):
-            print('CES {}/{}'.format(i, len(t0s)))
-            print('Chunksize = {}'.format(chunksize))
-
-            if done_chunking:
-                break
-
-            nsamp_full_ces = (t1 - t0) * self.fsamp
-            if not chunksize or chunksize >= nsamp_full_ces:
-                print('Chunk larger than nsamp_full_ces')
-                chunksize2use = int(nsamp_full_ces)
-                nchunks = 1
-            else:
-                print('nsamp_full_ces | chunksize')
-                print('{} | {}'.format(nsamp_full_ces, chunksize))
-                chunksize2use = int(chunksize)
-                nchunks = int(np.ceil(nsamp_full_ces / float(chunksize2use)))
-
-            start = samplenum
-            tstart = t0
-            for cidx in range(nchunks):
-                end = start + chunksize2use
-                if cidx == nchunks-1:
-                    end =  start + nsamp_full_ces
-
-                chunks.append(dict(start=int(start), end=int(end),
-                    cidx=int(chunknum + cidx)))
-
-                az0i.append(ra_i[i])
-                az1i.append(dec_i[i])
-                eli.append(pa_i[i])
-                t0i.append(t0s[i])
-                t1i.append(t1s[i])
-
-                ctime_starts.append(tstart)
-
-                start += chunksize2use
-                tstart += float(chunksize2use) / self.fsamp
-
-                if start >= nsamp:
-                    done_chunking=True
-                    break
-
-            if done_chunking:
-                # chunknum += nchunks
-                chunknum += cidx+1
-            else:
-                # chunknum += cidx+1
-                chunknum += nchunks
-
-            samplenum = end
-
-        self.chunks = chunks
-        self.ctime_starts = ctime_starts
-
-        # Assigning attributes that will be used by schedule_ctime and
-        # schedule_scan
-        self.ras = ra_i
-        self.decs = dec_i
-        self.pas = pa_i
-        self.t0s = t0i
-        self.t1s = t1i
-
-
-        return chunks    
 
 
     def partition_schedule_file(self, filename='', chunksize=None):
@@ -3348,8 +3153,6 @@ class ScanStrategy(Instrument, qp.QMap):
         el_off = beam.el
         polang = beam.polang_truth # True polang for scanning.
         q_off = self.det_offset(az_off, el_off, 0)
-        if not beam.ghost:
-            beam.q_off_azel = q_off
 
         # Rotate offset given rot_dict. We rotate the centroid
         # around the boresight. It's q_bore * q_rot * q_off.
@@ -3423,22 +3226,12 @@ class ScanStrategy(Instrument, qp.QMap):
             # Expose pixel indices for test centroid.
             self.pix = pix
 
-        # if planck_pointing:
-        #     self.partition_planck_file()
-        #     pix = self.radec2pix(ra=self.ras, dec=self.decs, nside=self.nside_out)
-        #     pa = self.pas   
-        #     az, el = self.radec2azel()
-        #     q_bore = self.azel2bore()
-        #     if not beam.ghost:
-        #         beam.q_off = q_off
-
         np.radians(pa, out=pa)
 
         # We convert from healpix convention to IAU convention...
         pa *= -1
         pa += np.pi
 
-        self.pa = pa
         # NOTE for now we should be in this block even if we are using
         # a hwp_mueller matrix.
         tod_c = np.zeros(tod_size, dtype=np.complex128)
@@ -3462,7 +3255,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            #expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * instang))
 
             tod_c *= expm2
             tod = np.real(tod_c) # Note, shares memory with tod_c.
@@ -3482,7 +3274,6 @@ class ScanStrategy(Instrument, qp.QMap):
             
             # Modulate by HWP angle and polarization angle.
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-            #expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang) + 2 * instang))
             tod_c *= expm2
 
             tod_c_tmp = np.zeros_like(tod_c)
@@ -3820,7 +3611,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
-            blm_s0a0_v = None
 
             # s0a0.
             spinmap_dict['s0a0'] = {}
@@ -3833,12 +3623,12 @@ class ScanStrategy(Instrument, qp.QMap):
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v', 
                                                     beam_v=beam_v)
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
-                    alm[3], blm_s0a0_v, spin_values_unpol, nside)   
-            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
-            
-            del blm_s0a0
-            if blm_s0a0_v is not None:
+                    alm[3], blm_s0a0_v, spin_values_unpol, nside) 
                 del blm_s0a0_v
+                      
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+            del blm_s0a0
+  
 
             # s2a4.
             spinmap_dict['s2a4'] = {}
@@ -3851,18 +3641,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # s0a2.
             spinmap_dict['s0a2'] = {}
-            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2', 
-                                                beam_v=beam_v)
-            # Switch, for new datamodel.
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
             blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
-                almE, almB, blmE, blmB, spin_values_pol, nside)
-
+                alm[0], alm[0] * 0, blmE, blmB, spin_values_pol, nside)            
+ 
             if input_v:
                 blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
                 blmE, blmB = tools.spin2eb(blmp2, blmm2)                        
-                spinmap_dict['s0a2']['maps'] += ScanStrategy._spinmaps_complex(
-                    almE, almB, blmE, blmB, spin_values_pol, nside)
+                spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
+                    alm[3], alm[3] * 0, blmE, blmB, spin_values_pol, nside)           
             spinmap_dict['s0a2']['s_vals'] = spin_values_pol   
 
             # s2a2.
@@ -3893,7 +3681,6 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0'] = {}
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm[0], spin_values_unpol, nside)
-            # spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
 
             if beam_v and input_v:
                 # spinmap_dict['s0a0_v'] = {}
@@ -3908,12 +3695,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol  
 
-            # Linearly and circularly polarized sky and beam
-            ##### update this part ???!!!
      
-            # spinmap_dict['s2a2'] = []
-            # spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_real(
-            #     alm[3], blm[3],  spin_values_circ, nside) 
     
         return spinmap_dict
 
@@ -3974,13 +3756,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif mode == 's0a2':
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)
-            blmm2 *= hwp_spin[0,2]
-            blmp2 *= hwp_spin[2,0]
             blmm2 *= hwp_spin[0,2] * np.sqrt(2)
             blmp2 *= hwp_spin[2,0] * np.sqrt(2)
             return blmm2, blmp2
 
-        # does this mode need * sqrt(2) ?
         elif mode == 's0a2_v':
             blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
             blmm2_v *= hwp_spin[3,2] * np.sqrt(2)
@@ -3991,16 +3770,12 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2 = blm[0]            
             blmp2 = blmm2
             blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
-            blmm2 *= hwp_spin[0,1]
-            blmp2 *= hwp_spin[1,0]
             blmm2 *= hwp_spin[0,1] * np.sqrt(2)
             blmp2 *= hwp_spin[1,0] * np.sqrt(2)
             if beam_v:
                 blmm2_v = blm[3]
                 blmp2_v = blmm2_v
-                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                
-                blmm2_v *= hwp_spin[3,1]
-                blmp2_v *= hwp_spin[1,3]                
+                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)                             
                 blmm2_v *= hwp_spin[3,1] * np.sqrt(2)
                 blmp2_v *= hwp_spin[1,3] * np.sqrt(2)   
                 blmm2 += blmm2_v
@@ -4186,72 +3961,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return func_c
 
-    def get_mueller(self, beam, hwp_params=[1,0,-1,0], polang=0.0, instang=0.0, 
-                    poleff=1.0, hwp_ang=0.0):
-        '''
-        A function that returns the A/B/C/D functions for a given detector to be 
-        used for the map-making process
-        
-        Arguments
-        ---------
-
-        beam : <detector.Beam> object
-            The main beam of the detector. 
-
-        Keyword arguments
-        -----------------
-        
-        hwp_params: array of float values
-                [T,rho,c,s] for the given HWP model. Default to ideal 
-                parameters [1,0,-1,0]
-        polang: float
-                polarization angle of the detector
-        instang: float
-                instrument angle, default set to 0.0 
-        poleff: float
-                polarization efficiency for different
-                detectors. Default: 1.0   
-        hwp_ang: float
-                The hwp_ang. Default:
-        '''  
-
-        # get the angles and hwp parameters
-        hwp_ang = np.radians(self.hwp_dict['angle'])
-        # polang = np.radians(beam.polang)
-        
-        try:
-            hwp_params = beam.hwp_mueller  
-        except ValueError:
-            hwp_params = np.asarray([1,0,0,0],[0,1,0,0],
-                                    [0,0,-1,0],[0,0,0,-1])
-            pass
-
-        
-        # define the normalized hwp parameters
-        rho_t = hwp_params[0,1] / hwp_params[0,0]
-        c_t = hwp_params[2,2] / hwp_params[0,0]
-        s_t = hwp_params[3,2] / hwp_params[0,0]
-
-        # try with perfect circular coupling
-        # s_t = 1
-
-        # SPIDER_150 HWP parameters
-        # rho_t, c_t, s_t = 0.00447, -0.98056, 0.19618
-     
-        # define A,B,C,D functions
-        A = 1 + poleff * rho_t * np.cos(2 * hwp_ang + 2 * polang)
-        B = (rho_t * np.cos(2 * hwp_ang + 2 * instang) + 
-            0.5 * (1 + c_t) * poleff * np.cos(2 * instang - 2 * polang) +
-            0.5 * (1 - c_t) * poleff * np.cos(2 * instang + 4 * hwp_ang + 
-            2 * polang)) 
-        C = (rho_t * np.sin(2 * hwp_ang + 2 * instang) + 
-            0.5 * (1 + c_t) * poleff * np.sin(2 * instang - 2 * polang) + 
-            0.5 * (1 - c_t) * poleff * np.sin(2 * instang + 4 * hwp_ang + 
-            2 * polang))
-        D = s_t * poleff * np.sin(2 * hwp_ang + 2 * polang)  
-
-        self.mueller_params = np.asarray([A,B,C,D])  
-
 
 
     def bin_tod(self, beam, tod=None, flag=None, init=True, add_to_global=True, 
@@ -4306,7 +4015,6 @@ class ScanStrategy(Instrument, qp.QMap):
         polang = -np.radians(polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
-
 
         if init:
             self.init_dest(nside=self.nside_out, pol=True, vpol=False, reset=True)
