@@ -277,8 +277,8 @@ class Beam(object):
         # Ghosts are not allowed to have ghosts
         if not self.ghost:
             self.__ghosts = []
-            self.ghost_count = 0
-
+            self.ghost_count = 0    
+    
     @property
     def idx(self):
         return self._idx
@@ -446,6 +446,7 @@ class Beam(object):
 
         self.btype = 'Gaussian'
         self.blm = blm
+
 
     def load_blm(self, filename, **kwargs):
         '''
@@ -730,6 +731,8 @@ class Beam(object):
 
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
                 vartheta=np.radians(self.el))
+        
+
 
 
 
