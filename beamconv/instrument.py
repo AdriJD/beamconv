@@ -3683,7 +3683,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 alm[0], blm[0], spin_values_unpol, nside)
 
             if beam_v and input_v:
-                # spinmap_dict['s0a0_v'] = {}
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm[3], spin_values_unpol, nside)
                 
@@ -3804,7 +3803,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # For s0a0 no shift
             # For s2a4, shift Bp up by 4, +2blm should have nonzero m=2.
             # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
-            # For s0a2_v, shift Bp down bt 2, -2blm should have nonzero m=0.
+            # For s0a2_v, shift Bp up by 2, +2blm should have nonzero m=0.
             # For s2a2, unpol2pol for Bi, Bv
             # For s2a0, no shift required.
             
