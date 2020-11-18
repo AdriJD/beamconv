@@ -3601,7 +3601,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             # Intensity only needs s >= 0 maps.
             spin_values_unpol = np.arange(max_spin + 1)
-
+            # Linear polarization needs -s,...,+s maps.
             spin_values_pol = np.arange(-max_spin, max_spin + 1)
 
         almE = alm[1]
