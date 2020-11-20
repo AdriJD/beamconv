@@ -471,6 +471,7 @@ class Beam(object):
         blm file can be rank 1 or 2. If rank is 1: array is blm and
         blmm2 and blmp2 are created assuming only the co-polar response
         If rank is 2, shape has to be (3,), with blm, blmm2 and blmp2
+        or (4,), with blm, blmm2, blmp2, blmv
 
         .npy files are assumed to be healpy alm arrays written using
         `numpy.save`. .fits files are assumed in l**2+l+m+1 order (i.e.
@@ -501,7 +502,7 @@ class Beam(object):
             blm = np.zeros(hp.Alm.getsize(lmax), dtype=np.complex128)
             blm[:blm_read.size] = blm_read
 
-            if npol == 3:
+            if npol >= 3:
                 blmm2_read, mmaxm2 = hp.read_alm(blm_file, hdu=2, return_mmax=True)
                 blmp2_read, mmaxp2 = hp.read_alm(blm_file, hdu=3, return_mmax=True)
 
@@ -515,7 +516,15 @@ class Beam(object):
                 blmm2[:blmm2_read.size] = blmm2_read
                 blmp2[:blmp2_read.size] = blmp2_read
 
-                blm = (blm, blmm2, blmp2)
+                if npol == 4:
+
+                    blmv_read, mvmax = hp.read_alm(blm_file, hdu=4, return_mmax=True)
+                    blmv = np.zeros_like(blm)
+                    blmv[:blmv_read.size] = blmv_read
+                    blm = (blm, blmm2, blmp2, blmv)
+
+                else:    
+                    blm = (blm, blmm2, blmp2)
 
             # Update mmax if needed.
             if mmax is None:
@@ -527,7 +536,7 @@ class Beam(object):
         # If tuple turn to (3, ) or (1, ..) array.
         blm = np.atleast_2d(blm)
 
-        if blm.shape[0] == 3 and self.cross_pol:
+        if blm.shape[0] == 3 or blm.shape[0] == 4 and self.cross_pol:
             cross_pol = True
         else:
             cross_pol = False
@@ -543,7 +552,10 @@ class Beam(object):
                 # Scale beam if needed
                 blm *= self.amplitude
 
-            self.blm = blm[0], blm[1], blm[2]
+            if np.shape(blm)[0] == 4: 
+                self.blm = blm[0], blm[1], blm[2], blm[3]
+            else:    
+                self.blm = blm[0], blm[1], blm[2]
 
         else:
             # Assume co-polarized beam
