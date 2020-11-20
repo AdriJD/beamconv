@@ -78,8 +78,8 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     dim1 = np.shape(maps)[0]
     stokes = ['I', 'Q', 'U']
 
-    if dim1 != 3 and dim1 !=4:
-        raise ValueError('maps should be a sequence of three or four arrays')
+    if dim1 != 3:
+        raise ValueError('maps should be a sequence of three arrays')
 
     limits_set = False
     if hasattr(sym_limits, "__iter__"):
