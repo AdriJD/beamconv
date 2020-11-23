@@ -288,7 +288,7 @@ class Instrument(MPIBase):
             self.lat = None
             self.lon = None
 
-        elif location == 'planck':
+       elif location == 'planck':
             self.lat = None
             self.lon = None
 
@@ -523,7 +523,6 @@ class Instrument(MPIBase):
         beams=[]
 
         if custom_lists is not None:
-            print('here!')
             azs = np.array(custom_lists[0])
             els = np.array(custom_lists[1])
             det_pairs = np.array(custom_lists[2])
@@ -2507,7 +2506,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def parse_ces_schedule_file(self, schedule_file=None):
+    def parse_schedule_file(self, schedule_file=None):
         '''
         Read a text file with standard input and generate arrays that can be
         circulated between
@@ -2560,7 +2559,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return np.arange(N), az0s, az1s, els, t0s, t1s
 
 
-    def partition_ces_schedule_file(self, filename='', chunksize=None):
+    def partition_schedule_file(self, filename='', chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
         of nsample / chunksize (final chunk can be
@@ -2586,7 +2585,7 @@ class ScanStrategy(Instrument, qp.QMap):
         done_chunking = False
         nsamp = self.nsamp
 
-        nces, az0s, az1s, els, t0s, t1s = self.parse_ces_schedule_file(filename)
+        nces, az0s, az1s, els, t0s, t1s = self.parse_schedule_file(filename)
         az0i, az1i, eli, t0i, t1i = [], [], [], [], []
 
         for i, (t0, t1) in enumerate(zip(t0s, t1s)):
@@ -2741,33 +2740,17 @@ class ScanStrategy(Instrument, qp.QMap):
 
         rings, ras, decs, t0s = self.parse_planck_schedule_file(filename)
 
-        # if self.mpi_rank == 0:
-
-        #     print('Partitioning mission')
-        #     print(np.shape(ras))
-        #     print(np.shape(decs))
-        #     print(np.shape(rings))
-        #     print(np.shape(t0s))
-        #     print(rings)
-
         ra0i, dec0i, t0i, t1i = [], [], [], []
-
         for i, (ringi, t0, t1) in enumerate(zip(rings, t0s, t0s[1:])):
-
-            # if self.mpi_rank == 0:
-            #     print('Ring {}/{}'.format(ringi, len(rings)))
 
             if done_chunking:
                 break
 
             nsamp_full_ring = (t1 - t0) * self.fsamp
             if not chunksize or chunksize >= nsamp_full_ring:
-                #print('Chunk larger than nsamp_full_ring')
                 chunksize2use = int(nsamp_full_ring)
                 nchunks = 1
             else:
-                #print('nsamp_full_ring | chunksize')
-                #print('{} | {}'.format(nsamp_full_ring, chunksize))
                 chunksize2use = int(chunksize)
                 nchunks = int(np.ceil(nsamp_full_ring / float(chunksize2use)))
 
@@ -2796,10 +2779,8 @@ class ScanStrategy(Instrument, qp.QMap):
                     break
 
             if done_chunking:
-                # chunknum += nchunks
                 chunknum += cidx+1
             else:
-                # chunknum += cidx+1
                 chunknum += nchunks
 
             samplenum = end
@@ -2813,7 +2794,12 @@ class ScanStrategy(Instrument, qp.QMap):
         self.t0s = t0i
         self.t1s = t1i
 
+        # Debugging
+        diff = np.array(t1i) - np.array(t0i)
+        assert(np.sum(diff <= 0) == 0), 't1 should be greater than t0'
+
         return chunks
+
 
     def schedule_ctime(self, **kwargs):
         '''
@@ -2845,7 +2831,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def schedule_scan(self, scan_speed=2.5,
-        return_all=False, az_prf='triangle', **kwargs):
+            return_all=False, az_prf='triangle', **kwargs):
         '''
 
         Reads in a schedule file following a certain format and procuces
@@ -2964,7 +2950,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def planck_scan(self, ring_num=300, return_all=False, **kwargs):
+def planck_scan(self, ring_num=300, return_all=False, **kwargs):
 
         '''
 
@@ -2994,58 +2980,23 @@ class ScanStrategy(Instrument, qp.QMap):
 
         t0_ring = self.t0s[idx_ring]
         t1_ring = self.t1s[idx_ring]
-        dt = self.ctime[0] - t0_ring
 
-        # idx = np.ceil(dt / self.fsamp)
+        assert(t1_ring > t0_ring), 't1 should be larger than t0'
+
         ras = self.ras[idx_ring]
         decs = self.decs[idx_ring]
-
-        # if self.mpi_rank == 0:
-        #     print(ras)
-        #     print(decs)
-        #     print(idx_ring)
 
         npt = len(ras)
 
         assert(len(ras) == len(decs)), 'ras and decs should have equal length'
 
-        # flag0 = np.zeros(el0.size, dtype=bool)
-
         nsamp4ring = (t1_ring - t0_ring) * self.fsamp
         nsamp_per_ring = int(60.0 * self.fsamp)
-        # phase = np.remainder(dt / float(self.fsamp), float(nsamp_per_period))
         nmult = np.ceil(float(nsamp) / nsamp_per_ring)
 
         t = np.linspace(t0_ring, t1_ring, nsamp4ring)
         ra = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), ras)
         dec = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), decs)
-
-        # import matplotlib
-        # matplotlib.use('Agg')
-        # import matplotlib.pyplot as plt
-
-
-        # plt.plot(t, ra)
-        # plt.savefig('rai.png')
-        # plt.close()
-
-        # plt.plot(np.linspace(0, 60, npt), ras)
-        # plt.savefig('ras.png')
-        # plt.close()
-
-        # plt.plot(t, dec)
-        # plt.savefig('deci.png')
-        # plt.close()
-
-        # plt.plot(np.linspace(0, 60, npt), decs)
-        # plt.savefig('decs.png')
-        # plt.close()
-
-        # raise
-
-        #ra = np.degrees(ra)
-        #dec = np.degrees(dec)
-
 
         pa = np.zeros_like(ra)
 
@@ -3065,14 +3016,6 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_end = sub_start + sub_size[self.mpi_rank]
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
-
-            # if self.mpi_rank == 0:
-            #     print(ra)
-            #     print(dec)
-            #     print(np.shape(ra))
-            #     print(np.shape(dec))
-            #     print(sub_start)
-            #     print(sub_end)
 
             # calculate section of q_bore
             q_boresub = self.radecpa2quat(ra[sub_start:sub_end],
