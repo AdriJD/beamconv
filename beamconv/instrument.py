@@ -288,7 +288,7 @@ class Instrument(MPIBase):
             self.lat = None
             self.lon = None
 
-       elif location == 'planck':
+        elif location == 'planck':
             self.lat = None
             self.lon = None
 
@@ -2558,7 +2558,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return np.arange(N), az0s, az1s, els, t0s, t1s
 
-
     def partition_schedule_file(self, filename='', chunksize=None):
         '''
         Divide up the mission in equal-sized chunks
@@ -2800,7 +2799,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return chunks
 
-
     def schedule_ctime(self, **kwargs):
         '''
         A function to produce unix time (ctime) for a given chunk
@@ -2950,98 +2948,98 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-def planck_scan(self, ring_num=300, return_all=False, **kwargs):
+    def planck_scan(self, ring_num=300, return_all=False, **kwargs):
 
-        '''
+            '''
 
-        Creates a pointing stream that is consistent with the Planck
-        scan strategy. Uses a schedule file with great circle information
-        per ring to generate boresight pointing timeline.
+            Creates a pointing stream that is consistent with the Planck
+            scan strategy. Uses a schedule file with great circle information
+            per ring to generate boresight pointing timeline.
 
-        Keyword arguments
-        -----------------
-        ring_num : int
-            The ring number
+            Keyword arguments
+            -----------------
+            ring_num : int
+                The ring number
 
-        scan_speed : float [deg/s]
-            Scan speed in deg/s
+            scan_speed : float [deg/s]
+                Scan speed in deg/s
 
-        Returns
-        -------
-        (az, el, lon, lat,) q_bore : array-like
-            Depending on return_all
+            Returns
+            -------
+            (az, el, lon, lat,) q_bore : array-like
+                Depending on return_all
 
-        '''
+            '''
 
-        nsamp = self.ctime.size # ctime determines chunk size
+            nsamp = self.ctime.size # ctime determines chunk size
 
-        # The idx to the last ring t0 before ctime[0]
-        idx_ring = kwargs.pop('cidx')
+            # The idx to the last ring t0 before ctime[0]
+            idx_ring = kwargs.pop('cidx')
 
-        t0_ring = self.t0s[idx_ring]
-        t1_ring = self.t1s[idx_ring]
+            t0_ring = self.t0s[idx_ring]
+            t1_ring = self.t1s[idx_ring]
 
-        assert(t1_ring > t0_ring), 't1 should be larger than t0'
+            assert(t1_ring > t0_ring), 't1 should be larger than t0'
 
-        ras = self.ras[idx_ring]
-        decs = self.decs[idx_ring]
+            ras = self.ras[idx_ring]
+            decs = self.decs[idx_ring]
 
-        npt = len(ras)
+            npt = len(ras)
 
-        assert(len(ras) == len(decs)), 'ras and decs should have equal length'
+            assert(len(ras) == len(decs)), 'ras and decs should have equal length'
 
-        nsamp4ring = (t1_ring - t0_ring) * self.fsamp
-        nsamp_per_ring = int(60.0 * self.fsamp)
-        nmult = np.ceil(float(nsamp) / nsamp_per_ring)
+            nsamp4ring = (t1_ring - t0_ring) * self.fsamp
+            nsamp_per_ring = int(60.0 * self.fsamp)
+            nmult = np.ceil(float(nsamp) / nsamp_per_ring)
 
-        t = np.linspace(t0_ring, t1_ring, nsamp4ring)
-        ra = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), ras)
-        dec = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), decs)
+            t = np.linspace(t0_ring, t1_ring, nsamp4ring)
+            ra = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), ras)
+            dec = np.interp(np.mod(t, 60.), np.linspace(0, 60., npt), decs)
 
-        pa = np.zeros_like(ra)
+            pa = np.zeros_like(ra)
 
-        if self.mpi:
-            # Calculate boresight quaternion in parallel
-            chunk_size = nsamp
-            sub_size = np.zeros(self.mpi_size, dtype=int)
-            quot, remainder = divmod(chunk_size,
-                                        self.mpi_size)
-            sub_size += quot
+            if self.mpi:
+                # Calculate boresight quaternion in parallel
+                chunk_size = nsamp
+                sub_size = np.zeros(self.mpi_size, dtype=int)
+                quot, remainder = divmod(chunk_size,
+                                            self.mpi_size)
+                sub_size += quot
 
-            if remainder:
-                # give first ranks one extra quaternion
-                sub_size[:int(remainder)] += 1
+                if remainder:
+                    # give first ranks one extra quaternion
+                    sub_size[:int(remainder)] += 1
 
-            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
-            sub_end = sub_start + sub_size[self.mpi_rank]
+                sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+                sub_end = sub_start + sub_size[self.mpi_rank]
 
-            q_bore = np.empty(chunk_size * 4, dtype=float)
+                q_bore = np.empty(chunk_size * 4, dtype=float)
 
-            # calculate section of q_bore
-            q_boresub = self.radecpa2quat(ra[sub_start:sub_end],
-                                    dec[sub_start:sub_end],
-                                    pa[sub_start:sub_end])
-            q_boresub = q_boresub.ravel()
+                # calculate section of q_bore
+                q_boresub = self.radecpa2quat(ra[sub_start:sub_end],
+                                        dec[sub_start:sub_end],
+                                        pa[sub_start:sub_end])
+                q_boresub = q_boresub.ravel()
 
-            sub_size *= 4 # for the flattened quat array
+                sub_size *= 4 # for the flattened quat array
 
-            offsets = np.zeros(self.mpi_size)
-            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+                offsets = np.zeros(self.mpi_size)
+                offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
 
-            # combine all sections on all ranks
-            self._comm.Allgatherv(q_boresub,
-                            [q_bore, sub_size, offsets, self._mpi_double])
-            q_bore = q_bore.reshape(chunk_size, 4)
+                # combine all sections on all ranks
+                self._comm.Allgatherv(q_boresub,
+                                [q_bore, sub_size, offsets, self._mpi_double])
+                q_bore = q_bore.reshape(chunk_size, 4)
 
-        else:
-            q_bore = self.radecpa2quat(ra, dec, pa)
+            else:
+                q_bore = self.radecpa2quat(ra, dec, pa)
 
-        self.flag = np.zeros(chunk_size, dtype=bool)
+            self.flag = np.zeros(chunk_size, dtype=bool)
 
-        if return_all:
-            return ra, dec, pa, q_bore
-        else:
-            return q_bore
+            if return_all:
+                return ra, dec, pa, q_bore
+            else:
+                return q_bore
 
     def rotate_hwp(self, **kwargs):
         '''
@@ -3664,7 +3662,6 @@ def planck_scan(self, ring_num=300, return_all=False, **kwargs):
                     scan *= 2
 
             tod += scan
-
 
     def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
                       symmetric=False):
