@@ -50,6 +50,7 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
     Plot a (set of I, Q, U) map(s) and write each to disk.
+    If a list with 4 maps is provided, assume the fourth component is Stokes V.
 
     Arguments
     ---------
@@ -78,8 +79,8 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
     dim1 = np.shape(maps)[0]
     stokes = ['I', 'Q', 'U']
 
-    if dim1 != 3:
-        raise ValueError('maps should be a sequence of three arrays')
+    if dim1 != 3 and dim1 !=4:
+        raise ValueError('maps should be a sequence of three or four arrays')
 
     limits_set = False
     if hasattr(sym_limits, "__iter__"):
@@ -95,6 +96,9 @@ def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
 
     if udicts is None and dim1 == 3:
         udicts = [{}, {}, {}]
+    elif udicts is None and dim1 == 4:
+        udicts = [{}, {}, {}, {}]
+        stokes.append('V')
 
     maxx, minn = None, None
     for pidx, (st, udict) in enumerate(zip(stokes, udicts)):
