@@ -12,7 +12,9 @@ and sky to generate simulated CMB detector signal timelines. Beams can be arbitr
 Pointing timelines can be read in or calculated on the fly. Optionally, the results can be
 binned on the sphere.
 
-The code and some results based on its use are described in: https://arxiv.org/abs/1809.05034
+The code and some results based on its use are described in: [1809.05034](https://arxiv.org/abs/1809.05034)
+
+**UPDATE**: See the `hwp_syst` branch for the generalization to non-ideal half-wave plates that is described in [2012.10437](https://arxiv.org/abs/2012.10437). This branch will be merged with the main branch in the future.
 
 ### Usage
 
