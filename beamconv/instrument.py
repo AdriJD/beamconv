@@ -2309,12 +2309,15 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_end = sub_start + sub_size[self.mpi_rank]
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
-
+            if ground_scan:
+                q_boresub = np.array([az[sub_start:sub_end], el[sub_start:sub_end],
+                 None, None])
+            else:
             # calculate section of q_bore
-            q_boresub = self.azel2bore(az[sub_start:sub_end],
-                                    el[sub_start:sub_end],
-                                    None, None, self.lon, self.lat,
-                                    ctime[sub_start:sub_end])
+                q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                        el[sub_start:sub_end],
+                                        None, None, self.lon, self.lat,
+                                        ctime[sub_start:sub_end])
             q_boresub = q_boresub.ravel()
 
             sub_size *= 4 # For the flattened quat array.
@@ -2328,7 +2331,10 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = q_bore.reshape(chunk_size, 4)
 
         else:
-            self.q_bore = self.azel2bore(az, el, None, None, self.lon,
+            if ground_scan:
+                self.q_bore = np.array([az, e, None, None])
+            else:
+                self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, ctime)
 
         # Store boresight quat in memmap if needed.
@@ -3230,7 +3236,6 @@ class ScanStrategy(Instrument, qp.QMap):
             self.pix = pix
 
         np.radians(pa, out=pa)
-
         # We convert from healpix convention to IAU convention...
         pa *= -1
         pa += np.pi
