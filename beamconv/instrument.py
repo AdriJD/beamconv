@@ -1717,7 +1717,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, input_v=False,
-            beam_v=False, ground_scan=False, **kwargs):
+            beam_v=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -2310,8 +2310,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
             if ground_scan:
-                q_boresub = np.array([az[sub_start:sub_end], el[sub_start:sub_end],
-                 None, None])
+                q_boresub = np.reshape([az[sub_start:sub_end], el[sub_start:sub_end],
+                 np.zeros(sub_end-sub_start), np.zeros(sub_end-sub_start)], (-1, 4))
             else:
             # calculate section of q_bore
                 q_boresub = self.azel2bore(az[sub_start:sub_end],
@@ -2332,7 +2332,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
             if ground_scan:
-                self.q_bore = np.array([az, el, None, None])
+                self.q_bore = np.reshape([az, el, np.zeros_like(az), np.zeros_like(az)], (-1, 4))
             else:
                 self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, ctime)
