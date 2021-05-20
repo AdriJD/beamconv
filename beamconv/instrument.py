@@ -2310,8 +2310,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
             if ground_scan:
-                q_boresub = np.reshape([az[sub_start:sub_end], el[sub_start:sub_end],
-                 np.zeros(sub_end-sub_start), np.zeros(sub_end-sub_start)], (-1, 4))
+                caz = np.cos(np.radians(az[sub_start:sub_end])/2.)
+                saz = np.sin(np.radians(az[sub_start:sub_end])/2.)
+                cel = np.cos(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
+                sel = np.sin(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
+                q_boresub = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+
             else:
             # calculate section of q_bore
                 q_boresub = self.azel2bore(az[sub_start:sub_end],
@@ -2332,26 +2336,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
             if ground_scan:
-                #az el to theta phi:
-                """
-                cos_theta = np.cos(np.radians(el)) * np.cos(np.radians(az))
-                tan_phi   = np.tan(np.radians(el)) / np.sin(np.radians(az))
-                theta     = np.arccos(cos_theta)
-                phi       = np.arctan2(np.tan(np.radians(el)), np.sin(np.radians(az)))
-
-                cphi = np.cos(-np.radians(phi)/2.)
-                sphi = np.sin(-np.radians(phi)/2.)
-                ctht = np.cos(np.pi/4.-np.radians(theta)/2.)
-                stht = np.sin(np.pi/4.-np.radians(theta)/2.)
-                self.q_bore = np.reshape([-sphi*ctht, cphi*stht, sphi*stht, cphi*ctht], (-1, 4))
-                self.q_bore = self.radecpa2quat(phi, np.pi/2. - theta, np.zeros_like(phi))
-                """
                 caz = np.cos(np.radians(az)/2.)
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
                 self.q_bore = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
-                
+
             else:
                 self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, ctime)
