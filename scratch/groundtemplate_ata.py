@@ -20,6 +20,6 @@ for i in range(el.size):
     az1 = raz[i]+rwidth[i] 
     condition = ((slope[i]*(phi-az0)>np.pi/2.-theta)*
         (slope[i]*(az1-phi)>np.pi/2.-theta)*(phi>az0)*(phi<az1)).astype(bool) 
-    gtemplate[condition]=290 
+    gtemplate[condition]=290*(theta/np.pi) 
 hp.mollview(gtemplate)
 plt.show()
