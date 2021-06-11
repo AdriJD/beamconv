@@ -73,7 +73,6 @@ class TestTools(unittest.TestCase):
 
         return
 
-
     def test_get_copol_blm(self):
         '''
         Test if converting the unpolarized beam to 
@@ -130,6 +129,159 @@ class TestTools(unittest.TestCase):
         np.testing.assert_array_almost_equal(tod_a, expt_a)
         np.testing.assert_array_almost_equal(tod_b, expt_b)
 
+    def test_tukey_window(self):
+
+        # Even input.
+        n = 10
+        w = tools.tukey_window(n)
+
+        exp_ans = np.asarray(
+            [0, 0.292292, 0.827430, 1, 1, 1, 1, 0.827430, 0.292292, 0])
+        np.testing.assert_array_almost_equal(w, exp_ans)
+
+        # Odd input
+        n = 11
+        w = tools.tukey_window(n)
+
+        exp_ans = np.asarray(
+            [0, 0.25, 0.75, 1, 1, 1, 1, 1, 0.75, 0.25, 0])
+        np.testing.assert_array_almost_equal(w, exp_ans)
+
+    def test_filter_ft_hwp(self):
+
+        fd = np.ones(10, dtype=np.complex)
+        fd += 1j
+        center_idx = 4
+        filter_width = 4
+        tools.filter_ft_hwp(fd, center_idx, filter_width)
+
+        exp_ans = np.zeros(10, dtype=np.complex)
+        exp_ans[3] = .75 + .75j
+        exp_ans[4] = 1. + 1.j
+        exp_ans[5] = .75 + .75j
+
+        np.testing.assert_array_almost_equal(fd, exp_ans)
+
+    def test_filter_tod_hwp(self):
+
+        fsamp = 10.3
+        nsamp = 103 # I.e. 10 sec of data.
+        
+        t = np.arange(nsamp, dtype=np.float) # Samples.
+        
+        tod = np.sin(2 * t * (2 * np.pi) / float(nsamp)) # f = .2 Hz
+        tod += np.sin(4 * t * (2 * np.pi) / float(nsamp)) # f = .4 Hz
+
+        hwp_freq = .1
+        
+        tools.filter_tod_hwp(tod, fsamp, hwp_freq)
+
+        # We should have filtered out the f = .2 Hz component.
+        exp_ans = np.sin(4 * t * (2 * np.pi) / float(nsamp))# f = .4 Hz
+        np.testing.assert_array_almost_equal(tod, exp_ans)
+
+    def test_mueller2spin_identity(self):
+
+        identity = np.eye(4)
+        mat_spin = tools.mueller2spin(identity)
+        np.testing.assert_almost_equal(mat_spin, identity)
+
+    def test_mueller2spin(self):
+
+        mat = np.arange(16).reshape(4,4)
+        mat_spin = tools.mueller2spin(mat)
+        exp_ans = np.asarray(
+            [[0, (1 - 2j) / np.sqrt(2), (1 + 2j) / np.sqrt(2), 3],
+             [(2 + 4j) * np.sqrt(2), (15 + 3j) / 2., (-5 + 15j) / 2., np.sqrt(-36 + 77j)],
+             [(2 - 4j) * np.sqrt(2), (-5 - 15j) / 2., (15 - 3j) / 2., np.sqrt(-36 - 77j)],
+             [12, (13 - 14j) / np.sqrt(2), (13 + 14j) / np.sqrt(2), 15]]
+            )
+        np.testing.assert_almost_equal(mat_spin, exp_ans)
+
+    def test_shift_blm_shift0(self):
+
+        # Test if shift of 0 leaves input unchanged.
+        lmax = 5
+        blmE = np.random.randn(hp.Alm.getsize(lmax)).astype(np.complex128)
+        blmE += 1j * np.random.randn(hp.Alm.getsize(lmax))        
+        blmB = np.random.randn(hp.Alm.getsize(lmax)).astype(np.complex128)
+        blmB += 1j * np.random.randn(hp.Alm.getsize(lmax))        
+
+        blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 0)
+
+        np.testing.assert_almost_equal(blmE_new, blmE)
+        np.testing.assert_almost_equal(blmB_new, blmB)
+
+    def test_shift_blm_shift4(self):
+
+        blmp2 = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2, 3, 3, 3, 4, 4, 5],
+                          dtype=np.complex128)
+        blmm2 = np.array(
+            [0, 0, 1j, 1j, 1j, 0, 2j, 2j, 2j, 3j, 3j, 3j, 4j, 4j, 5j],
+            dtype=np.complex128)
+        blmE, blmB = tools.spin2eb(blmm2, blmp2)
+        
+        blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 4)
+        blmm2_new, blmp2_new = tools.eb2spin(blmE_new, blmB_new)
+        
+        blmp2_exp = np.array(
+            [0, 0, 0, 0, -5j, 0, 0, 4j, 4j, -3j, -3j, -3j, 2j, 2j, 1],
+            dtype=np.complex128)
+
+        blmm2_exp = np.array(
+            [0, 0, 0, 0, 5j, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            dtype=np.complex128)
+        
+        np.testing.assert_almost_equal(blmm2_new, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2_new, blmp2_exp)        
+
+    def test_shift_nlm_mimic_unpol2pol(self):
+        # Test if shift by -2 is equal to unpol2pol.
+        blm = np.array([1, 1, 1, 1, 1, 2, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j],
+                          dtype=np.complex128)
+        blmm2, blmp2 = tools.shift_blm(blm, blm, -2, eb=False)
+        blmm2_exp, blmp2_exp = tools.unpol2pol(blm)
+
+        # Comparison is not perfect, because unpol2pol will set
+        # all l=0 and l=1 elemets to zero. shift_blm does not
+        # have that restriction. So, let us manually fix that.
+        blmm2[5] = 0
+        
+        np.testing.assert_almost_equal(blmm2, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2, blmp2_exp)        
+        
+    def test_shift_blm_undo_unpol2pol(self):
+        # Test if shift by +2 undoes unpol2pol operation.        
+        blm = np.array([1, 1, 1, 1, 1, 2, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j],
+                          dtype=np.complex128)
+        blmm2, blmp2 = tools.unpol2pol(blm)
+        
+        blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
+
+        # We now expect that blmm2 and blmp2 are equal to blm again.
+        # The only difference is that we have lost some l=0 and l=1
+        # elements along the way.
+
+        blmm2_exp = np.array([0, 0, 1, 1, 1, 0, 0, 2, 2j, 0, 0, 3j, 0, 0, 0])
+        blmp2_exp = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j])
+
+        np.testing.assert_almost_equal(blmm2, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2, blmp2_exp)        
+
+    def test_shift_blm_s2a4(self):
+        # Test if copolar beam does what we expect.
+        blmm2 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1j, 0, 0, 0],
+                         dtype=np.complex128) 
+        blmp2 = np.zeros_like(blmm2)
+        blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 4, eb=False)        
+
+        blmm2_exp = np.zeros_like(blmm2)
+        blmp2_exp = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, -1j, 0, 0, 0],
+                         dtype=np.complex128) 
+
+        np.testing.assert_almost_equal(blmm2, blmm2_exp)
+        np.testing.assert_almost_equal(blmp2, blmp2_exp)        
+        
 if __name__ == '__main__':
     unittest.main()
         

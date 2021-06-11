@@ -313,8 +313,7 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
     This means that the beam is highly asymmetric.
 
     Keyword arguments
-    ---------
-
+    -----------------
     az_off : float,
         Azimuthal location of detector relative to boresight
         (default : 0.)
@@ -471,6 +470,163 @@ def offset_beam(az_off=0, el_off=0, polang=0, lmax=100,
         plt.savefig('../scratch/img/tods.png')
         plt.close()
 
+def offset_beam_interp(az_off=0, el_off=0, polang=0, lmax=100,
+                fwhm=200, hwp_freq=25., pol_only=True):
+    '''
+    Script that scans LCDM realization of sky with a symmetric
+    Gaussian beam that has been rotated away from the boresight.
+    This means that the beam is highly asymmetric. Scanning using
+    interpolation.
+
+    Keyword arguments
+    -----------------
+    az_off : float,
+        Azimuthal location of detector relative to boresight
+        (default : 0.)
+    el_off : float,
+        Elevation location of detector relative to boresight
+        (default : 0.)
+    polang : float,
+        Detector polarization angle in degrees (defined for
+        unrotated detector as offset from meridian)
+        (default : 0)
+    lmax : int,
+        Maximum multipole number, (default : 200)
+    fwhm : float,
+        The beam FWHM used in this analysis [arcmin]
+        (default : 100)
+    hwp_freq : float,
+        HWP spin frequency (continuous mode) (default : 25.)
+    pol_only : bool,
+        Set unpolarized sky signal to zero (default : True)
+    '''
+
+    # Load up alm and blm
+    ell, cls = get_cls()
+    np.random.seed(30)
+    alm = hp.synalm(cls, lmax=lmax, new=True, verbose=True) # uK
+
+    if pol_only:
+        alm = (alm[0]*0., alm[1], alm[2])
+
+    # init scan strategy and instrument
+    mlen = 240 # mission length
+    ss = ScanStrategy(mlen, # mission duration in sec.
+                      sample_rate=1, # sample rate in Hz
+                      location='spole') # South pole instrument
+
+    # create single detector
+    ss.create_focal_plane(nrow=1, ncol=1, fov=0, no_pairs=True,
+                          polang=polang, lmax=lmax, fwhm=fwhm,
+                          scatter=True)
+
+    # move detector away from boresight
+    try:
+        ss.beams[0][0].az = az_off
+        ss.beams[0][0].el = el_off
+    except IndexError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
+
+    # Start instrument rotated (just to make things complicated)
+    rot_period =  ss.mlen
+    ss.set_instr_rot(period=rot_period, start_ang=45)
+
+    # Set HWP rotation
+    ss.set_hwp_mod(mode='stepped', freq=1/20., start_ang=45,
+                   angles=[34, 12, 67])
+
+    # calculate tod in one go (beam is symmetric so mmax=2 suffices)
+    ss.partition_mission()
+    ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
+                           max_spin=2, interp=True)
+
+    # Store the tod made with symmetric beam
+    try:
+        tod_sym = ss.tod.copy()
+    except AttributeError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
+    
+    # now repeat with asymmetric beam and no detector offset
+    # set offsets to zero such that tods are generated using
+    # only the boresight pointing.
+    try:
+        ss.beams[0][0].az = 0
+        ss.beams[0][0].el = 0
+        ss.beams[0][0].polang = 0
+
+        # Convert beam spin modes to E and B modes and rotate them
+        # create blm again, scan_instrument_mpi detetes blms when done
+        ss.beams[0][0].gen_gaussian_blm()
+        blm = ss.beams[0][0].blm
+        blmI = blm[0].copy()
+        blmE, blmB = tools.spin2eb(blm[1], blm[2])
+
+        # Rotate blm to match centroid.
+        # Note that rotate_alm uses the ZYZ euler convention.
+        # Note that we include polang here as first rotation.
+        q_off = ss.det_offset(az_off, el_off, polang)
+        ra, dec, pa = ss.quat2radecpa(q_off)
+
+        # convert between healpy and math angle conventions
+        phi = np.radians(ra)
+        theta = np.radians(90 - dec)
+        psi = np.radians(-pa)
+
+        # rotate blm
+        hp.rotate_alm([blmI, blmE, blmB], psi, theta, phi, lmax=lmax, mmax=lmax)
+
+        # convert beam coeff. back to spin representation.
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
+        ss.beams[0][0].blm = (blmI, blmm2, blmp2)
+
+    except IndexError as e:
+        if ss.mpi_rank != 0:
+            pass
+        else:
+            raise e
+
+    ss.reset_instr_rot()
+    ss.reset_hwp_mod()
+    
+    # Now we use all spin modes.
+    ss.scan_instrument_mpi(alm, binning=False, nside_spin=512,
+                           max_spin=lmax, interp=True) 
+
+    if ss.mpi_rank == 0:
+        plt.figure()
+        gs = gridspec.GridSpec(5, 9)
+        ax1 = plt.subplot(gs[:2, :6])
+        ax2 = plt.subplot(gs[2:4, :6])
+        ax4 = plt.subplot(gs[:, 6:])
+
+        samples = np.arange(tod_sym.size)
+        ax1.plot(samples, ss.tod, label='Asymmetric Gaussian', linewidth=0.7)
+        ax1.plot(samples, tod_sym, label='Symmetric Gaussian', linewidth=0.7,
+                 alpha=0.5)
+        ax1.legend()
+
+        ax1.tick_params(labelbottom='off')
+        sigdiff = ss.tod - tod_sym
+        ax2.plot(samples, sigdiff,ls='None', marker='.', markersize=2.)
+        ax2.tick_params(labelbottom='off')
+        ax1.set_ylabel(r'Signal [$\mu K_{\mathrm{CMB}}$]')
+        ax2.set_ylabel(r'asym-sym. [$\mu K_{\mathrm{CMB}}$]')
+        ax2.set_xlabel('Sample number')
+
+        ax4.hist(sigdiff, 128, label='Difference')
+        ax4.set_xlabel(r'Difference [$\mu K_{\mathrm{CMB}}$]')
+        ax4.tick_params(labelleft='off')
+
+        plt.savefig('../scratch/img/tods_interp.png', dpi=250)
+        plt.close()
+
+        
 def offset_beam_ghost(az_off=0, el_off=0, polang=0, lmax=100,
                       fwhm=200, hwp_freq=25., pol_only=True):
     '''
@@ -1207,11 +1363,11 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
                  unit='Hits', plot_func=hp.mollview, **cart_opts)
 
 if __name__ == '__main__':
-    scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
+    #scan_bicep(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # scan_atacama(mmax=2, rot_period=60*60, mlen=48*60*60, nrow=3, ncol=3,
     #    fov=8.0, ra0=[-10], dec0=[-57.5], cut_el_min=False)
-
     # offset_beam(az_off=4, el_off=13, polang=36., pol_only=False)
+    offset_beam_interp(az_off=40, el_off=13, polang=36., pol_only=True)    
     # offset_beam_ghost(az_off=4, el_off=13, polang=36., pol_only=True)
     # test_ghosts(mmax=2, hwp_mode='stepped', fwhm=28, lmax=1000)
     # single_detector()

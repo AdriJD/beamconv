@@ -1,0 +1,2 @@
+* Add ability to simulate pointing (centroid) errors
+  - Both DC and time-dependent errors

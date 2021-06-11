@@ -3,6 +3,8 @@ import sys
 import time
 import copy
 from warnings import warn, catch_warnings, filterwarnings
+import glob
+import pickle
 
 import numpy as np
 import qpoint as qp
@@ -510,10 +512,11 @@ class Instrument(MPIBase):
             self.ndet = 2 * nrow * ncol # A and B detectors.
             idx = 0
 
+        beams=[]
+
         azs = np.linspace(-fov/2., fov/2., ncol)
         els = np.linspace(-fov/2., fov/2., nrow)
 
-        beams = []
 
         for az_idx in range(azs.size):
             for el_idx in range(els.size):
@@ -529,6 +532,7 @@ class Instrument(MPIBase):
                               name=det_str+'B', polang=polang+90.,
                               dead=dead or no_pairs, pol='B',
                               idx=idx+1, **kwargs)
+
 
                 beams.append([beam_a, beam_b])
                 idx += 2
@@ -599,7 +603,8 @@ class Instrument(MPIBase):
 
 
         beams = []
-        for i, (az, el, polang, dead) in enumerate(zip(azs, els, polangs, deads)):
+        for i, (az, el, polang, dead) in enumerate(
+                zip(azs, els, polangs, deads)):
 
             beam_a = Beam(az=az[0], el=el[0], name='det{}'.format(i),
                 polang=polang[0], dead=dead[0], pol='A', idx=i, **kwargs)
@@ -689,9 +694,6 @@ class Instrument(MPIBase):
         beams.
         '''
 
-        import glob
-        import pickle
-
         # do all I/O on root
         if self.mpi_rank == 0:
 
@@ -747,6 +749,7 @@ class Instrument(MPIBase):
 
                 pkl_file = open(bfile, 'rb')
                 beam_opts = pickle.load(pkl_file)
+
                 pkl_file.close()
 
                 if isinstance(beam_opts, dict):
@@ -754,6 +757,7 @@ class Instrument(MPIBase):
 
                     beam_opts_a = beam_opts
                     beam_opts_b = copy.deepcopy(beam_opts)
+
 
                     if beam_opts.get('name'):
                         beam_opts_a['name'] += 'A'
@@ -767,6 +771,7 @@ class Instrument(MPIBase):
 
                     beam_opts_a = beam_opts[0]
                     beam_opts_b = beam_opts[1]
+
 
                 # Overrule options with given kwargs
                 beam_opts_a.update(kwargs)
@@ -792,6 +797,7 @@ class Instrument(MPIBase):
 
                 beam_a = Beam(pol='A', **beam_opts_a)
                 beam_b = Beam(pol='B', **beam_opts_b)
+
 
                 beams.append([beam_a, beam_b])
 
@@ -820,6 +826,8 @@ class Instrument(MPIBase):
             self.ndet = ndet
         else:
             self.ndet += ndet
+
+
 
     def create_crosstalk_ghosts(self, azs, els,
             beams=None, ghost_tag='crosstalk_ghost', rand_stdev=0., **kwargs):
@@ -1084,7 +1092,8 @@ class Instrument(MPIBase):
                 if incl_ghosts:
                     for ghost in beam.ghosts:
                         for key in prop:
-                            val = getattr(ghost, key) + np.random.normal() * prop[key]
+                            val = getattr(
+                                ghost, key) + np.random.normal() * prop[key]
                             setattr(ghost, key, val)
 
     def add_to_prop(self, prop, incl_ghosts=True,
@@ -1260,7 +1269,7 @@ class ScanStrategy(Instrument, qp.QMap):
             sample_rate = num_samples / float(duration)
 
         else:
-            # sample_rate and duration are not None.
+            # Sample_rate and duration are not None.
             nsamp = int(duration * sample_rate)
             if num_samples is not None:
                 if nsamp != num_samples:
@@ -1284,13 +1293,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
         self._data = {}
 
-      # Checking qpoint version
+      # Checking qpoint version.
         if qp.version() < self._qp_version:
             raise RuntimeError(
                  'qpoint version {} required, found version {}'.format(
                      self._qp_version, qp.version()))
 
-        # Set some useful qpoint/qmap options as default
+        # Set some useful qpoint/qmap options as default.
         qmap_opts = dict(pol=True,
                          fast_math=False,
                          mean_aber=True,
@@ -1387,7 +1396,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def set_hwp_mod(self, mode=None,
                     freq=None, start_ang=0.,
-                    angles=None):
+                    angles=None, varphi=0.):
         '''
         Set options for modulating the polarized sky signal
         using a (stepped or continuously rotating) half-wave
@@ -1406,6 +1415,10 @@ class ScanStrategy(Instrument, qp.QMap):
             Rotation angles for stepped HWP. If not set,
             use 22.5 degree steps. If set, ignores
             start_ang.
+        varphi : float, 0.
+            If your HWP induces a phase shift of varphi between ingoing
+            and outgoing polarisation, adding its value to the dictionnary
+            ensures it will get substacted from hwp angles at bin_tod time
         '''
 
         self.hwp_dict['mode'] = mode
@@ -1415,7 +1428,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.hwp_dict['angle'] = start_ang
         self.hwp_dict['start_ang'] = start_ang
         self.hwp_dict['remainder'] = 0 # num. samp. from last step
-
+        self.hwp_dict['varphi'] = varphi
 
         if angles is None:
             angles = np.arange(start_ang, 360+start_ang, 22.5)
@@ -1542,7 +1555,7 @@ class ScanStrategy(Instrument, qp.QMap):
         period = self.rot_dict['period']
 
         if not period:
-        # No instrument rotation, so no need for subchunks
+        # No instrument rotation, so no need for subchunks.
             return [chunk]
 
         rot_chunk_size = self.rot_dict['rot_chunk_size']
@@ -1557,7 +1570,7 @@ class ScanStrategy(Instrument, qp.QMap):
         nchunks = 1 if nchunks < 1 else nchunks
 
         if nchunks == 1:
-            # rot period is larger or equal to chunksize
+            # Rot period is larger or equal to chunksize.
             if self.rot_dict['remainder'] >= chunk_size:
 
                 subchunks.append(dict(start=start, end=chunk['end']))
@@ -1623,7 +1636,8 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None,
-                     **kwargs):
+                    beam_v=False, input_v=False,
+                    **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
         for a detector pair and all its ghosts.
@@ -1633,16 +1647,21 @@ class ScanStrategy(Instrument, qp.QMap):
         alm : tuple
             Tuple containing (almI, almE, almB) as
             Healpix-formatted complex numpy arrays
+            or (almI, almE, almB, almV) if the map
+            contains V polarization
         beam_a : <detector.Beam> object
             The A detector.
+        beam_v : bool
+                include the 4th blm component
+        input_v : bool
+                include the 4th alm component
 
         Keyword arguments
         -----------------
         beam_b : <detector.Beam> object
             The B detector. (default : None)
         kwargs : {spinmaps_opts}
-            Extra kwargs are assumed input to
-            `init_spinmaps()`
+            Extra kwargs are assumed input to `init_spinmaps()`
 
         Notes
         -----
@@ -1658,15 +1677,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # We give the ghosts identical Gaussian beams if they
         # have no blm.
+
         if beam_a.ghosts:
 
             for gidx in range(beam_a.ghost_count):
                 ghost_a = beam_a.ghosts[gidx]
 
+
                 if gidx == 0:
                     if not hasattr(ghost_a, 'blm'):
                         ghost_a.gen_gaussian_blm()
-
                 else:
                     if not hasattr(ghost_a, 'blm'):
                         ghost_a.reuse_blm(beam_a.ghosts[0])
@@ -1685,8 +1705,8 @@ class ScanStrategy(Instrument, qp.QMap):
                             beam_b.ghosts[gidx].reuse_blm(
                                 beam_a.ghosts[0])
 
-
-        self.init_spinmaps(alm, beam_obj=beam_a, **kwargs)
+        self.init_spinmaps(alm, beam_a, input_v=input_v,
+                            beam_v=beam_v, **kwargs)
 
         # free blm attributes
         beam_a.delete_blm(del_ghosts_blm=True)
@@ -1696,7 +1716,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def scan_instrument_mpi(self, alm, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
-            preview_pointing=False, **kwargs):
+            preview_pointing=False, filter_4fhwp=False, input_v=False,
+            beam_v=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1746,6 +1767,15 @@ class ScanStrategy(Instrument, qp.QMap):
             and no scanning is done (tod are zero). All pointing and binning
             steps are performed, so useful for quickly checking output hits-map
             and condition number (default : False)
+        filter_4fhwp : bool
+            Only use TOD modes modulated at 4 x the HWP frequency.
+            Only allowed with spinning HWP. (default : False)
+        input_v : bool
+                include the 4th alm component if
+                it exists
+        beam_v : bool
+                include the 4th blm component if
+                it exists
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `constant_el_scan()` or `init_spinmaps()`.
@@ -1767,7 +1797,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # Pop init_spinmaps kwargs.
         max_spin = kwargs.pop('max_spin', None)
         nside_spin = kwargs.pop('nside_spin', None)
-        spinmaps_opts = dict(verbose=(verbose==2))
+        spinmaps_opts = {}
         if max_spin:
             spinmaps_opts.update({'max_spin' : max_spin})
         if nside_spin:
@@ -1797,7 +1827,6 @@ class ScanStrategy(Instrument, qp.QMap):
         # Let every core loop over max number of beams per core
         # this makes sure that cores still participate in
         # calculating boresight quaternions.
-        #nmax = int(np.ceil(self.ndet/float(self.mpi_size)/2.))
         nmax = int(np.ceil(len(self.beams)/float(self.mpi_size)))
 
         for bidx in range(nmax): # Loop over beams.
@@ -1818,6 +1847,7 @@ class ScanStrategy(Instrument, qp.QMap):
             beam_a = beampair[0]
             beam_b = beampair[1]
 
+
             if verbose == 2:
                 print('\n[rank {:03d}]: working on: \n{} \n{}'.format(
                         self.mpi_rank, str(beam_a), str(beam_b)))
@@ -1836,7 +1866,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
-                                  **spinmaps_opts)
+                                input_v=input_v, beam_v=beam_v,
+                                **spinmaps_opts)
 
             if not hasattr(self, 'chunks'):
                 # Assume no chunking is needed and use full mission length.
@@ -1869,10 +1900,10 @@ class ScanStrategy(Instrument, qp.QMap):
                                             **chunk)
                 if beam_a and not beam_a.dead:
                     self._allocate_detector_data(beam_a, save_tod=save_tod,
-                                                 save_point=save_point, **chunk)
+                                                save_point=save_point, **chunk)
                 if beam_b and not beam_b.dead:
                     self._allocate_detector_data(beam_b, save_tod=save_tod,
-                                                 save_point=save_point, **chunk)
+                                                save_point=save_point, **chunk)
 
                 # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
@@ -1882,9 +1913,9 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     if verbose == 2:
                         print(('[rank {:03d}]:\t\t...'
-                               ' samples {:d}-{:d}, norot={}').format(self.mpi_rank,
-                                                 subchunk['start'], subchunk['end'],
-                                                       subchunk.get('norot', False)))
+                               ' samples {:d}-{:d}, norot={}').format(
+                         self.mpi_rank, subchunk['start'], subchunk['end'],
+                          subchunk.get('norot', False)))
 
                     # Rotate instrument and hwp if needed.
                     if not subchunk.get('norot', False):
@@ -1894,7 +1925,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
                     # Scan and bin.
                     if beam_a and not beam_a.dead:
-
                         self._scan_detector(beam_a, interp=interp,
                                             save_tod=save_tod,
                                             save_point=save_point,
@@ -1911,7 +1941,8 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_a = self.tod.copy()
                         elif binning:
-                            self.bin_tod(beam_a, add_to_global=True, **subchunk)
+                            self.bin_tod(beam_a, add_to_global=True, filter_4fhwp=filter_4fhwp,
+                                **subchunk)
 
                     if beam_b and not beam_b.dead:
                         self._scan_detector(beam_b, interp=interp,
@@ -1923,7 +1954,8 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_b = self.tod
                         elif binning:
-                            self.bin_tod(beam_b, add_to_global=True, **subchunk)
+                            self.bin_tod(beam_b, add_to_global=True, filter_4fhwp=filter_4fhwp,
+                                **subchunk)
 
                     if do_ctalk:
                         tools.cross_talk(tod_a, tod_b, ctalk=ctalk)
@@ -1934,10 +1966,10 @@ class ScanStrategy(Instrument, qp.QMap):
                             self._update_tod(beam_b, tod_b, **subchunk)
 
                         if binning:
-                            self.bin_tod(beam_a, tod=tod_a,
-                                         add_to_global=True, **subchunk)
-                            self.bin_tod(beam_b, tod=tod_b,
-                                         add_to_global=True, **subchunk)
+                            self.bin_tod(beam_a, tod=tod_a, add_to_global=True,
+                            filter_4fhwp=filter_4fhwp, **subchunk)
+                            self.bin_tod(beam_b, tod=tod_b, add_to_global=True,
+                            filter_4fhwp=filter_4fhwp, **subchunk)
 
     def _chunk2idx(self, **kwargs):
         '''
@@ -2159,6 +2191,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
 
+
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
         ctime += self.ctime0
@@ -2333,7 +2366,8 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def satellite_scan(self, alpha=50., beta=50.,
-        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False):
+        alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
+        **kwargs):
         '''
         A function to simulate satellite scanning strategy.
 
@@ -2358,6 +2392,7 @@ class ScanStrategy(Instrument, qp.QMap):
             Start index
         end : int
             End index
+        cidx : int
 
         Returns
         -------
@@ -2368,7 +2403,6 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         See Wallis et al., 2017, MNRAS, 466, 425.
         '''
-
         deg_per_day = 360.9863
         dt = 1 / float(self.fsamp)
         nsamp = self.ctime.size # ctime determines chunk size
@@ -2458,37 +2492,28 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def parse_schedule_file(self, schedule_file=None):
         '''
-
         Read a text file with standard input and generate arrays that can be
         circulated between
 
         Keyword arguments
-        ---------
+        -----------------
         schedule_file : file path (string)
-
 
         Returns
         -------
-
         nces : ndarray (int)
             A monotonically increasing array of integers corresponding
             to scan number
-
         az0s : ndarray (float)
             Lower limit on azimuthal range
-
         az1s : ndarray (float)
             Upper limit on azimuthal range
-
         els : ndarray (float)
             Boresight elevation value for the scan
-
         t0s : ndarray (float)
             Start times for each scan (unix time)
-
         t1s : ndarray (float)
             End times for each scan (unix time)
-
         '''
 
         def mjd2ctime(mjd):
@@ -2615,7 +2640,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def schedule_ctime(self, **kwargs):
         '''
-        A function to produce unix time (ctime) for a given chunk
+        A function to produce unix time (ctime) for a given chunk.
+        Used as part of a simulation pipeline that reads from a schedule file.
 
         Keyword arguments
         -----------------
@@ -2643,7 +2669,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return ctime
 
     def schedule_scan(self, scan_speed=2.5,
-            return_all=False, az_prf='triangle', **kwargs):
+        return_all=False, az_prf='triangle', **kwargs):
         '''
 
         Reads in a schedule file following a certain format and procuces
@@ -2653,6 +2679,10 @@ class ScanStrategy(Instrument, qp.QMap):
         -----------------
         scan_speed : float [deg/s]
             Scan speed in deg/s
+        return_all : bool
+            If set, return az, el, lat, lon as well as q_bore
+        az_prf : str
+            Type of scan profile, currently only admits 'triangle'
 
         Returns
         -------
@@ -2670,14 +2700,12 @@ class ScanStrategy(Instrument, qp.QMap):
         t0_ces = self.t0s[idx_ces]
         el0 = self.els[idx_ces]
         dt = self.ctime[0] - t0_ces
-        # idx = np.ceil(dt / self.fsamp)
         az0 = self.az0s[idx_ces]
         az1 = self.az1s[idx_ces]
-
         flag0 = np.zeros(el0.size, dtype=bool)
 
         if az0 > az1:
-            az_throw = (360-az0) + az1
+            az_throw = (360 - az0) + az1
         else:
             az_throw = az1 - az0
 
@@ -2918,8 +2946,9 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['pix'] = pix
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
 
+
     def _scan_detector(self, beam, interp=False, save_tod=False,
-                           save_point=False, skip_scan=False, **kwargs):
+        save_point=False, skip_scan=False, **kwargs):
         '''
         Convenience function that adds ghost(s) TOD to main beam TOD
         and saves TOD and pointing if needed.
@@ -2950,7 +2979,6 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         Returns ValueError when `beam` is a ghost.
         '''
-
         if beam.ghost:
             raise ValueError('_scan_detector() called with ghost.')
 
@@ -2981,7 +3009,8 @@ class ScanStrategy(Instrument, qp.QMap):
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
                         return_point=save_point,
-                        skip_scan=skip_scan, **kwargs)
+                        skip_scan=skip_scan,
+                        **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
@@ -3149,36 +3178,27 @@ class ScanStrategy(Instrument, qp.QMap):
             # Skip all other scanning.
             return
 
-        if not beam.ghost:
-            func, func_c = self.spinmaps['main_beam']['maps']
-            s_vals, s_vals_c = self.spinmaps['main_beam']['s_vals']
+        beam_type = 'main_beam' if not beam.ghost else 'ghosts'
+        if beam_type == 'ghosts':
+            spinmaps = self.spinmaps[beam_type][beam.ghost_idx]
         else:
-            ghost_idx = beam.ghost_idx
-            func, func_c = self.spinmaps['ghosts'][ghost_idx]['maps']
-            s_vals, s_vals_c = self.spinmaps['ghosts'][ghost_idx]['s_vals']
+            spinmaps = self.spinmaps[beam_type]
 
-        # Check if shape spinmaps matches s_vals.
-        if func.shape[0] != s_vals.size or func_c.shape[0] != s_vals_c.size:
-            raise ValueError('Shap spinmaps and size s_vals do not match.')
-
-        # Check for azimuthal symmetry.
-        if beam.symmetric:
-            if s_vals[0] != 0 or s_vals.size != 1:
-                raise ValueError('Wrong shape spinmmaps for symmetric beam.')
-            if s_vals_c[0] != 2 or s_vals_c.size != 1:
-                raise ValueError('Wrong shape spinmmaps for symmetric beam.')
-
-
-        # Extract N (= max_spin + 1) and nside of spin maps
-        N, npix = func.shape
-        nside_spin = hp.npix2nside(npix)
-
-        # Paranoid android.
-        N2, npix2 = func_c.shape
-        #assert 2*N-1 == N2, "func and func_c have different max_spin"
-        assert npix == npix2, "func and func_c have different npix"
-
-        tod_c = np.zeros(tod_size, dtype=np.complex128)
+        # Do some sanity checks on spinmaps.
+        for conv_type in spinmaps:
+            maps = spinmaps[conv_type]['maps']
+            s_vals = spinmaps[conv_type]['s_vals']
+            if maps.shape[0] != s_vals.size:
+                raise ValueError(
+                    'Shape maps {} and s_vals {} do not match for {} {}.'.
+                    format(maps.shape[0], s_vals.size, beam_type, conv_type))
+            nside_spin = hp.npix2nside(maps.shape[1])
+            try:
+                if nside_spin != nside_spin_previous:
+                    raise ValueError('spinmaps have different nside')
+            except NameError:
+                pass
+            nside_spin_previous = nside_spin
 
         # Find the indices to the pointing and ctime arrays.
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
@@ -3211,30 +3231,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
         np.radians(pa, out=pa)
 
-        # NOTE
+        # We convert from healpix convention to IAU convention...
+        pa *= -1
         pa += np.pi
 
-        # Fill complex array, i.e. the linearly polarized part
-        # Init arrays used for recursion: exp i n pa = (exp i pa) ** n
-        # to avoid doing triginometry at each n.
+        # NOTE for now we should be in this block even if we are using
+        # a hwp_mueller matrix.
+        tod_c = np.zeros(tod_size, dtype=np.complex128)
 
-        # If beam.symmetric is True, we can be sure to only have s=2.
-        if beam.symmetric:
-            expipan = np.exp(1j * pa * 2)
-        else:
-            expipa = np.exp(1j * pa) # used for recursion
-            expipan = np.exp(1j * pa * (-N + 1)) # starting point (n = -N+1)
-
-        for nidx, n in enumerate(s_vals_c):
-
-            if nidx != 0: # expipan is already initialized for nidx=0
-                expipan *= expipa
-
-            if interp:
-                tod_c += hp.get_interp_val(func_c[nidx], dec, ra) \
-                         * expipan
-            else:
-                tod_c += func_c[nidx,pix] * expipan
+        if interp:
+            pix = (ra, dec)
 
         # Check for HWP angle array.
         if not hasattr(self, 'hwp_ang'):
@@ -3242,34 +3248,70 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             hwp_ang = self.hwp_ang
 
-        # Modulate by HWP angle and polarization angle.
-        expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
-        tod_c[:] = np.real(tod_c * expm2 + np.conj(tod_c * expm2)) / 2.
-        tod = np.real(tod_c) # Note, shares memory with tod_c.
+        # Find out if old or new HWP behaviour is desired.
+        if set(spinmaps.keys()) == set(['s0a0', 's2a4']):
+            # Old behaviour.
+            self._scan_modulate_pa(tod_c, pix, pa,
+                                   spinmaps['s2a4']['maps'],
+                                   spinmaps['s2a4']['s_vals'],
+                                   reality=False, interp=interp)
 
-        # Add unpolarized tod.
-        # Reset starting point recursion.
-        # Note, if beam.symmetric=True, expipa is not initialized, so
-        # following will automatically crash if s_vals != [0]
-        expipan[:] = 1.
 
-        for n in s_vals:
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
 
-            # Equal to func exp(n pa) + c.c (pa: position angle).
-            if n == 0:
-                if interp:
-                    tod += np.real(hp.get_interp_val(func[n], dec, ra))
-                else:
-                    tod += np.real(func[n,pix])
+            tod_c *= expm2
+            tod = np.real(tod_c) # Note, shares memory with tod_c.
 
-            if n > 0:
-                expipan *= expipa
+            # Add unpolarized tod.
+            self._scan_modulate_pa(tod, pix, pa,
+                                   spinmaps['s0a0']['maps'],
+                                   spinmaps['s0a0']['s_vals'],
+                                   reality=True, interp=interp)
 
-                if interp:
-                    tod += 2 * np.real(hp.get_interp_val(func[n], dec, ra) \
-                                   * expipan)
-                else:
-                    tod += 2 * np.real(func[n,pix] * expipan)
+        else:
+            # New behaviour.
+            self._scan_modulate_pa(tod_c, pix, pa,
+                                   spinmaps['s2a4']['maps'],
+                                   spinmaps['s2a4']['s_vals'],
+                                   reality=False, interp=interp)
+
+            # Modulate by HWP angle and polarization angle.
+            expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
+            tod_c *= expm2
+
+            tod_c_tmp = np.zeros_like(tod_c)
+            self._scan_modulate_pa(tod_c_tmp, pix, pa,
+                                   spinmaps['s0a2']['maps'],
+                                   spinmaps['s0a2']['s_vals'],
+                                   reality=False, interp=interp)
+
+            expm2 = np.exp(1j * (2 * hwp_ang + 2 * np.radians(polang)))
+            tod_c_tmp *= expm2
+            tod_c += tod_c_tmp
+
+            tod_c_tmp *= 0.
+            self._scan_modulate_pa(tod_c_tmp, pix, pa,
+                                   spinmaps['s2a2']['maps'],
+                                   spinmaps['s2a2']['s_vals'],
+                                   reality=False, interp=interp)
+
+            expm2 = np.exp(1j * (2 * hwp_ang))
+            tod_c_tmp *= expm2
+            tod_c += tod_c_tmp
+            del tod_c_tmp
+
+            self._scan_modulate_pa(tod_c, pix, pa,
+                                   spinmaps['s2a0']['maps'],
+                                   spinmaps['s2a0']['s_vals'],
+                                   reality=False, interp=interp)
+
+            # Add unpolarized tod.
+            tod = np.real(tod_c) # Note, shares memory with tod_c.
+            self._scan_modulate_pa(tod, pix, pa,
+                                   spinmaps['s0a0']['maps'],
+                                   spinmaps['s0a0']['s_vals'],
+                                   reality=True, interp=interp)
+
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3299,121 +3341,238 @@ class ScanStrategy(Instrument, qp.QMap):
         elif return_tod and return_point:
             return ret_tod, ret_pix, ret_nside, ret_pa, ret_hwp
 
-    def init_spinmaps(self, alm, blm=None, max_spin=5, nside_spin=256,
-                      verbose=True, beam_obj=None, symmetric=False):
+    @staticmethod
+    def _scan_modulate_pa(tod, pix, pa, maps, s_vals,
+                          reality=False, interp=False):
         '''
-        Compute convolution of map with different spin modes
-        of the beam. Computed per spin, so creates spinmmap
-        for every s<= 0 for T and for every s for pol.
+        Populate TOD with maps[pix] * exp( -i s psi).
+
+        Arguments
+        ---------
+        tod : (nsamp) array
+            TOD to be added to.
+        pix : (nsamp) int array or sequence of arrays.
+            HEALPix pixel indices or (ra, dec) if interpolation
+            is used.
+        pa : (nsamp) array
+            Psi angle (position angle).
+        maps : (nspin, npix) array
+            Maps to be scanned.
+        s_vals : (nspin) array
+            Spin values.
+
+        Keyword Arguments
+        -----------------
+        reality : bool
+            Whether or not the maps obey the reality condition:
+            sf = -sf^*. If set, use the s <-> -s symmetry.
+        interp : bool
+            If interpolation should be used while scanning.
+
+        Raises
+        ------
+        ValueError
+            If negative spin values are given while reality symmetry
+            is used.
+            If pix argument is not [ra, dec] if interpolation is used.
+        '''
+
+        if reality and s_vals.min() < 0:
+            raise ValueError('Negative spin not allowed when reality '
+                             'symmetry is used')
+
+        # Use recursion of exponent if spin values are spaced by 1.
+        if np.array_equal(s_vals, np.arange(s_vals[0], s_vals[-1] + 1)):
+            recursion = True
+            expmipa = np.exp(-1j * pa) # Used for recursion
+            expmipas = np.exp(-1j * pa * s_vals[0])
+        else:
+            recursion = False
+
+        for sidx, spin in enumerate(s_vals):
+
+            if recursion and sidx != 0:
+                # Already initialized for first spin.
+                expmipas *= expmipa
+            else:
+                expmipas = np.exp(-1j * pa * spin)
+
+            if interp:
+                ra, dec = pix
+                scan = hp.get_interp_val(maps[sidx], dec, ra)
+            else:
+                scan = maps[sidx, pix] # Is already a copy.
+
+            if spin != 0:
+                scan *= expmipas
+
+            if reality:
+                scan = np.real(scan)
+                if spin != 0:
+                    # For -s and +s.
+                    scan *= 2
+
+            tod += scan
+
+
+    def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
+                      symmetric=False, input_v=False, beam_v=False):
+        '''
+        Compute appropriate spinmaps for beam and
+        all its ghosts.
 
         Arguments
         ---------
         alm : tuple of array-like
-            Tuple of (alm, almE, almB)
-        blm : tuple of array-like
-            Tuple of (blmI, blmm2, blmp2)
+            Sky alms (alm, almE, almB) or (alm, almE, almB, almV)
+        beam : <detector.Beam> object
+            If provided, create spinmaps for main beam and
+            all ghosts (if present).
 
         Keyword arguments
         -----------------
         max_spin : int, optional
-            Maximum azimuthal mode describing the beam
-            (default : 5)
+            Maximum azimuthal mode describing the beam (default : 5)
         nside_spin : int
             Nside of spin maps (default : 256)
-        beam_obj : <detector.Beam> object
-            If provided, create spinmaps for main beam and
-            all ghosts (if present). `ghost_idx` attribute
-            decides whether ghosts have distinct beams. See
-            `Beam.__init__()`
         symmetric : bool
             If set, only use s=0 (intensity) and s=2 (lin. pol).
-            `max_spin` kwarg is ignored.
-            (default : False)
+            `max_spin` kwarg is ignored (default : False)
+        input_v : bool
+            include the 4th alm component
+        beam_v : bool
+            include the 4th blm component
 
-        returns
-        -------
-        func : array_like
-        func_c : array_like
-        s_values : array_like
-        s_values_c : array_like
 
         Notes
         -----
-        Populates following class attributes if beam_obj is provided:
+        Populates following class attributes:
 
         spinmaps : dict
             Dictionary constaining all spinmaps for main beam and
             possible ghosts.
 
-        Uses minimum lmax value of beam and sky SWSH coefficients.
-        Uses min value of max_spin and the mmax of beam object as azimuthal
-        band-limit.
+        The `ghost_idx` attribute decides whether ghosts have
+        distinct beams. See `Beam.__init__()`.
         '''
 
-        # This block iterates the function to create spinmaps for
-        # the main beam and unique ghost beams (if present)
-        # spinmaps are stored internally in self.spinmaps dict.
-        if beam_obj:
+        self.spinmaps = {'main_beam' : {},
+                         'ghosts': []}
 
-            self.spinmaps = {'main_beam' : {},
-                             'ghosts': []}
+        max_s = min(beam.mmax, max_spin)
+        blm = beam.blm # main beam
+        # calculate spinmaps for main beam
 
-            max_s = min(beam_obj.mmax, max_spin)
-            blm = beam_obj.blm # main beam
+        spinmap_dict = self._init_spinmaps(alm,
+                    blm, max_s, nside_spin, symmetric=beam.symmetric,
+                    hwp_mueller=beam.hwp_mueller, input_v=input_v,
+                    beam_v=beam_v)
 
-            # calculate spinmaps for main beam
-            func, func_c, s_vals, s_vals_pol = self.init_spinmaps(alm,
-                                                blm=blm, max_spin=max_s,
-                                                nside_spin=nside_spin,
-                                                verbose=verbose,
-                                                symmetric=beam_obj.symmetric)
-            self.spinmaps['main_beam']['maps'] = [func, func_c]
-            self.spinmaps['main_beam']['s_vals'] = [s_vals, s_vals_pol]
+        # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
+        # s refers to spin value under psi, a to spin value under HWP rot.
+        self.spinmaps['main_beam'] = spinmap_dict
 
-            if beam_obj.ghosts:
+        if beam.ghosts:
 
-                # Find unique ghost beams.
-                assert len(beam_obj.ghosts) == beam_obj.ghost_count
-                # Ghost_indices.
-                g_indices = np.empty(beam_obj.ghost_count, dtype=int)
+            # Find unique ghost beams.
+            assert len(beam.ghosts) == beam.ghost_count
+            # Ghost_indices.
+            g_indices = np.empty(beam.ghost_count, dtype=int)
 
-                for gidx, ghost in enumerate(beam_obj.ghosts):
-                    g_indices[gidx] = ghost.ghost_idx
+            for gidx, ghost in enumerate(beam.ghosts):
+                g_indices[gidx] = ghost.ghost_idx
 
-                unique, u_indices = np.unique(g_indices, return_index=True)
+            unique, u_indices = np.unique(g_indices, return_index=True)
 
-                # Calculate spinmaps for unique ghost beams.
-                for uidx, u in enumerate(unique):
+            # Calculate spinmaps for unique ghost beams.
+            for uidx, u in enumerate(unique):
 
-                    self.spinmaps['ghosts'].append([])
-                    self.spinmaps['ghosts'][u] = {}
+                self.spinmaps['ghosts'].append([])
+                self.spinmaps['ghosts'][u] = {}
 
-                    # Use the blms from the first occurrence of unique
-                    # ghost_idx.
-                    ghost = beam_obj.ghosts[u_indices[uidx]]
+                # Use the blms from the first occurrence of unique
+                # ghost_idx.
+                ghost = beam.ghosts[u_indices[uidx]]
 
-                    blm = ghost.blm
-                    max_s = min(ghost.mmax, max_spin)
+                blm = ghost.blm
+                max_s = min(ghost.mmax, max_spin)
 
-                    func, func_c, s_vals, s_vals_pol = self.init_spinmaps(alm,
-                                                      blm=blm, max_spin=max_s,
-                                                      nside_spin=nside_spin,
-                                                      verbose=verbose,
-                                                      symmetric=ghost.symmetric)
+                spinmap_dict = self._init_spinmaps(alm,
+                            blm, max_s, nside_spin, symmetric=ghost.symmetric,
+                            hwp_mueller=ghost.hwp_mueller,
+                            input_v=input_v, beam_v=beam_v)
+                self.spinmaps['ghosts'][u] = spinmap_dict
 
-                    self.spinmaps['ghosts'][u]['maps'] = [func, func_c]
-                    self.spinmaps['ghosts'][u]['s_vals'] = [s_vals, s_vals_pol]
-            return
 
-        # Check for nans in alms. E.g from when there was a nan in original maps.
-        # If so, crash. Otherwise healpy will just create nan maps.
+
+    @staticmethod
+    def _init_spinmaps(alm, blm, max_spin, nside,
+                       symmetric=False, hwp_mueller=None,
+                       input_v=False, beam_v=False):
+        '''
+        Compute convolution of map with different spin modes
+        of the beam.
+
+        Arguments
+        ---------
+        alm : tuple of array-like
+            Sky alms (alm, almE, almB) or (alm, almE, almB, almV)
+        blm : tuple of array-like
+            Beam alms (blmI, blmm2, blmp2) or (blmI, blmm2, blmp2, blmV)
+        max_spin : int
+            Maximum azimuthal mode describing the beam.
+        nside : int
+            Nside of output maps.
+
+        Keyword arguments
+        -----------------
+        symmetric : bool
+            If set, only use s=0 (I, V) and s=2 (Q, U).
+            `max_spin` kwarg is ignored (default : False).
+        hwp_mueller : (4, 4) array, None
+            Unrotated Mueller matrix of half-wave plate.
+        input_v : bool
+            include the 4th alm component if
+            it exists
+        beam_v : bool
+            include the 4th blm component if
+            it exists
+
+        returns
+        -------
+        spinmap_dict : dict of dicts
+            Container for spinmaps and spin values for each type, see notes.
+
+        Notes
+        -----
+        Keys of output dictionary refer to the behaviour under sky rotation (s)
+        and HWP rotation (a) of the maps in case of azimuthally symmetric beams.
+        So s0a0 is completely scalar, s2a4 is the standard linear polarization.
+
+        Uses minimum lmax value of beam and sky SWSH coefficients.
+        Uses min value of max_spin and the mmax of blm as azimuthal
+        band-limit.
+        '''
+        # Output.
+        spinmap_dict = {}
+
+        # Check for nans in alms. E.g from a nan pixel in original maps.
         crash_a = False
         crash_b = False
         i = 0
-        while i < 3 and not (crash_a or crash_b):
+        if np.shape(alm)[0] != 4 and input_v:
+            raise ValueError("There is no V sky component")
+
+        if np.shape(blm)[0] != 4 and beam_v:
+            raise ValueError("There is no V beam component")
+
+        # break the condition
+        while i < np.shape(alm)[0] and not crash_a:
             crash_a = ~np.isfinite(np.sum(alm[i][:]))
-            crash_b = ~np.isfinite(np.sum(blm[i][:]))
             i += 1
+        while i < np.shape(blm)[0] and not crash_b:
+            crash_b = ~np.isfinite(np.sum(blm[i][:]))
+            i +=1
         if crash_a or crash_b:
             name = 'alm' if crash_a else 'blm'
             raise ValueError('{}[{}] contains nan/inf.'.format(name, i-1))
@@ -3421,121 +3580,393 @@ class ScanStrategy(Instrument, qp.QMap):
         # Match up bandlimits beam and sky.
         lmax_sky = hp.Alm.getlmax(alm[0].size)
         lmax_beam = hp.Alm.getlmax(blm[0].size)
-
         if lmax_sky > lmax_beam:
-            alm = tools.trunc_alm(alm, lmax_beam)
+            alms = tools.trunc_alm([alm[0],alm[1],alm[2]], lmax_beam)
+            if input_v:
+                almV = tools.trunc_alm(alm[3], lmax_beam)
+                alm = [alms[0],alms[1],alms[2],almV]
+            else:
+                alm = [alms[0],alms[1],alms[2]]
             lmax = lmax_beam
         elif lmax_beam > lmax_sky:
-            blm = tools.trunc_alm(blm, lmax_sky)
+            blms = tools.trunc_alm([blm[0],blm[1],blm[2]], lmax_sky)
+            if beam_v:
+                blmV = tools.trunc_alm(blm[3], lmax_sky)
+                blm = [blms[0],blms[1],blms[2],blmV]
+            else:
+                blm = [blms[0],blms[1],blms[2]]
             lmax = lmax_sky
         else:
             lmax = lmax_sky
-
         if symmetric:
             spin_values_unpol = np.array([0], dtype=int)
             spin_values_pol = np.array([2], dtype=int)
+        else:
+            # Intensity only needs s >= 0 maps.
+            spin_values_unpol = np.arange(max_spin + 1)
+            # Linear polarization needs -s,...,+s maps.
+            spin_values_pol = np.arange(-max_spin, max_spin + 1)
 
-            # Note, spin-0 case is real.
-            func = np.zeros((1, 12*nside_spin**2), dtype=float)
-            func_c = np.zeros((1, 12*nside_spin**2), dtype=np.complex128)
+        almE = alm[1]
+        almB = alm[2]
+
+
+        if hwp_mueller is not None:
+
+            hwp_spin = tools.mueller2spin(hwp_mueller)
+
+            # s0a0.
+            spinmap_dict['s0a0'] = {}
+            blm_s0a0 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0',
+                                    beam_v=beam_v)
+            spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
+                alm[0], blm_s0a0, spin_values_unpol, nside)
+
+            if input_v:
+                blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v',
+                                                    beam_v=beam_v)
+                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
+                    alm[3], blm_s0a0_v, spin_values_unpol, nside)
+                del blm_s0a0_v
+
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+            del blm_s0a0
+
+
+            # s2a4.
+            spinmap_dict['s2a4'] = {}
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol
+
+            # s0a2.
+            spinmap_dict['s0a2'] = {}
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
+                alm[0], alm[0] * 0, blmE, blmB, spin_values_pol, nside)
+
+            if input_v:
+                blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
+                blmE, blmB = tools.spin2eb(blmp2, blmm2)
+                spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
+                    alm[3], alm[3] * 0, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s0a2']['s_vals'] = spin_values_pol
+
+            # s2a2.
+            spinmap_dict['s2a2'] = {}
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2',
+                                beam_v=beam_v)
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a2']['s_vals'] = spin_values_pol
+
+            # s2a0.
+            spinmap_dict['s2a0'] = {}
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a0')
+            # Switch, for new datamodel.
+            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a0']['s_vals'] = spin_values_pol
+
 
         else:
-            N = max_spin + 1
-            spin_values_unpol = np.arange(N, dtype=int)
-            spin_values_pol = np.arange(-N+1, N, dtype=int)
+            # Old default behaviour.
+            blmE, blmB = tools.spin2eb(blm[1], blm[2])
 
-            # Intensity only needs s >=0 maps, lin. pol. need \pm s maps.
-            func = np.zeros((N, 12*nside_spin**2), dtype=np.complex128)
-            func_c = np.zeros((2*N-1, 12*nside_spin**2), dtype=np.complex128)
+            # Unpolarized sky and beam.
+            spinmap_dict['s0a0'] = {}
+            spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
+                alm[0], blm[0], spin_values_unpol, nside)
 
-        # Unpolarized sky and beam first.
-        start = 0
-        for sidx, s in enumerate(spin_values_unpol): # s are azimuthal modes in bls.
-            end = lmax + 1 - s
+            if beam_v and input_v:
+                spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
+                    alm[3], blm[3], spin_values_unpol, nside)
+
+            spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
+
+            # Linearly polarized sky and beam.
+            spinmap_dict['s2a4'] = {}
+            spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
+                almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a4']['s_vals'] = spin_values_pol
+
+
+
+        return spinmap_dict
+
+    @staticmethod
+    def blmxhwp(blm, hwp_spin, mode, beam_v=False):
+        '''
+
+        Arguments
+        ---------
+        blm : sequence of arrays
+            Beam alms (blmI, blmm2, blmp2) or (blmI, blmm2, blmp2, blmV)
+        hwp_spin : (4, 4) array, None
+            Unrotated Mueller matrix of half-wave plate in complex basis.
+            See `tools.mueller2spin`.
+        mode : str
+            Pick between 's0a0', 's0a0_v', s2a4', 's0a2', 's0a2_v', 's2a2' or 's2a0'.
+        beam_v : bool
+            include the 4th blm component when constructing the spinmaps
+
+
+        Returns
+        -------
+        blmxhwp : array or tuple of arrays
+
+        Raises
+        ------
+        ValueError
+            If mode is not recognized.
+
+        Notes
+        -----
+        We have the SWSH modes of the beam (the blms).
+        However, we want to use the SHWSH modes of the
+        beam x HWP Mueller matrix elements. Instead of
+        Multiplying the two fields in real space, we
+        effecitively convolve the two in harmonic space,
+        this way we can use the blms and avoid going back
+        to real space.
+        '''
+        if mode == 's0a0':
+            blm_s0a0 = blm[0] * hwp_spin[0,0]
+            if beam_v:
+                blm_s0a0 += blm[3] * hwp_spin[3,0]
+            return blm_s0a0
+
+        elif mode == 's0a0_v':
+            blm_s0a0_v = blm[0] * hwp_spin[0,3]
+            if beam_v:
+                blm_s0a0_v += blm[3] * hwp_spin[3,3]
+
+            return blm_s0a0_v
+
+        elif mode == 's2a4':
+            blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 4, eb=False)
+            blmm2 *= hwp_spin[1,2]
+            blmp2 *= hwp_spin[2,1]
+            return blmm2, blmp2
+
+        elif mode == 's0a2':
+            blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)
+            blmm2 *= hwp_spin[0,2] * np.sqrt(2)
+            blmp2 *= hwp_spin[2,0] * np.sqrt(2)
+            return blmm2, blmp2
+
+        elif mode == 's0a2_v':
+            blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
+            blmm2_v *= hwp_spin[3,2] * np.sqrt(2)
+            blmp2_v *= hwp_spin[2,3] * np.sqrt(2)
+            return blmm2_v, blmp2_v
+
+        elif mode == 's2a2':
+            blmm2 = blm[0]
+            blmp2 = blmm2
+            blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
+            blmm2 *= hwp_spin[0,1] * np.sqrt(2)
+            blmp2 *= hwp_spin[1,0] * np.sqrt(2)
+            if beam_v:
+                blmm2_v = blm[3]
+                blmp2_v = blmm2_v
+                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)
+                blmm2_v *= hwp_spin[3,1] * np.sqrt(2)
+                blmp2_v *= hwp_spin[1,3] * np.sqrt(2)
+                blmm2 += blmm2_v
+                blmp2 += blmp2_v
+
+            return blmm2, blmp2
+
+        elif mode == 's2a0':
+            blmm2 = blm[1] * hwp_spin[1,1]
+            blmp2 = blm[2] * hwp_spin[2,2]
+            return blmm2, blmp2
+
+        else:
+            raise ValueError('{} is unrecognized mode'.format(mode))
+            # Call function that combines hwp_spin with blms.
+
+            # s0a0  (Bi Mii + Bv Mvi) Ai
+            # s0a0_v (Bi Miv + Bv Mvv) Av
+            # s2a4  (Bp Mpc,p) Ap
+            # s0a2  (Bp Mpc,i) Ai
+            # s0a2_v  (Bp Mv,pc) Av
+            # s2a2  (Bi Mip + Bv Mvp) Ap
+            # s2a0  (Bpc Mpp) Ap
+
+            # For s0a0 no shift
+            # For s0a0 no shift
+            # For s2a4, shift Bp up by 4, +2blm should have nonzero m=2.
+            # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
+            # For s0a2_v, shift Bp up by 2, +2blm should have nonzero m=0.
+            # For s2a2, unpol2pol for Bi, Bv
+            # For s2a0, no shift required.
+
+    @staticmethod
+    def _spinmaps_real(alm, blm, spin_values, nside):
+        '''
+        Return spinmaps for a "real-valued" spin field with
+        spin-weighted spherical harmonic coefficients given
+        by sflm = alm * bls.
+
+        Arguments
+        ---------
+        alm : complex array
+            Sky alms.
+        blm : complex array
+            Beam alms.
+        spin_values : (nspin) array
+            Nonnegative spin values to be considered.
+        nside : int
+            Nside of output.
+
+        Returns
+        -------
+        spinmaps : (nspin, 12*nside**2) array
+            Real if single spin value is 0, otherwise complex.
+
+        Raises
+        ------
+        ValueError
+            If spin values contain negative values.
+
+        Notes
+        -----
+        We only consider non-negative spin values here because for
+        a real spin field sf we have sf^* = -sf, or, in terms of the
+        harmonic coefficients: sflm^* = -sfl-m (-1)^(s+m). We can
+        therefore reconstruct the fields for negative s if needed.
+        '''
+
+        if spin_values.min() < 0:
+            raise ValueError('Negatve spin provided for real beams and sky')
+
+        lmax = hp.Alm.getlmax(alm.size)
+
+        if len(spin_values) == 1 and spin_values[0] == 0:
+            # Symmetric case
+            func = np.zeros((1, 12*nside**2), dtype=float)
+        else:
+            func = np.zeros((len(spin_values), 12*nside**2),
+                            dtype=np.complex128)
+
+        for sidx, s in enumerate(spin_values): # s are azimuthal modes in bls.
+            bell = tools.blm2bl(blm, m=s, full=True)
+
             if s == 0: # Scalar transform.
 
-                flms = hp.almxfl(alm[0], blm[0][start:start+end], inplace=False)
-                func[sidx,:] += hp.alm2map(flms, nside_spin, verbose=False)
+                flms = hp.almxfl(alm, bell, inplace=False)
+                func[sidx,:] = hp.alm2map(flms, nside, verbose=False)
 
             else: # Spin transforms.
 
-                bell = np.zeros(lmax+1, dtype=np.complex128)
-                # s beam modes.
-                bell[s:] = blm[0][start:start+end]
+                # The positive s values.
+                flms = hp.almxfl(alm, bell, inplace=False)
 
-                flms = hp.almxfl(alm[0], bell, inplace=False)
-                flmms = hp.almxfl(alm[0], np.conj(bell), inplace=False)
+                # The negative s values: alm bl-s = alm bls^* (-1)^s.
+                flmms = hp.almxfl(alm, (-1) ** s * np.conj(bell), inplace=False)
 
                 # Turn into plus and minus (think E and B) modes for healpy's
                 # alm2map_spin.
-                flmsp = - (flms + flmms) / 2.
-                flmsm = 1j * (flms - flmms) / 2.
-                spinmaps = hp.alm2map_spin([flmsp, flmsm], nside_spin, s, lmax,
-                                           lmax)
+                spinmaps = hp.alm2map_spin(tools.spin2eb(flmms, flms, spin=s),
+                                           nside, s, lmax, lmax)
+
                 func[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
-            start += end
+        return func
 
-        # Linearly polarized sky and beam.
-        almp2 = -1 * (alm[1] + 1j * alm[2])
-        almm2 = -1 * (alm[1] - 1j * alm[2])
+    @staticmethod
+    def _spinmaps_complex(almE, almB, blmE, blmB, spin_values, nside):
+        '''
+        Return spinmaps for a complex spin field with harmonic
+        coefficients given by sflm = 2alm -2bls. Where 2alm and
+        -2bls are the harmonic coefficients of two (real) spin
+        fields.
 
-        blmm2 = blm[1]
-        blmp2 = blm[2]
+        Arguments
+        ---------
+        almE : complex array
+            Sky E-mode alms.
+        almB : complex array
+            Sky B-mode alms
+        blmE : complex array
+            Beam E-mode alms.
+        blmB : complex array
+            Beam B-mode alms.
+        spin_values : (nspin) array
+            Spin values to be considered.
+        nside : int
+            Nside of output.
 
-        start = 0
-        for sidx, s in enumerate(spin_values_pol):
+        Returns
+        -------
+        spinmaps : (nspin, 12*nside**2) complex array
 
-            # Note healpy is indexed as idx = m(2lmax+1-m)/2 + l,
-            # so start is index where l=m and end where l=lmax (+1).
+        Notes
+        -----
+        A complex spin field is one that does not obey the reality
+        condition for spin fields: sf^* != -sf, or, equivalently,
+        sflm^* != -sfl-m (-1)^(s+m). This means that the spin 0 output
+        map is complex and that the s < 0 output maps are not generally
+        given by the complex conjugate of the s > 0 maps.
+        '''
 
-            start = int(abs(s) * (2 * lmax + 1 - abs(s)) / 2. + abs(s))
-            end = int(abs(s) * (2 * lmax + 1 - abs(s)) / 2. + lmax) + 1
+        almm2, almp2 = tools.eb2spin(almE, almB)
+        blmm2, blmp2 = tools.eb2spin(blmE, blmB)
 
-            bellp2 = np.zeros(lmax+1, dtype=np.complex128)
-            bellm2 = bellp2.copy()
+        lmax = hp.Alm.getlmax(almm2.size)
 
-            bellp2[abs(s):] = blmp2[start:end]
-            bellm2[abs(s):] = blmm2[start:end]
+        func_c = np.zeros((len(spin_values), 12*nside**2),
+                              dtype=np.complex128)
+
+        for sidx, s in enumerate(spin_values):
+            bellp2 = tools.blm2bl(blmp2, m=abs(s), full=True)
+            bellm2 = tools.blm2bl(blmm2, m=abs(s), full=True)
 
             if s >= 0:
-                ps_flm_p = hp.almxfl(almp2, bellm2, inplace=False) + \
-                    hp.almxfl(almm2, np.conj(bellm2), inplace=False)
-                ps_flm_p /= -2.
 
-                ps_flm_m = hp.almxfl(almp2, bellm2, inplace=False) - \
-                    hp.almxfl(almm2, np.conj(bellm2), inplace=False)
-                ps_flm_m *= 1j / 2.
+                ps_flm_p, ps_flm_m = tools.spin2eb(
+                    hp.almxfl(almm2, np.conj(bellm2) * (-1) ** abs(s)),
+                    hp.almxfl(almp2, bellm2),
+                    spin = abs(s))
 
             if s <= 0:
-                ms_flm_p = hp.almxfl(almm2, bellp2, inplace=False) + \
-                    hp.almxfl(almp2, np.conj(bellp2), inplace=False)
-                ms_flm_p /= -2.
 
-                ms_flm_m = hp.almxfl(almm2, bellp2, inplace=False) - \
-                    hp.almxfl(almp2, np.conj(bellp2), inplace=False)
-                ms_flm_m *= 1j / 2.
+                ms_flm_p, ms_flm_m = tools.spin2eb(
+                    hp.almxfl(almp2, np.conj(bellp2) * (-1) ** abs(s)),
+                    hp.almxfl(almm2, bellp2),
+                    spin = abs(s))
 
             if s == 0:
-                spinmaps = [hp.alm2map(-ps_flm_p, nside_spin, verbose=False),
-                            hp.alm2map(-ms_flm_m, nside_spin, verbose=False)]
-
-                func_c[sidx,:] = spinmaps[0] - 1j * spinmaps[1]
+                # The (-1) factor for spin 0 is explained in HEALPix doc.
+                spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
+                            hp.alm2map(ms_flm_m, nside, verbose=False)]
+                func_c[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
             if s > 0:
                 spinmaps = hp.alm2map_spin([ps_flm_p, ps_flm_m],
-                                           nside_spin, s, lmax, lmax)
+                                           nside, s, lmax, lmax)
                 func_c[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
             elif s < 0:
                 spinmaps = hp.alm2map_spin([ms_flm_p, ms_flm_m],
-                                           nside_spin, abs(s), lmax, lmax)
+                                           nside, abs(s), lmax, lmax)
                 func_c[sidx,:] = spinmaps[0] - 1j * spinmaps[1]
 
-        return func, func_c, spin_values_unpol, spin_values_pol
+        return func_c
 
-    def bin_tod(self, beam, tod=None, flag=None, init=True,
-                add_to_global=True, **kwargs):
+
+
+    def bin_tod(self, beam, tod=None, flag=None, init=True, add_to_global=True,
+                filter_4fhwp=False, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -3560,11 +3991,14 @@ class ScanStrategy(Instrument, qp.QMap):
         add_to_global : bool
             Add local maps to maps allocated by `allocate_maps`.
             (default : True)
+        filter_4fhwp : bool
+            Only use TOD modes modulated at 4 x the HWP frequency.
+            Only allowed with spinning HWP. (default : False)
         kwargs : {chunk_opts}
         '''
 
         # HWP does not depend on particular detector.
-        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang))
+        q_hwp = self.hwp_quat(np.degrees(self.hwp_ang)-self.hwp_dict['varphi'])
 
         qidx_start, qidx_end = self._chunk2idx(**kwargs)
 
@@ -3572,27 +4006,37 @@ class ScanStrategy(Instrument, qp.QMap):
                         ctime=self.ctime[qidx_start:qidx_end],
                         q_hwp=q_hwp)
 
+
         # Use q_off quat with polang (and instr. ang) included.
         polang = beam.polang # Possibly offset polang for binning.
 
         # Get detector offset quaternion that includes boresight rotation.
-        q_off = beam.q_off
 
+        q_off = beam.q_off
         # Add polang to q_off as first rotation. Note minus sign.
         polang = -np.radians(polang)
         q_polang = np.asarray([np.cos(polang/2.), 0., 0., np.sin(polang/2.)])
         q_off = tools.quat_left_mult(q_off, q_polang)
 
         if init:
-            self.init_dest(nside=self.nside_out, pol=True, reset=True)
+            self.init_dest(nside=self.nside_out, pol=True, vpol=False, reset=True)
 
         q_off = q_off[np.newaxis]
 
-        # Note that qpoint wants (,nsamples) shaped tod array.
         if tod is None:
-            tod = self.tod[np.newaxis]
-        else:
-            tod = tod[np.newaxis]
+            tod = self.tod
+
+        if filter_4fhwp:
+            if self.hwp_dict['mode'] == 'continuous':
+                hwp_freq = self.hwp_dict['freq']
+                tools.filter_tod_hwp(tod, self.fsamp, hwp_freq)
+            else:
+                raise ValueError(
+                    'filter_4fhwp not valid with hwp mode : {}'.format(
+                    self.hwp_dict['mode']))
+
+        # Note that qpoint wants (,nsamples) shaped tod array.
+        tod = tod[np.newaxis]
 
         if flag is False:
             flag  = None
@@ -3618,8 +4062,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Keyword arguments
         -----------------
         fill : scalar
-            Fill value for unobserved pixels
-            (default : hp.UNSEEN)
+            Fill value for unobserved pixels (default : hp.UNSEEN)
         return_proj : bool
             Also return proj matrix (default : False)
 
@@ -3638,27 +4081,27 @@ class ScanStrategy(Instrument, qp.QMap):
             # Collect the binned maps on the root process.
             vec = self.reduce_array(self.vec)
             proj = self.reduce_array(self.proj)
+
         else:
             vec = self.vec
             proj = self.proj
 
-        # Solve map on root process.
+
         if self.mpi_rank == 0:
-            # Suppress 1/0 warnings from numpy linalg.
+            # Suppress warnings from numpy linalg.
             with catch_warnings(record=True) as w:
                 filterwarnings('ignore', category=RuntimeWarning)
 
                 maps = self.solve_map(vec=vec, proj=proj,
                                       copy=True, fill=fill)
-
                 cond = self.proj_cond(proj=proj)
             cond[cond == np.inf] = fill
         else:
             maps = None
             cond = None
 
+
         if return_proj:
             return maps, cond, proj
 
         return maps, cond
-

@@ -153,6 +153,100 @@ def scale_blm(blm, normalize=False, deconv_q=False):
     else:
         return blm
 
+def shift_blm(blmE, blmB, shift, eb=True):
+    '''
+    Return copy of input with m values shifted
+    up or down.
+
+    \pm2b_lm^new = \pm2bl(m \mp shift)^old 
+    
+    Arguments
+    ---------
+    blmE : complex array
+        E-mode coefficients.
+    blmB : complex array
+        B-mdoe coefficients.
+    shift : int
+
+    Keyword arguments
+    -----------------
+    eb : bool
+        Whether input/output is E and B, or -2 and +2 spin (default : True).
+
+    Returns
+    -------
+    blmE : complex array
+        Updated E-mode coefficients.
+    BlmB : complex array
+        Updated B-mode coefficients.
+    
+    Raises
+    ------
+    ValueError
+        If input sizes do not match.
+        If shift > lmax.
+    '''
+
+    if blmE.size != blmB.size:
+        raise ValueError('Input sizes do not match')
+
+    lmax = hp.Alm.getlmax(blmE.size)
+
+    if shift > lmax:
+        raise ValueError('Shift exceeds lmax')
+
+    if eb:
+        blmm2, blmp2 = eb2spin(blmE, blmB)
+    else:
+        blmm2, blmp2 = blmE, blmB
+        
+    blmm2_new = np.zeros_like(blmm2)
+    blmp2_new = np.zeros_like(blmp2)        
+
+    # First we do +2blm^new.    
+    # Loop over m modes in new blms
+    for m in range(lmax + 1):
+
+        # Slice into new blms.
+        start = hp.Alm.getidx(lmax, m, m)
+        end = start + lmax + 1 - m        
+
+        m_old = m - shift
+        if abs(m_old) > lmax:
+            continue
+        
+        if m_old >= 0:
+            bell_old = blm2bl(blmp2, m=m_old, full=True)         
+        elif m_old < 0: 
+            bell_old = blm2bl(blmm2, m=abs(m_old), full=True)           
+            bell_old = np.conj(bell_old) * (-1) ** m_old
+ 
+        # Length bell_old is always (lmax + 1).
+        blmp2_new[start:end] = bell_old[m:]
+
+    # Now we do -2blm^new.        
+    for m in range(lmax + 1):
+
+        start = hp.Alm.getidx(lmax, m, m)
+        end = start + lmax + 1 - m        
+        
+        m_old = m + shift
+        if abs(m_old) > lmax:
+            continue
+        
+        if m_old >= 0:
+            bell_old = blm2bl(blmm2, m=m_old, full=True)         
+        elif m_old < 0: 
+            bell_old = blm2bl(blmp2, m=abs(m_old), full=True)           
+            bell_old = np.conj(bell_old) * (-1) ** m_old
+
+        blmm2_new[start:end] = bell_old[m:]
+
+    if eb:
+        return spin2eb(blmm2_new, blmp2_new)
+    else:
+        return blmm2_new, blmp2_new
+        
 def unpol2pol(blm):
     '''
     Compute spin \pm 2 blm coefficients by transforming input
@@ -235,7 +329,7 @@ def get_copol_blm(blm, c2_fwhm=None, **kwargs):
     ---------
     c2_fwhm : float, None
         fwhm in arcmin. Used to multiply \pm 2 blm coefficients
-        with exp 2 sigma**2. Needed to match healpy Gaussian 
+        with exp 2 sigma**2. Needed to match healpy Gaussian
         smoothing for pol (see Challinor et al. 2000)
         (default : None)
     kwargs : {scale_blm_opts}
@@ -279,7 +373,7 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
     Returns
     -------
     blmm2, blmp2 : tuple of array-like
-        The spin \pm 2 harmonic coefficients of the
+        The spin -2 and +2 harmonic coefficients of the
         polarized beam.
     '''
 
@@ -289,14 +383,14 @@ def get_pol_beam(blm_q, blm_u, **kwargs):
     blmm2_q, blmp2_q = unpol2pol(blm_q)
     blmm2_u, blmp2_u = unpol2pol(blm_u)
 
-    # Note the signs here, phi -> -phi+pi compared to to 
+    # Note the signs here, phi -> -phi+pi compared to to
     # Challinor et al. 2000
     blmm2 = blmm2_q + 1j * blmm2_u
     blmp2 = blmp2_q - 1j * blmp2_u
 
     return blmm2, blmp2
 
-def spin2eb(almm2, almp2):
+def spin2eb(almm2, almp2, spin=2):
     '''
     Convert spin-harmonic coefficients
     to E and B mode coefficients.
@@ -310,18 +404,37 @@ def spin2eb(almm2, almp2):
        Healpix-ordered complex array with spin-(+2)
        coefficients
 
+    Keyword arguments
+    -----------------
+    spin : int
+        Spin of input. Odd spins receive relative
+        minus sign between input in order to be consistent
+        with HEALPix alm2map_spin.
+
     Returns
     -------
     almE : array-like
         Healpix ordered array with E-modes
     almB : array-like
-        Healpix ordered array with B-modes
+        Healpix ordered array with B-modes\
+
+    Raises
+    ------
+    ValueError
+        If spin is not an integer.
+
+    Notes
+    -----
+    See https://healpix.jpl.nasa.gov/html/subroutinesnode12.htm
     '''
 
-    almE = almp2 + almm2
+    if int(spin) != spin:
+        raise ValueError('Spin must be integer')
+    
+    almE = almp2 + almm2 * (-1.) ** spin
     almE /= -2.
 
-    almB = almp2 - almm2
+    almB = almp2 - almm2 * (-1.) ** spin
     almB *= (1j / 2.)
 
     return almE, almB
@@ -359,7 +472,7 @@ def radec2colatlong(ra, dec):
     and longitude used for healpy.
 
     Long = RA
-    Co-lat = -DEC + pi/2 
+    Co-lat = -DEC + pi/2
 
     Arguments
     ---------
@@ -367,10 +480,10 @@ def radec2colatlong(ra, dec):
         Right ascension in degrees.
     dec : array-like
         Declination in degrees.
-    
+
     '''
 
-    # Convert RA to healpix longitude (=phi) 
+    # Convert RA to healpix longitude (=phi)
     ra *= (np.pi / 180.)
     ra = np.mod(ra, 2 * np.pi, out=ra)
 
@@ -555,7 +668,7 @@ def quat_conj_by(q, q2):
 
     return q3
 
-def blm2bl(blm, m=0, copy=True):
+def blm2bl(blm, m=0, copy=True, full=False):
     '''
     A tool to return blm for a fixed m-mode
 
@@ -563,26 +676,28 @@ def blm2bl(blm, m=0, copy=True):
     ---------
     blm : array-like
        Complex numpy array corresponding to the spherical harmonics of the beam
-        
+
     Keyword arguments
     -----------------
     m : int
         The m-mode being requested (note m >= 0) (default : 0)
     copy : bool
         Return copied slice or not (default : True)
+    full : bool
+        If set, always return full-sized (lmax + 1) array
+        Note, this always produces a copy. (default : False)
 
     Returns
     -------
-    blm : array-like
+    bl : array-like
         Array of bl's for the m-mode requested
-
     '''
 
     if blm.ndim > 1:
         raise ValueError('blm should have have ndim == 1')
     if m < 0:
         raise ValueError('m cannot be negative')
-        
+
     lmax = hp.Alm.getlmax(blm.size)
 
     start = hp.Alm.getidx(lmax, m, m)
@@ -590,6 +705,11 @@ def blm2bl(blm, m=0, copy=True):
 
     bell = blm[start:end]
 
+    if full:
+        bell_full = np.zeros(lmax + 1, dtype=blm.dtype)
+        bell_full[m:] = bell
+        bell = bell_full
+        
     if copy:
         return bell.copy()
     else:
@@ -607,14 +727,14 @@ def sawtooth_wave(num_samp, scan_speed, period):
         Degrees per sample.
     period : float
         Period of wave in degrees.
-        
+
     Returns
     -------
     az : array-like
          Azimuth value for each sample in degrees.
     '''
 
-    tot_degrees = scan_speed * num_samp 
+    tot_degrees = scan_speed * num_samp
     az = np.linspace(0, tot_degrees, num=num_samp, dtype=float,
                      endpoint=False)
     np.mod(az, period, out=az)
@@ -634,7 +754,7 @@ def cross_talk(tod_a, tod_b, ctalk=0.01):
     Keyword arguments
     -----------------
     ctalk : float
-        Amount of cross-talk, i.e. fraction of each time-stream 
+        Amount of cross-talk, i.e. fraction of each time-stream
         that is added to the other. (default : 0.01)
     '''
 
@@ -645,4 +765,164 @@ def cross_talk(tod_a, tod_b, ctalk=0.01):
     tod_b *= (1. - ctalk)
     tod_a += tod_c
     tod_b += tod_c
+
+def iquv2ippv(mueller_mat):
+    '''
+    Returns a 4x4 matrix in the (I, P, Pbar, V) base with P = Q+jU
+
+    Argument
+    ----------
+    mueller_mat : array-like, size (4,4)
+    '''
+
+    A = np.array([[1, 0,  0,  0],
+                  [0, 1,  1j, 0],
+                  [0, 1, -1j, 0],
+                  [0, 0,  0,  1]], dtype=complex)
+
+    Ainv = np.array([[1,  0.0,  0.0, 0],
+                     [0,  0.5,  0.5, 0],
+                     [0, -.5j, .5j,  0],
+                     [0,  0.0,  0.0, 1]], dtype=complex)
+
+    mueller_mat = np.matmul(Ainv,np.matmul(mueller_mat,A))
+    return mueller_mat
+
+def ippv2iquv(mueller_mat):
+    '''
+    Returns a 4x4 matrix in the (I, Q, U, V) base with Q = P+Pbar
+
+    Argument
+    ----------
+    mueller_mat : array-like, size (4,4)
+    '''
+
+    Ainv = np.array([[1, 0,  0,  0],
+                  [0, 1,  1j, 0],
+                  [0, 1, -1j, 0],
+                  [0, 0,  0,  1]], dtype=complex)
+
+    A = np.array([[1,  0.0,  0.0, 0],
+                     [0,  0.5,  0.5, 0],
+                     [0, -.5j, .5j,  0],
+                     [0,  0.0,  0.0, 1]], dtype=complex)
+
+    mueller_mat = np.matmul(Ainv,np.matmul(mueller_mat,A))
+    return mueller_mat
+
+def tukey_window(n):
+    '''
+    Return tukey window (alpha=0.5).
+    See https://en.wikipedia.org/wiki/Window_function#Tukey_window.
+
+    Arguments
+    ---------
+    n : int
+        Window_length.
+
+    Returns
+    -------
+    window : ndarray
+        Tukey window.
+    '''
+    alpha = 0.5
+    L = float(n + 1)
+
+    window = np.ones(n, dtype=float)
+    x = np.arange(int(alpha * L / 2.) + 1, dtype=float)
+
+    window[:int(alpha * L / 2.) + 1] -= 0.5 * np.cos(2 * np.pi * x / alpha / L) + .5
+    # Use symmetry of window.
+    window[-int(n/2.):] = np.flip(window[:int(n/2.)], 0)
+
+    return window
+
+def filter_ft_hwp(fd, center_idx, filter_width):
+    '''
+    Apply window to fourier transformed real data around given frequency.
+
+    Note, calculated in-place for memory reasons.
+
+    Arguments
+    ---------
+    fd : ndarray
+        Fourier-transformed (real) data, fd[0] should contain the zero
+        frequency term.
+    center_idx : int
+        Apply filter around this element of the input array.
+    filter_width : int
+        Wdith of filter measured in elements of fd. If even, 1 is
+        added to window width.
+    '''
+
+    # We select a view from the input array and apply the window to it,
+    # this avoids creating another large array for the window.
+    left = center_idx - int(filter_width / 2.)
+    right = center_idx + int(filter_width / 2.) + 1
+    arr2filter = fd[left:right]
+
+    # Apply the filter.
+    w = tukey_window(arr2filter.size)
+    arr2filter *= w
+
+    # Set array outside filter to zero.
+    fd[:left] *= 0.
+    fd[right:] *= 0.
+
+    return
+
+def filter_tod_hwp(tod, fsamp, hwp_freq):
+    '''
+    Convolve TOD with window around 4 * fHWP (in place).
+
+    Arguments
+    ---------
+    tod : ndarray
+    fsamp : float
+        Sample frequency of TOD in Hz
+    hwp_freq : float
+        HWP rotation frequency (fHWP) in Hz.
+    '''
+
+    fd = np.fft.rfft(tod)
+
+    # Find sample that corresponds to 4 * fHWP.
+    # We could use numpy.fft.rfftfreq here, but we want to
+    # avoid loading another large array in memory.
+
+    center_idx = int(round((4 * hwp_freq) / float(fsamp) * tod.size))
+
+    # For now, we use a window width of 2 * hwp_freq.
+    left_idx = round((3 * hwp_freq) / float(fsamp) * tod.size)
+    right_idx = round((5 * hwp_freq) / float(fsamp) * tod.size)
+    filter_width = right_idx - left_idx + 1
+
+    filter_ft_hwp(fd, center_idx, filter_width)
+
+    # This is not really in place I think.
+    tod[:] = np.fft.irfft(fd, n=tod.size)
+
+    return
+
+def mueller2spin(mueller_mat):
+    '''
+    Transform input Mueller matrix to complex
+    spin basis.
+
+    Arguments
+    ---------
+    mueller_mat : (4, 4) array
+
+    Returns
+    -------
+    spin_mat : (4, 4) complex array    
+    '''
+    sqrt2 = np.sqrt(2)
+    tmat = np.asarray([[1, 0, 0, 0],
+                       [0, 1/sqrt2, 1j/sqrt2, 0],
+                       [0, 1/sqrt2, -1j/sqrt2, 0],
+                       [0, 0, 0, 1]])
+    tmatinv = np.linalg.inv(tmat)
+    
+    return np.dot(np.dot(tmat, mueller_mat), tmatinv)        
 

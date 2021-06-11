@@ -6,7 +6,7 @@ import numpy as np
 import healpy as hp
 
 def plot_map(map_arr, write_dir, tag,
-             plot_func=hp.mollview, tight=False, dpi=150, **kwargs):
+    plot_func=hp.mollview, tight=False, dpi=150, transparent=False, **kwargs):
     '''
     Plot map using one of the healpy plotting
     functions and write to disk.
@@ -37,18 +37,20 @@ def plot_map(map_arr, write_dir, tag,
         filterwarnings('ignore', category=RuntimeWarning)
 
         plot_func(map_arr, **kwargs)
-        plt.savefig(filename+'.png', bbox_inches=bbox_inches, dpi=dpi)
+        plt.savefig(filename+'.png', bbox_inches=bbox_inches, dpi=dpi,
+            transparent=transparent)
     plt.close()
 
 def round_sig(x, sig=1):
 
     return np.round(x, sig-int(np.floor(np.log10(np.abs(x))))-1)
 
-def plot_iqu(maps, write_dir, tag,
-             sym_limits=None, mask=None, tight=False, dpi=150, udicts=None, **kwargs):
+def plot_iqu(maps, write_dir, tag, plot_func=hp.mollview,
+    no_limits=False, limits=None, sym_limits=None, symmetric=False,
+    mask=None, tight=False, dpi=150, udicts=None, **kwargs):
     '''
-    Plot a (set of I, Q, U) map(s) and write each
-    to disk.
+    Plot a (set of I, Q, U) map(s) and write each to disk.
+    If a list with 4 maps is provided, assume the fourth component is Stokes V.
 
     Arguments
     ---------
@@ -73,23 +75,43 @@ def plot_iqu(maps, write_dir, tag,
     kwargs : {plot_map_opts, healpy_plt_opts}
     '''
 
+
     dim1 = np.shape(maps)[0]
-    if dim1 != 3:
-        raise ValueError('maps should be a sequence of three arrays')
+    stokes = ['I', 'Q', 'U']
 
-    if not hasattr(sym_limits, "__iter__"):
+    if dim1 != 3 and dim1 !=4:
+        raise ValueError('maps should be a sequence of three or four arrays')
+
+    limits_set = False
+    if hasattr(sym_limits, "__iter__"):
+        symmetric, limits_set = True, True
+
+    if hasattr(limits, "__iter__"):
+        limits_set = True
+        symmetric = False
+
+    elif (not hasattr(sym_limits, "__iter__")) and sym_limits is not None and symmetric:
         sym_limits = [sym_limits] * 3
+        limits_set = True
 
-    if udicts is None:
+    if udicts is None and dim1 == 3:
         udicts = [{}, {}, {}]
+    elif udicts is None and dim1 == 4:
+        udicts = [{}, {}, {}, {}]
+        stokes.append('V')
 
-    for pidx, (pol, udict) in enumerate(zip(['I', 'Q', 'U'], udicts)):
+    maxx, minn = None, None
+    for pidx, (st, udict) in enumerate(zip(stokes, udicts)):
 
-        maxx = kwargs.pop('max', sym_limits[pidx])
-        try:
-            minn = -maxx
-        except TypeError:
-            minn = maxx
+        if limits_set and symmetric:
+            minn = -sym_limits[pidx]
+            maxx = sym_limits[pidx]
+        elif limits_set:
+            minn = limits[pidx][0]
+            maxx = limits[pidx][1]
+        elif (maxx is None) and (minn is None):
+            maxx = kwargs.pop('max', 10)
+            minn = kwargs.pop('min', -10)
 
         zwargs = kwargs.copy()
         zwargs.update(udict)
@@ -105,5 +127,10 @@ def plot_iqu(maps, write_dir, tag,
         if mask is not None:
             map2plot[~mask] = np.nan
 
-        plot_map(map2plot, write_dir, tag+'_'+pol,
-                min=minn, max=maxx,  tight=tight, **zwargs)
+        plot_func = zwargs.pop('plot_func', plot_func)
+        if no_limits:
+            plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
+                tight=tight, **zwargs)
+        else:
+            plot_map(map2plot, write_dir, tag+'_'+st, plot_func=plot_func,
+                min=minn, max=maxx, tight=tight, **zwargs)
