@@ -14,8 +14,6 @@ binned on the sphere.
 
 The code and some results based on its use are described in: [1809.05034](https://arxiv.org/abs/1809.05034)
 
-**UPDATE**: See the `hwp_syst` branch for the generalization to non-ideal half-wave plates that is described in [2012.10437](https://arxiv.org/abs/2012.10437). This branch will be merged with the main branch in the future.
-
 ### Usage
 
 See example scripts [`beamconv/test.py`](../../tree/master/beamconv/test.py) and Jupyter notebooks in [`notebooks`](../../tree/master/notebooks). In particular, we suggest that the user try running [`notebooks/introduction.ipynb`](../../tree/master/notebooks/introduction.ipynb) followed by [`notebooks/simple_scan.ipynb`](../../tree/master/notebooks/simple_scan.ipynb).
