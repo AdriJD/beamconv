@@ -1,5 +1,7 @@
 # beamconv
 
+**This branch is for implementing and testing a spinning-top satellite scanning strategy**
+
 **Authors**: Adri J. Duivenvoorden and Jon E. Gudmundsson
 
 **contact**: adriaand@princeton.edu
