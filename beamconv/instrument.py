@@ -1636,7 +1636,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None,
-                    beam_v=False, input_v=False,
+                    beam_v=False, input_v=False, ground_alm=False,
                     **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
@@ -1704,8 +1704,11 @@ class ScanStrategy(Instrument, qp.QMap):
 
                             beam_b.ghosts[gidx].reuse_blm(
                                 beam_a.ghosts[0])
-
-        self.init_spinmaps(alm, beam_a, input_v=input_v,
+        if ground_alm is not None:
+            self.init_spinmaps(alm, beam_a, ground_alm = ground_alm, 
+                            input_v=input_v, beam_v=beam_v, **kwargs)
+        else:
+            self.init_spinmaps(alm, beam_a, input_v=input_v,
                             beam_v=beam_v, **kwargs)
 
         # free blm attributes
@@ -1713,7 +1716,7 @@ class ScanStrategy(Instrument, qp.QMap):
         if b_exists:
             beam_b.delete_blm(del_ghosts_blm=True)
 
-    def scan_instrument_mpi(self, alm, verbose=1, binning=True,
+    def scan_instrument_mpi(self, alm, ground_alm=None, verbose=1, binning=True,
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, input_v=False,
@@ -1732,6 +1735,11 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         ---------
+        ground_alm :  tuple, None
+            Tuple containing (almI, almE, almB) as Healpix-formatted
+            complex numpy arrays for a ground in  horizontal coordinates
+            Used if one wants to add a ground template signal to the tod.
+            Obviously made for ground-based scans only.
         verbose : int
             Prints status reports (0 : nothing, 1: some,
             2: all) (defaul: 1)
@@ -1864,6 +1872,10 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             elif hasattr(self, 'spinmaps') and reuse_spinmaps:
                 pass
+            elif ground_alm is not None:
+                self.init_detpair(alm, beam_a, beam_b=beam_b,
+                                input_v=input_v, beam_v=beam_v, ground_alm
+                                **spinmaps_opts)
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
                                 input_v=input_v, beam_v=beam_v,
@@ -1886,7 +1898,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Make the boresight move.
                 ces_opts = kwargs.copy()
                 ces_opts.update(chunk)
-
+                if ground_alm is not None:
+                    ces_opts.update({'ground':True})
                 # Use precomputed pointing on subsequent passes.
                 # Note, not used if memmap is not initialized.
                 if bidx > 0:
@@ -1907,7 +1920,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
-
+                if ground_alm is not None:
+                    subchunk['ground'] = True
                 # print(subchunks)
                 for subchunk in subchunks:
 
@@ -2104,7 +2118,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
         scan_speed=1, az_prf='triangle',
         check_interval=600, el_min=45, cut_el_min=False,
-        use_precomputed=False, ground_scan=False, q_bore_func=None,
+        use_precomputed=False, ground=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,
         ctime_kwargs=None, **kwargs):
         '''
@@ -2309,19 +2323,26 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_end = sub_start + sub_size[self.mpi_rank]
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
-            if ground_scan:
+            
+            if ground:
+                q_boreground = np.empty(chunk_size * 4, dtype=float)
                 caz = np.cos(np.radians(az[sub_start:sub_end])/2.)
                 saz = np.sin(np.radians(az[sub_start:sub_end])/2.)
                 cel = np.cos(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
                 sel = np.sin(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
-                q_boresub = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                q_boresubground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                q_boresubground = q_boresubground.ravel()
+                ground_offsets = np.zeros(self.mpi_size)
+                ground_offsets[1:] = np.cumsum(4*sub_size)[:-1] # start * 4
+                self._comm.Allgatherv(q_boresubground,
+                                [q_boreground, 4*sub_size, ground_offsets, self._mpi_double])
+                self.q_boreground = q_boreground.reshape(chunk_size, 4)
 
-            else:
             # calculate section of q_bore
-                q_boresub = self.azel2bore(az[sub_start:sub_end],
-                                        el[sub_start:sub_end],
-                                        None, None, self.lon, self.lat,
-                                        ctime[sub_start:sub_end])
+            q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                    el[sub_start:sub_end],
+                                    None, None, self.lon, self.lat,
+                                    ctime[sub_start:sub_end])
             q_boresub = q_boresub.ravel()
 
             sub_size *= 4 # For the flattened quat array.
@@ -2335,16 +2356,15 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = q_bore.reshape(chunk_size, 4)
 
         else:
-            if ground_scan:
+            if ground:
                 caz = np.cos(np.radians(az)/2.)
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                self.q_bore = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                self.q_boreground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
 
-            else:
-                self.q_bore = self.azel2bore(az, el, None, None, self.lon,
-                                         self.lat, ctime)
+            self.q_bore = self.azel2bore(az, el, None, None, self.lon,
+                                     self.lat, ctime)
 
         # Store boresight quat in memmap if needed.
         if hasattr(self, 'mmap'):
@@ -3027,6 +3047,10 @@ class ScanStrategy(Instrument, qp.QMap):
                         skip_scan=skip_scan,
                         **kwargs)
 
+        #Add ground tod
+        if 'ground' in kwargs:
+            self.scan(beam, interp=interp, add_to_tod=True, **kwargs)
+
         # Find indices to slice of chunk.
         start = kwargs.get('start')
         end = kwargs.get('end')
@@ -3194,6 +3218,8 @@ class ScanStrategy(Instrument, qp.QMap):
             return
 
         beam_type = 'main_beam' if not beam.ghost else 'ghosts'
+        if 'ground' in kwargs:
+            beam_type = 'ground'
         if beam_type == 'ghosts':
             spinmaps = self.spinmaps[beam_type][beam.ghost_idx]
         else:
@@ -3222,8 +3248,15 @@ class ScanStrategy(Instrument, qp.QMap):
             ra = np.empty(tod_size, dtype=np.float64)
             dec = np.empty(tod_size, dtype=np.float64)
             pa = np.empty(tod_size, dtype=np.float64)
+            if 'ground' in kwargs:
+                self.bore2radec(q_off,
+                            self.ctime[qidx_start:qidx_end],
+                            self.q_boreground[qidx_start:qidx_end],
+                            q_hwp=None, sindec=False, return_pa=True,
+                            ra=ra, dec=dec, pa=pa)
 
-            self.bore2radec(q_off,
+            else:
+                self.bore2radec(q_off,
                             self.ctime[qidx_start:qidx_end],
                             self.q_bore[qidx_start:qidx_end],
                             q_hwp=None, sindec=False, return_pa=True,
@@ -3236,10 +3269,16 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             # In no interpolation is required, we can go straight
             # from quaternion to pix and pa.
-            pix, pa = self.bore2pix(q_off,
-                        self.ctime[qidx_start:qidx_end],
-                        self.q_bore[qidx_start:qidx_end],
-                        q_hwp=None, nside=nside_spin, return_pa=True)
+            if 'ground' in kwargs:
+                pix, pa = self.bore2pix(q_off,
+                            self.ctime[qidx_start:qidx_end],
+                            self.q_boreground[qidx_start:qidx_end],
+                            q_hwp=None, nside=nside_spin, return_pa=True)
+            else:
+                pix, pa = self.bore2pix(q_off,
+                            self.ctime[qidx_start:qidx_end],
+                            self.q_bore[qidx_start:qidx_end],
+                            q_hwp=None, nside=nside_spin, return_pa=True)
 
             # Expose pixel indices for test centroid.
             self.pix = pix
@@ -3429,7 +3468,7 @@ class ScanStrategy(Instrument, qp.QMap):
             tod += scan
 
 
-    def init_spinmaps(self, alm, beam, max_spin=5, nside_spin=256,
+    def init_spinmaps(self, alm, beam, ground_alm=None, max_spin=5, nside_spin=256,
                       symmetric=False, input_v=False, beam_v=False):
         '''
         Compute appropriate spinmaps for beam and
@@ -3471,6 +3510,7 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         self.spinmaps = {'main_beam' : {},
+                         'ground': {},
                          'ghosts': []}
 
         max_s = min(beam.mmax, max_spin)
@@ -3517,6 +3557,11 @@ class ScanStrategy(Instrument, qp.QMap):
                             input_v=input_v, beam_v=beam_v)
                 self.spinmaps['ghosts'][u] = spinmap_dict
 
+        if ground_alm is not None:
+            self.spinmaps['ground'] = self._init_spinmaps(ground_alm,
+                                    blm, max_s, nside_spin, symmetric=beam.symmetric,
+                                    hwp_mueller=beam.hwp_mueller, input_v=input_v,
+                                    beam_v=beam_v)
 
 
     @staticmethod
