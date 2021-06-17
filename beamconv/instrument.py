@@ -1636,7 +1636,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.nside_out = nside
 
     def init_detpair(self, alm, beam_a, beam_b=None,
-                    beam_v=False, input_v=False, ground_alm=False,
+                    beam_v=False, input_v=False, ground_alm=None,
                     **kwargs):
         '''
         Initialize the internal structure (the spinmaps)
@@ -1874,7 +1874,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             elif ground_alm is not None:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
-                                input_v=input_v, beam_v=beam_v, ground_alm
+                                input_v=input_v, beam_v=beam_v, ground_alm=ground_alm,
                                 **spinmaps_opts)
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
@@ -1920,11 +1920,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
                 # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
-                if ground_alm is not None:
-                    subchunk['ground'] = True
                 # print(subchunks)
                 for subchunk in subchunks:
-
+                    if ground_alm is not None:
+                        subchunk['ground'] = True
                     if verbose == 2:
                         print(('[rank {:03d}]:\t\t...'
                                ' samples {:d}-{:d}, norot={}').format(
@@ -3040,16 +3039,18 @@ class ScanStrategy(Instrument, qp.QMap):
 
         tod_exists = True if n > 0 else False
 
+        #Add ground tod
+        if 'ground' in kwargs:
+            self.scan(beam, interp=interp, add_to_tod=tod_exists, **kwargs)
+            kwargs.pop('ground')
+            tod_exists = True
+
         # Scan with main beam. Add to ghost TOD if present.
         ret = self.scan(beam, interp=interp, return_tod=save_tod,
                         add_to_tod=tod_exists,
                         return_point=save_point,
                         skip_scan=skip_scan,
                         **kwargs)
-
-        #Add ground tod
-        if 'ground' in kwargs:
-            self.scan(beam, interp=interp, add_to_tod=True, **kwargs)
 
         # Find indices to slice of chunk.
         start = kwargs.get('start')
