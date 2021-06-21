@@ -1719,7 +1719,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, input_v=False,
-            beam_v=False, **kwargs):
+            beam_v=False, use_litebird_scan=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1778,7 +1778,7 @@ class ScanStrategy(Instrument, qp.QMap):
         beam_v : bool
                 include the 4th blm component if
                 it exists
-        kwargs : {ces_opts, spinmaps_opts}
+        kwargs : {scan_opts, spinmaps_opts}
             Extra kwargs are assumed input to
             `implement_scan()` or `init_spinmaps()`.
 
@@ -1886,15 +1886,18 @@ class ScanStrategy(Instrument, qp.QMap):
                             chunk['cidx'], chunk['start'], chunk['end']))
 
                 # Make the boresight move.
-                ces_opts = kwargs.copy()
-                ces_opts.update(chunk)
+                scan_opts = kwargs.copy()
+
+                print('debug:')
+                print(scan_opts.keys())
+                scan_opts.update(chunk)
 
                 # Use precomputed pointing on subsequent passes.
                 # Note, not used if memmap is not initialized.
                 if bidx > 0:
-                    ces_opts.update(dict(use_precomputed=True))
+                    scan_opts.update(dict(use_precomputed=True))
 
-                self.implement_scan(**ces_opts)
+                self.implement_scan(**scan_opts)
 
                 # If needed, allocate arrays for data.
                 if bidx == 0:
@@ -2107,7 +2110,7 @@ class ScanStrategy(Instrument, qp.QMap):
         az_prf='triangle', check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,
-        ctime_kwargs=None, litebird_scan=False, **kwargs):
+        ctime_kwargs=None, use_litebird_scan=False, **kwargs):
 
         '''
         Populates scanning quaternions.
@@ -2196,7 +2199,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
 
-        elif litebird_scan:
+        elif use_litebird_scan:
+
+            print('Implementing litebird scan')
+
             self.ctime = litebird_ctime(start=start, end=end, **ctime_kwargs)
             self.q_bore = litebird_scan(start=start, end=end, **q_bore_kwargs)
 
@@ -2462,12 +2468,17 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
 
+            print('We are here')
+
             q_bore = scanning.ctime2bore(self.ctime)
             # q_bore = self.azel2bore(az, el, None, None, lon,
             #                              lat, self.ctime)
 
-        self.flag = np.zeros_like(az, dtype=bool)
+            #print(q_bore[:100])
 
+        self.flag = np.zeros(len(q_bore), dtype=bool)
+
+        return q_bore
 
     def satellite_ctime(self, **kwargs):
         '''
