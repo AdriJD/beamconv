@@ -170,6 +170,11 @@ def ctime2bore(ctime):
     freq_antisun = 192.348  # minutes
     freq_boresight = 0.314  # radians per minutes
 
+    theta_antisun = np.radians(theta_antisun)
+    theta_boresight = np.radians(theta_boresight)
+    freq_antisun = 1. / (freq_antisun * 60.)
+    freq_boresight = freq_boresight / 60.
+
     # n_time = int(siad * sample_rate)
     # sec2date = (1.e-4/8.64)
     # time_julian = np.arange(n_time)/(n_time-1.)*siad*sec2date + today_julian # time in julian [day]
