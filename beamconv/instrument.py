@@ -1719,7 +1719,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, input_v=False,
-            beam_v=False, use_litebird_scan=False, **kwargs):
+            beam_v=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1888,8 +1888,6 @@ class ScanStrategy(Instrument, qp.QMap):
                 # Make the boresight move.
                 scan_opts = kwargs.copy()
 
-                print('debug:')
-                print(scan_opts.keys())
                 scan_opts.update(chunk)
 
                 # Use precomputed pointing on subsequent passes.
@@ -2161,7 +2159,7 @@ class ScanStrategy(Instrument, qp.QMap):
             `ScanStrategy.__init__`. (default : None)
         ctime_kwargs : dict, None
             Keyword arguments to ctime_func (default: None)
-        litebird_scan : bool
+        use_litebird_scan : bool
             If true, implements a LiteBIRD-like scan strategy
         start : int
             Start index
@@ -2181,8 +2179,11 @@ class ScanStrategy(Instrument, qp.QMap):
         every other kwarg except `start` and `end`.
         '''
 
+
         start = kwargs.pop('start')
         end = kwargs.pop('end')
+
+
 
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
@@ -2192,7 +2193,7 @@ class ScanStrategy(Instrument, qp.QMap):
             raise TypeError("implement_scan() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
-        if self.ext_point:
+        if self.ext_point and not use_litebird_scan:
             # Use external pointing, so skip rest of function.
             self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, **q_bore_kwargs)
@@ -2202,9 +2203,8 @@ class ScanStrategy(Instrument, qp.QMap):
         elif use_litebird_scan:
 
             print('Implementing litebird scan')
-
-            self.ctime = litebird_ctime(start=start, end=end, **ctime_kwargs)
-            self.q_bore = litebird_scan(start=start, end=end, **q_bore_kwargs)
+            self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
+            self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
             return
 
@@ -2468,13 +2468,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
 
-            print('We are here')
-
             q_bore = scanning.ctime2bore(self.ctime)
-            # q_bore = self.azel2bore(az, el, None, None, lon,
-            #                              lat, self.ctime)
-
-            #print(q_bore[:100])
 
         self.flag = np.zeros(len(q_bore), dtype=bool)
 
