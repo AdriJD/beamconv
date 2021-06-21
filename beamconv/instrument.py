@@ -10,6 +10,8 @@ import numpy as np
 import qpoint as qp
 import healpy as hp
 
+import scanning
+
 from . import tools
 from .detector import Beam
 
@@ -1224,7 +1226,7 @@ class ScanStrategy(Instrument, qp.QMap):
         num_samples : int, None
             Number of samples in mission (default : None)
         external_pointing : bool
-            If set, `constant_el_scan` loads up boresight pointing
+            If set, `implement_scan` loads up boresight pointing
             and time timestreams instead of calculating them.
             (default : False)
         ctime0 : float
@@ -1778,7 +1780,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 it exists
         kwargs : {ces_opts, spinmaps_opts}
             Extra kwargs are assumed input to
-            `constant_el_scan()` or `init_spinmaps()`.
+            `implement_scan()` or `init_spinmaps()`.
 
         Notes
         -----
@@ -1892,7 +1894,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 if bidx > 0:
                     ces_opts.update(dict(use_precomputed=True))
 
-                self.constant_el_scan(**ces_opts)
+                self.implement_scan(**ces_opts)
 
                 # If needed, allocate arrays for data.
                 if bidx == 0:
@@ -2101,16 +2103,17 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return arr
 
-    def constant_el_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
+    def implement_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
         scan_speed=1, az_prf='triangle',
         check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,
-        ctime_kwargs=None, **kwargs):
+        ctime_kwargs=None, litebird_scan=False, **kwargs):
         '''
         Populates scanning quaternions.
-        Let boresight scan back and forth in azimuth, starting
-        centered at ra0, dec0, while keeping elevation constant.
+        If no other options are selected, makes boresight scan back and forth in
+        azimuth, starting centered at ra0, dec0, while keeping elevation
+        constant.
 
         Keyword Arguments
         ---------
@@ -2155,6 +2158,8 @@ class ScanStrategy(Instrument, qp.QMap):
             `ScanStrategy.__init__`. (default : None)
         ctime_kwargs : dict, None
             Keyword arguments to ctime_func (default: None)
+        litebird_scan : bool
+            If true, implements a LiteBIRD-like scan strategy
         start : int
             Start index
         end : int
@@ -2181,7 +2186,7 @@ class ScanStrategy(Instrument, qp.QMap):
         hwpang = kwargs.pop('hwpang', None)
 
         if kwargs:
-            raise TypeError("constant_el_scan() got unexpected "
+            raise TypeError("implement_scan() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
         if self.ext_point:
@@ -2191,6 +2196,11 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
 
+        elif litebird_scan:
+            self.ctime = litebird_ctime(start=start, end=end, **ctime_kwargs)
+            self.q_bore = litebird_scan(start=start, end=end, **q_bore_kwargs)
+
+            return
 
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
@@ -2338,6 +2348,79 @@ class ScanStrategy(Instrument, qp.QMap):
             # wait for I/O
             if self.mpi:
                 self._comm.barrier()
+
+    def litebird_ctime(self, **kwargs):
+        '''
+        A function to produce unix time (ctime) for a given chunk
+
+        Keyword arguments
+        -----------------
+
+        kwargs : {chunk}
+
+
+        Returns
+        -------
+
+        ctime : ndarray
+            Unix time array. Size = (end - start)
+        '''
+
+        start = kwargs.pop('start')
+        end = kwargs.pop('end')
+
+        ctime = np.arange(start, end, dtype=float)
+        ctime /= float(self.fsamp)
+        ctime += self.ctime0
+
+        return ctime
+
+    def litebird_scan(self, theta_antisun=45., theta_boresight = 50.,
+        freq_antisun = 192.348, freq_boresight = 0.314, sample_rate = 19.1,
+        jitter_amp=0.0, return_all=False, **kwargs):
+        '''
+        A function to simulate satellite scanning strategy.
+
+        Keyword arguments
+        -----------------
+        alpha : float
+            Angle between spin axis and precession axis in degree.
+            (default : 50.)
+        beta : float
+            Angle between spin axis and boresight in degree.
+            (default : 50.)
+        alpha_period : float
+            Time period for precession in seconds. (default : 5400)
+        beta_period : float
+            Spin period in seconds. (default : 600.)
+        jitter_amp : float
+            Std of iid Gaussian noise added to elevation coords.
+            (default : 0.0)
+        return_all : bool
+            Also return az, el, lon, lat. (default : False)
+        start : int
+            Start index
+        end : int
+            End index
+        cidx : int
+
+        Returns
+        -------
+        (az, el, lon, lat,) q_bore : array-like
+            Depending on return_all
+
+        Notes
+        -----
+        See Wallis et al., 2017, MNRAS, 466, 425.
+        '''
+
+        siad = 86400.            # seconds in a day
+        today_julian = 1        # I just set 1 by hand
+        sample_rate = 19.1      # Hz
+        ydays = 20              # duration of the mission (in days)
+        nsiade = 256
+        runtime_i = time.time()
+
 
     def satellite_ctime(self, **kwargs):
         '''
