@@ -2103,12 +2103,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return arr
 
-    def implement_scan(self, ra0=-10, dec0=-57.5, az_throw=90,
-        scan_speed=1, az_prf='triangle',
-        check_interval=600, el_min=45, cut_el_min=False,
+    def implement_scan(self, ra0=-10, dec0=-57.5, az_throw=90, scan_speed=1,
+        az_prf='triangle', check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,
         ctime_kwargs=None, litebird_scan=False, **kwargs):
+
         '''
         Populates scanning quaternions.
         If no other options are selected, makes boresight scan back and forth in
@@ -2377,7 +2377,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def litebird_scan(self, theta_antisun=45., theta_boresight = 50.,
         freq_antisun = 192.348, freq_boresight = 0.314, sample_rate = 19.1,
-        jitter_amp=0.0, return_all=False, **kwargs):
+        jitter_amp=0.0, **kwargs):
         '''
         A function to simulate satellite scanning strategy.
 
@@ -2396,8 +2396,6 @@ class ScanStrategy(Instrument, qp.QMap):
         jitter_amp : float
             Std of iid Gaussian noise added to elevation coords.
             (default : 0.0)
-        return_all : bool
-            Also return az, el, lon, lat. (default : False)
         start : int
             Start index
         end : int
@@ -2421,6 +2419,55 @@ class ScanStrategy(Instrument, qp.QMap):
         nsiade = 256
         runtime_i = time.time()
 
+        dt = 1 / float(self.fsamp)
+        nsamp = self.ctime.size # ctime determines chunk size
+
+        if self.mpi:
+
+            # Calculate boresight quaternion in parallel
+            chunk_size = nsamp
+            sub_size = np.zeros(self.mpi_size, dtype=int)
+            quot, remainder = divmod(chunk_size, self.mpi_size)
+            sub_size += quot
+
+            if remainder:
+                # give first ranks one extra quaternion
+                sub_size[:int(remainder)] += 1
+
+            sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
+            sub_end = sub_start + sub_size[self.mpi_rank]
+
+            q_bore = np.empty(chunk_size * 4, dtype=float)
+
+            # calculate section of q_bore
+            # q_boresub = self.azel2bore(az[sub_start:sub_end],
+            #                         el[sub_start:sub_end],
+            #                         None, None,
+            #                         lon[sub_start:sub_end],
+            #                         lat[sub_start:sub_end],
+            #                         self.ctime[sub_start:sub_end])
+
+            q_boresub = scanning.ctime2bore(self.ctime[sub_start:sub_end])
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # for the flattened quat array
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+
+            # combine all sections on all ranks
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            q_bore = q_bore.reshape(chunk_size, 4)
+
+        else:
+
+            q_bore = scanning.ctime2bore(self.ctime)
+            # q_bore = self.azel2bore(az, el, None, None, lon,
+            #                              lat, self.ctime)
+
+        self.flag = np.zeros_like(az, dtype=bool)
+
 
     def satellite_ctime(self, **kwargs):
         '''
@@ -2437,6 +2484,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         ctime : ndarray
             Unix time array. Size = (end - start)
+
         '''
 
         start = kwargs.pop('start')
