@@ -68,9 +68,9 @@ for i in range(el.size):
     +(t_cmb_cerro-t_cmb_ground)/400.*dcerro*np.tan(np.pi/2.-theta[condition]))
 
 hp.mollview(gtemplate, cmap='plasma', flip='geo', rot=(180,0,0), 
-    min=3.41e8, max=3.51e8, unit=r"T $(\mu K_{CMB})$")
-plt.title("Blackbody ground template at 95GHz, 20% bandwidth")
-#hp.graticule(dpar=15, dmer=30)
-plt.show()
+    min=3.41e8, max=3.51e8, unit=r"T $(\mu K_{CMB})$", bgcolor='#FFFFFF')
+#plt.title("Blackbody ground template at 95GHz, 20% bandwidth")
+hp.graticule(dpar=15, dmer=30)
+plt.savefig("ata_95.png", transparent=True)
 
-hp.write_map('ground_ata95.fits', gtemplate, overwrite=True)
+#hp.write_map('ground_ata95.fits', gtemplate, overwrite=True)
