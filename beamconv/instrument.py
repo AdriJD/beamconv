@@ -1651,13 +1651,16 @@ class ScanStrategy(Instrument, qp.QMap):
             contains V polarization
         beam_a : <detector.Beam> object
             The A detector.
+
+        Keyword arguments
+        -----------------
         beam_v : bool
                 include the 4th blm component
         input_v : bool
                 include the 4th alm component
-
-        Keyword arguments
-        -----------------
+        ground_alm : tuple
+            Tuple containing (ground_almI, ground_almE, ground_almB) as
+            Healpix-formatted complex numpy arrays
         beam_b : <detector.Beam> object
             The B detector. (default : None)
         kwargs : {spinmaps_opts}
@@ -2154,6 +2157,9 @@ class ScanStrategy(Instrument, qp.QMap):
         use_precomputed : bool
             Load up precomputed boresight quaternion if
             memory-map is present (default : False)
+        ground : bool
+            If True, will compute q_boreground, the pointing quaternion in
+            az, el cooridnates
         q_bore_func : callable, None
             A user-defined function that takes `start` and `end` (kw)args and
             outputs a (unit) quaternion array of shape=(nsamp, 4) on all ranks.
@@ -2716,7 +2722,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return_all : bool
             If set, return az, el, lat, lon as well as q_bore
         ground : bool
-            If set, return q_boreground
+            If True, return q_boreground
         az_prf : str
             Type of scan profile, currently only admits 'triangle'
 
@@ -3248,6 +3254,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmaps = self.spinmaps[beam_type][beam.ghost_idx]
         else:
             spinmaps = self.spinmaps[beam_type]
+        #This way, you can get the "main_beam" or the "ground" spin map
 
         # Do some sanity checks on spinmaps.
         for conv_type in spinmaps:
@@ -3272,6 +3279,7 @@ class ScanStrategy(Instrument, qp.QMap):
             ra = np.empty(tod_size, dtype=np.float64)
             dec = np.empty(tod_size, dtype=np.float64)
             pa = np.empty(tod_size, dtype=np.float64)
+            #If ground, point the detector in horizontal coordinates
             if 'ground' in kwargs:
                 self.bore2radec(q_off,
                             self.ctime[qidx_start:qidx_end],
@@ -3508,6 +3516,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
         Keyword arguments
         -----------------
+        ground_alm : tuple of array-like, optional
+            Ground alms (ground_almI, ground_almE, ground_almB) 
         max_spin : int, optional
             Maximum azimuthal mode describing the beam (default : 5)
         nside_spin : int
