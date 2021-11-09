@@ -149,13 +149,13 @@ class TestTools(unittest.TestCase):
 
     def test_filter_ft_hwp(self):
 
-        fd = np.ones(10, dtype=np.complex)
+        fd = np.ones(10, dtype=np.complex128)
         fd += 1j
         center_idx = 4
         filter_width = 4
         tools.filter_ft_hwp(fd, center_idx, filter_width)
 
-        exp_ans = np.zeros(10, dtype=np.complex)
+        exp_ans = np.zeros(10, dtype=np.complex128)
         exp_ans[3] = .75 + .75j
         exp_ans[4] = 1. + 1.j
         exp_ans[5] = .75 + .75j
@@ -167,7 +167,7 @@ class TestTools(unittest.TestCase):
         fsamp = 10.3
         nsamp = 103 # I.e. 10 sec of data.
         
-        t = np.arange(nsamp, dtype=np.float) # Samples.
+        t = np.arange(nsamp, dtype=np.float64) # Samples.
         
         tod = np.sin(2 * t * (2 * np.pi) / float(nsamp)) # f = .2 Hz
         tod += np.sin(4 * t * (2 * np.pi) / float(nsamp)) # f = .4 Hz
