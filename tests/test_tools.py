@@ -207,6 +207,9 @@ class TestTools(unittest.TestCase):
         blmB = np.random.randn(hp.Alm.getsize(lmax)).astype(np.complex128)
         blmB += 1j * np.random.randn(hp.Alm.getsize(lmax))        
 
+        blmE[:lmax+1] = np.real(blmE[:lmax+1])
+        blmB[:lmax+1] = np.real(blmB[:lmax+1])
+
         blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 0)
 
         np.testing.assert_almost_equal(blmE_new, blmE)
@@ -219,17 +222,17 @@ class TestTools(unittest.TestCase):
         blmm2 = np.array(
             [0, 0, 1j, 1j, 1j, 0, 2j, 2j, 2j, 3j, 3j, 3j, 4j, 4j, 5j],
             dtype=np.complex128)
-        blmE, blmB = tools.spin2eb(blmm2, blmp2)
+        #blmE, blmB = tools.spin2eb(blmm2, blmp2)
         
-        blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 4)
-        blmm2_new, blmp2_new = tools.eb2spin(blmE_new, blmB_new)
+        blmm2_new, blmp2_new = tools.shift_blm(blmm2, blmp2, 4, eb=False)
+        #blmm2_new, blmp2_new = tools.eb2spin(blmE_new, blmB_new)
         
         blmp2_exp = np.array(
-            [0, 0, 0, 0, -5j, 0, 0, 4j, 4j, -3j, -3j, -3j, 2j, 2j, 1],
+            [0, 0, 0, 0, 0, 0, 0, 4j, 4j, -3j, -3j, -3j, 2j, 2j, 1],
             dtype=np.complex128)
 
         blmm2_exp = np.array(
-            [0, 0, 0, 0, 5j, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             dtype=np.complex128)
         
         np.testing.assert_almost_equal(blmm2_new, blmm2_exp)
@@ -246,6 +249,9 @@ class TestTools(unittest.TestCase):
         # all l=0 and l=1 elemets to zero. shift_blm does not
         # have that restriction. So, let us manually fix that.
         blmm2[5] = 0
+        # Also, unpol2pol does not demand that m=0 is real.
+        blmm2_exp[:5] = np.real(blmm2_exp[:5])
+        blmp2_exp[:5] = np.real(blmp2_exp[:5])
         
         np.testing.assert_almost_equal(blmm2, blmm2_exp)
         np.testing.assert_almost_equal(blmp2, blmp2_exp)        
@@ -260,10 +266,10 @@ class TestTools(unittest.TestCase):
 
         # We now expect that blmm2 and blmp2 are equal to blm again.
         # The only difference is that we have lost some l=0 and l=1
-        # elements along the way.
+        # elements and some imaginary parts along the way.
 
         blmm2_exp = np.array([0, 0, 1, 1, 1, 0, 0, 2, 2j, 0, 0, 3j, 0, 0, 0])
-        blmp2_exp = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j])
+        blmp2_exp = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2j, 3, 3, 0, 4, 4j, 5j])
 
         np.testing.assert_almost_equal(blmm2, blmm2_exp)
         np.testing.assert_almost_equal(blmp2, blmp2_exp)        
@@ -281,6 +287,34 @@ class TestTools(unittest.TestCase):
 
         np.testing.assert_almost_equal(blmm2, blmm2_exp)
         np.testing.assert_almost_equal(blmp2, blmp2_exp)        
+
+    def test_shift_blm_m0(self):
+        # Test if m=0 elements of resulting blms are real.
+
+        blmp2 = np.array([0, 0, 1, 1, 1, 0, 2 + 2j, 2 - 2j, 2 + 2j,
+                          3 + 3j, 3 - 3j, 3 + 3j, 4 - 4j, 4 + 4j, 5 + 5j],
+                          dtype=np.complex128)
+        blmm2 = np.array([0, 0, 10, 10, 10, 0, 20 + 20j, 20 - 20j, 20 + 20j,
+                          30 + 30j, 30 - 30j, 30 + 30j, 40 + 40j, 40 - 40j, 50 + 50j],
+                          dtype=np.complex128)
+
+        blmp2_exp = np.array([0, 0, 30, 30, 30,
+                              0, -20 + 20j, -20 - 20j, -20 + 20j,
+                              1, 1, 1, 
+                              2 - 2j, 2 + 2j,
+                              3 + 3j],
+                             dtype=np.complex128)
+
+        blmm2_exp = np.array([0, 0, 30, 30, 30,
+                              0, 0, 40 + 40j, 40 - 40j,
+                              0, 0, 50 + 50j, 
+                              0, 0,
+                              0],
+                             dtype=np.complex128)
+
+        blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
+        np.testing.assert_allclose(blmp2, blmp2_exp)
+        np.testing.assert_allclose(blmm2, blmm2_exp)
         
 if __name__ == '__main__':
     unittest.main()
