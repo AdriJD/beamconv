@@ -2633,7 +2633,6 @@ class ScanStrategy(Instrument, qp.QMap):
         self.t0s = t0i
         self.t1s = t1i
 
-
         return chunks
 
     def schedule_ctime(self, **kwargs):
@@ -2693,7 +2692,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # The idx to the last CES t0 before ctime[0]
         idx_ces = kwargs.pop('cidx')
-
 
         t0_ces = self.t0s[idx_ces]
         el0 = self.els[idx_ces]
@@ -3301,6 +3299,16 @@ class ScanStrategy(Instrument, qp.QMap):
             # Add unpolarized tod.
             tod_tmp = np.zeros_like(tod)
 
+            # The s0a2 case is a bit complicated. The spinmaps in this case 
+            # correspond to sqrt2 sum_lm -2bls+2 Cpi alm sYlm for positive
+            # and negative s. However, we need sum_lm bls^Re alm sYlm cos(2 alpha) and 
+            # sum_lm bls^Im alm sYlm sin(2 alpha) for positive s. Here
+            # bls^Re = (-2bls+2 Cpi + 2bls-2 Cp*i)/sqrt2 and bls^Im = 
+            # i (-2bls+2 Cpi 0 2bls-2 Cp*i)/sqrt2. 
+            # For a given |s| these are given by 0.5 (map_|s| + (map_-|s|)^*) cos(2 alpha)
+            # and 0.5 i (map_|s| - (map_-|s|)^*) sin(2 alpha). 
+            # To construct these we use that (map_|s|)^* = map_-|s|.
+
             s_vals = spinmaps['s0a2']['s_vals']
             idx_nonneg = np.where(s_vals >= 0)[0]
             npix = spinmaps['s0a2']['maps'][0].size
@@ -3665,12 +3673,10 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
 
-
             # s2a4.
             spinmap_dict['s2a4'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a4')
-            # Switch, for new datamodel.
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol
@@ -3694,8 +3700,7 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s2a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a2',
                                 beam_v=beam_v)
-            # Switch, for new datamodel.
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
             spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a2']['s_vals'] = spin_values_pol
@@ -3703,12 +3708,10 @@ class ScanStrategy(Instrument, qp.QMap):
             # s2a0.
             spinmap_dict['s2a0'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's2a0')
-            # Switch, for new datamodel.
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
             spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
             spinmap_dict['s2a0']['s_vals'] = spin_values_pol
-
 
         else:
             # Old default behaviour.
@@ -3749,7 +3752,6 @@ class ScanStrategy(Instrument, qp.QMap):
         beam_v : bool
             include the 4th blm component when constructing the spinmaps
 
-
         Returns
         -------
         blmxhwp : array or tuple of arrays
@@ -3783,7 +3785,8 @@ class ScanStrategy(Instrument, qp.QMap):
             return blm_s0a0_v
 
         elif mode == 's2a4':
-            blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 4, eb=False)
+            # Note the switch, blmm2 becomes blmp2 and vice versa.
+            blmp2, blmm2 = tools.shift_blm(blm[1], blm[2], 4, eb=False)
             blmm2 *= hwp_spin[1,2]
             blmp2 *= hwp_spin[2,1]
             return blmm2, blmp2
@@ -3803,13 +3806,14 @@ class ScanStrategy(Instrument, qp.QMap):
         elif mode == 's2a2':
             blmm2 = blm[0]
             blmp2 = blmm2
-            blmm2, blmp2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
+            # Note the switch, blmm2 becomes blmp2 and vice versa.
+            blmp2, blmm2 = tools.shift_blm(blmm2, blmp2, 2, eb=False)
             blmm2 *= hwp_spin[0,2] * np.sqrt(2)
             blmp2 *= hwp_spin[0,1] * np.sqrt(2)
             if beam_v:
                 blmm2_v = blm[3]
                 blmp2_v = blmm2_v
-                blmm2_v, blmp2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)
+                blmp2_v, blmm2_v = tools.shift_blm(blmm2_v, blmp2_v, 2, eb=False)
                 blmm2_v *= hwp_spin[3,2] * np.sqrt(2)
                 blmp2_v *= hwp_spin[3,1] * np.sqrt(2)
                 blmm2 += blmm2_v
@@ -3824,23 +3828,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
             raise ValueError('{} is unrecognized mode'.format(mode))
-            # Call function that combines hwp_spin with blms.
-
-            # s0a0  (Bi Mii + Bv Mvi) Ai
-            # s0a0_v (Bi Miv + Bv Mvv) Av
-            # s2a4  (Bp Mpc,p) Ap
-            # s0a2  (Bp Mpc,i) Ai
-            # s0a2_v  (Bp Mv,pc) Av
-            # s2a2  (Bi Mip + Bv Mvp) Ap
-            # s2a0  (Bpc Mpp) Ap
-
-            # For s0a0 no shift
-            # For s0a0 no shift
-            # For s2a4, shift Bp up by 4, +2blm should have nonzero m=2.
-            # For s0a2, shift Bp up by 2, +2blm should have nonzero m=0.
-            # For s0a2_v, shift Bp up by 2, +2blm should have nonzero m=0.
-            # For s2a2, unpol2pol for Bi, Bv
-            # For s2a0, no shift required.
 
     @staticmethod
     def _spinmaps_real(alm, blm, spin_values, nside):
