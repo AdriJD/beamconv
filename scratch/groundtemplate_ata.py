@@ -3,6 +3,7 @@ hp.disable_warnings()
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.integrate as integrate
+from numpy.random import default_rng
 
 h = 6.62e-34
 c = 3e8
@@ -11,7 +12,8 @@ nside=512
 #scope
 freq=95e9
 deltanu = 30.e9
-area = np.pi*0.21*0.21#SAT aperture
+rng = default_rng(123456789)
+sigmaT = 5e6
 def tb2b(tb, nu):
     #Convert blackbody temperature to spectral
     x = h*nu/(k_b*tb)
@@ -56,7 +58,9 @@ t_cmb_cerro = band_avg_tcmb(276, freq, .2)*1e6#uK
 dcerro = 400./np.tan(np.radians(15))
 t_cmb_ground = band_avg_tcmb(280, freq, .2)*1e6#uK
 #ground temperature
-gtemplate[theta>=np.pi/2.]=t_cmb_ground
+npix_under_horizon = len(gtemplate[theta>=np.pi/2.])
+gtemplate[theta>=np.pi/2.]=rng.normal(loc=t_cmb_ground, scale=sigmaT, 
+    size= npix_under_horizon)
 
 #Define mountains and temperatures
 for i in range(el.size): 
@@ -64,13 +68,15 @@ for i in range(el.size):
     az1 = raz[i]+rwidth[i] 
     condition = ((slope[i]*(phi-az0)>np.pi/2.-theta)*
         (slope[i]*(az1-phi)>np.pi/2.-theta)*(theta<np.pi/2.)).astype(bool) 
-    gtemplate[condition]= (t_cmb_ground 
-    +(t_cmb_cerro-t_cmb_ground)/400.*dcerro*np.tan(np.pi/2.-theta[condition]))
+    gtemplate[condition]= rng.normal(
+        loc = (t_cmb_ground +(t_cmb_cerro-t_cmb_ground)/400.
+                                *dcerro*np.tan(np.pi/2.-theta[condition])),
+        scale = sigmaT)
 
 hp.mollview(gtemplate, cmap='plasma', flip='geo', rot=(180,0,0), 
-    min=3.41e8, max=3.51e8, unit=r"T $(\mu K_{CMB})$", bgcolor='#FFFFFF')
+    min=3.41e8, max=3.51e8, unit=r"T $(\mu K_{CMB})$", bgcolor='#FFFFFF')#
 #plt.title("Blackbody ground template at 95GHz, 20% bandwidth")
 hp.graticule(dpar=15, dmer=30)
-plt.savefig("ata_95.png", transparent=True)
-
-#hp.write_map('ground_ata95.fits', gtemplate, overwrite=True)
+#plt.savefig("ata_95.png", transparent=True)
+#plt.show()
+hp.write_map('ground_ata_95_variance5.fits', gtemplate, overwrite=True)
