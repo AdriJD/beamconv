@@ -244,10 +244,14 @@ def shift_blm(blmE, blmB, shift, eb=True):
 
     if eb:
         blmm2_new, blmp2_new = spin2eb(blmm2_new, blmp2_new)
+        # Make sure m=0 elements are real.
+        blmm2_new[:lmax+1] = np.real(blmm2_new[:lmax+1])
+        blmp2_new[:lmax+1] = np.real(blmp2_new[:lmax+1])
 
-    # Make sure m=0 elemets are real.
-    blmm2_new[:lmax+1] = np.real(blmm2_new[:lmax+1])
-    blmp2_new[:lmax+1] = np.real(blmp2_new[:lmax+1])
+    # Here we might want to ensure that
+    #   blmm2_new[:lmax+1] == np.conj(blmp2_new[:lmax+1])
+    # but I think this is actually guaranteed by the code above
+    # (if the inputs were OK...)
 
     return blmm2_new, blmp2_new
         
