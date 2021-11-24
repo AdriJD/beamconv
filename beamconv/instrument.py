@@ -3304,7 +3304,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # and negative s. However, we need sum_lm bls^Re alm sYlm cos(2 alpha) and 
             # sum_lm bls^Im alm sYlm sin(2 alpha) for positive s. Here
             # bls^Re = (-2bls+2 Cpi + 2bls-2 Cp*i)/sqrt2 and bls^Im = 
-            # i (-2bls+2 Cpi 0 2bls-2 Cp*i)/sqrt2. 
+            # i (-2bls+2 Cpi - 2bls-2 Cp*i)/sqrt2. 
             # For a given |s| these are given by 0.5 (map_|s| + (map_-|s|)^*) cos(2 alpha)
             # and 0.5 i (map_|s| - (map_-|s|)^*) sin(2 alpha). 
             # To construct these we use that (map_|s|)^* = map_-|s|.

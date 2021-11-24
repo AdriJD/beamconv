@@ -244,10 +244,9 @@ def shift_blm(blmE, blmB, shift, eb=True):
 
     if eb:
         blmm2_new, blmp2_new = spin2eb(blmm2_new, blmp2_new)
-
-    # Make sure m=0 elemets are real.
-    blmm2_new[:lmax+1] = np.real(blmm2_new[:lmax+1])
-    blmp2_new[:lmax+1] = np.real(blmp2_new[:lmax+1])
+        # Make sure m=0 elements are real.
+        blmm2_new[:lmax+1] = np.real(blmm2_new[:lmax+1])
+        blmp2_new[:lmax+1] = np.real(blmp2_new[:lmax+1])
 
     return blmm2_new, blmp2_new
         
@@ -314,10 +313,6 @@ def unpol2pol(blm):
             end_p0 = getidx(lmax, m+3, m+3)
 
             blmp2[start+2:end] = blm[start_p0:end_p0]
-
-    # Set m=0 to be real.
-    blmm2[:lmax+1] = np.real(blmm2[:lmax+1])
-    blmp2[:lmax+1] = np.real(blmp2[:lmax+1])
 
     return blmm2, blmp2
 
