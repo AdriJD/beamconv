@@ -34,6 +34,11 @@ def convolve(alm1, alm2, lmax, nthreads=1):
         map=tmap, lmax=0, spin=0, geometry="GL", nthreads=nthreads)
     return np.sqrt(4*np.pi)*res[0,0].real
 
+
+# This does the following:
+# - convert s_lm (TEBV) to a sufficiently high resolution IQUV map
+# - apply M_alpha^T M_HWP M_alpha to the IQUV vector in each pixel
+# - transform the resulting IQUV map back to s_lm (TEBV) and return this
 def apply_mueller_to_sky(slm, lmax, m_hwp, alpha, nthreads=1):
     ncomp = slm.shape[0]
     
@@ -78,7 +83,7 @@ def apply_mueller_to_sky(slm, lmax, m_hwp, alpha, nthreads=1):
 
 
 def explicit_convolution(slm, blm, lmax, theta, phi, psi, alpha, m_hwp, nthreads=1):
-    # extend blm to full (lmax, lmax) size for rotation
+    # extend blm from (lmax, mmax) to full (lmax, lmax) size for rotation
     blm2 = np.zeros((blm.shape[0], nalm(lmax, lmax)), dtype=np.complex128)
     blm2[:, 0:blm.shape[1]] = blm
     # rotate beam to desired orientation
@@ -142,7 +147,7 @@ def test_basic_convolution():
 
     # scan using beamconv
     tod, pix, nside_out, pa, hwp_ang = scs.scan(beam,
-                    return_tod=True, return_point=True, **chunk)
+                    return_tod=True, return_point=True, interp=False, **chunk)
 
 
     # verify the first returned TOD value by brute force convolution
@@ -165,7 +170,8 @@ def test_basic_convolution():
 
     res = explicit_convolution(slm, blm_ex, lmax, theta, phi, psi, alpha, hwp_mueller, nthreads=1)
 
-    print(tod[0],res, tod[0]/res-1)
+    print(tod[0],res, tod[0]/res - 1)
+    np.testing.assert_allclose(tod[0],res)
 
 
 if __name__ == "__main__":
