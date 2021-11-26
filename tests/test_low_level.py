@@ -1,13 +1,8 @@
-import unittest
 import numpy as np
 import healpy as hp
 from beamconv import ScanStrategy
 from beamconv import Beam, tools
-import os
-import pickle
 import ducc0
-
-opj = os.path.join
 
 def nalm(lmax, mmax):
     return ((mmax+1)*(mmax+2))//2 + (mmax+1)*(lmax-mmax)
@@ -103,11 +98,8 @@ def test_basic_convolution():
     rng = np.random.default_rng(41)
     lmax = 10
 
-    # create a uniform sky with only Stokes I, no polarization 
-    slmT = np.zeros(nalm(lmax,lmax), dtype=np.complex128)
-    slmT = random_alm(lmax, lmax, 0, 1, rng)[0]
- #   slmT[0] = 1.
-    slm = (slmT, slmT*0, slmT*0)
+    slm_in = random_alm(lmax, lmax, 0, 4, rng)
+    slm = (slm_in[0], slm_in[1], slm_in[2], slm_in[3])
 
     # create a scanning strategy (we only care for the very first sample though)
     mlen = 10 * 60
@@ -115,10 +107,10 @@ def test_basic_convolution():
     mmax = 2
     ra0=-10
     dec0=-57.5
-    fwhm = 20 # pencil beam, to make things simpler
+    fwhm = 20
     nside = 128
     az_throw = 10
-    polang = 0.
+    polang = 20.
 
     ces_opts = dict(ra0=ra0, dec0=dec0, az_throw=az_throw,
                     scan_speed=2.)
@@ -130,9 +122,9 @@ def test_basic_convolution():
                            polang=polang)
     beam = scs.beams[0][0]
     hwp_mueller = np.asarray([[1, 0, 0, 0],
-                              [0, 0, 0, 0],
-                              [0, 0, 0, 0],
-                              [0, 0, 0, 0]])
+                              [0, 1, 0, 0],
+                              [0, 0, 1, 0],
+                              [0, 0, 0, 1]])
     beam.hwp_mueller = hwp_mueller
     scs.init_detpair(slm, beam, nside_spin=nside,
                                max_spin=mmax)
@@ -152,25 +144,18 @@ def test_basic_convolution():
     tod, pix, nside_out, pa, hwp_ang = scs.scan(beam,
                     return_tod=True, return_point=True, **chunk)
 
-    # # now do the same with ducc0.totalconvolve
-    # theta, phi = hp.pixelfunc.pix2ang(nside_out, pix, nest=False)
-    # inter = 
-    
 
+    # verify the first returned TOD value by brute force convolution
     theta, phi = hp.pixelfunc.pix2ang(nside_out, pix[0], nest=False)
-    psi = pa[0]
-    alpha = hwp_ang[0]
-    slm_ex = np.empty((4, len(slm[0])), dtype=np.complex128)
-    slm_ex[0] = slm[0]
-    slm_ex[1] = slm[1]
-    slm_ex[2] = slm[2]
-    slm_ex[3] = slm[2]*0
+    psi = np.radians(pa[0])
+    alpha = np.radians(hwp_ang[0])
+
+    slm = slm_in.copy()
     # Adjust blm to ducc/healpy conventions
     blm = beam.blm
     blm_ex = np.empty((4, len(blm[0])), dtype=np.complex128)
     blm_ex[0] = blm[0]
-    blm_ex[1] = blm[1]*0
-    blm_ex[2] = blm[2]*0
+    blm_ex[1], blm_ex[2] = tools.spin2eb(blm[1], blm[2])
     blm_ex[3] = blm[2]*0
     lfac = np.sqrt((1.+2*np.arange(lmax+1.))/(4*np.pi))
     ofs=0
@@ -178,13 +163,9 @@ def test_basic_convolution():
         blm_ex[:, ofs:ofs+lmax+1-m] *= lfac[m:].reshape((1,-1))
         ofs += lmax+1-m
 
-    res = explicit_convolution(slm_ex, blm_ex, lmax, theta, phi, psi, alpha, hwp_mueller, nthreads=1)
+    res = explicit_convolution(slm, blm_ex, lmax, theta, phi, psi, alpha, hwp_mueller, nthreads=1)
 
-
-    # check the Healpix map value
-    map = hp.alm2map(slm[0], nside_out, lmax)
-    pixval = map[pix[0]]
-    print(tod[0]/res)
+    print(tod[0],res, tod[0]/res-1)
 
 
 if __name__ == "__main__":
