@@ -25,9 +25,12 @@ class TestTools(unittest.TestCase):
             alm += 1j * np.random.randn(hp.Alm.getsize(lmax))
             # Make m=0 modes real.
             alm[:lmax+1] = np.real(alm[:lmax+1])
+#            alm[:] = 0
+            alm[0]= 0
             return alm
 
         cls.alm = tuple([rand_alm(lmax) for i in range(3)])
+        cls.alm = (cls.alm[0], cls.alm[1]*0, cls.alm[2]*0)
         cls.lmax = lmax
 
     def test_init(self):
@@ -243,8 +246,10 @@ class TestTools(unittest.TestCase):
         tod = scs.scan(beam, return_tod=True, **chunk)
         self.assertEqual(tod.size, chunk['end'] - chunk['start'])
 
+        print("gnampfx")
         pix, nside_out, pa, hwp_ang = scs.scan(beam, return_point=True,
                                            **chunk)
+        print("gnampfy")
         self.assertEqual(pix.size, tod.size)
         self.assertEqual(nside, nside_out)
         self.assertEqual(pa.size, tod.size)
@@ -253,8 +258,10 @@ class TestTools(unittest.TestCase):
         # Turn on HWP
         scs.set_hwp_mod(mode='continuous', freq=1., start_ang=0)
         scs.rotate_hwp(**chunk)
+        print("gnampf1")
         tod2, pix2, nside_out2, pa2, hwp_ang2 = scs.scan(beam,
                         return_tod=True, return_point=True, **chunk)
+        print("gnampf2")
         np.testing.assert_almost_equal(pix, pix2)
         np.testing.assert_almost_equal(pix, pix2)
         np.testing.assert_almost_equal(pa, pa2)
@@ -1218,11 +1225,12 @@ class TestTools(unittest.TestCase):
         mmax = 2
         ra0=-10
         dec0=-57.5
-        fwhm = 200
-        nside = 128
+        fwhm = 0
+        nside = 1024
         az_throw = 10
-        polang = 20.
+        polang = 0.
 
+        print("Start")
         ces_opts = dict(ra0=ra0, dec0=dec0, az_throw=az_throw,
                         scan_speed=2.)
 
@@ -1233,10 +1241,11 @@ class TestTools(unittest.TestCase):
                                lmax=self.lmax, fwhm=fwhm,
                                polang=polang)
         beam = scs.beams[0][0]
+        print(beam)
         hwp_mueller = np.asarray([[1, 0, 0, 0],
-                                  [0, 1, 0, 0],
-                                  [0, 0, -1, 0],
-                                  [0, 0, 0, -1]])
+                                  [0, 0, 0, 0],
+                                  [0, 0, 0, 0],
+                                  [0, 0, 0, 0]])
         beam.hwp_mueller = hwp_mueller
         scs.init_detpair(self.alm, beam, nside_spin=nside,
                                    max_spin=mmax)
@@ -1251,8 +1260,10 @@ class TestTools(unittest.TestCase):
         # Turn on HWP
         scs.set_hwp_mod(mode='continuous', freq=1., start_ang=0)
         scs.rotate_hwp(**chunk)
+        print("Knampf1")
         tod, pix, nside_out, pa, hwp_ang = scs.scan(beam,
-                        return_tod=True, return_point=True, **chunk)
+                        return_tod=True, return_point=True, interp=True,  **chunk)
+        print("Knampf2")
 
         # Construct TOD manually.
         polang = beam.polang

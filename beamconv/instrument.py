@@ -9,6 +9,7 @@ import pickle
 import numpy as np
 import qpoint as qp
 import healpy as hp
+import ducc0.totalconvolve
 
 from . import tools
 from .detector import Beam
@@ -3213,7 +3214,11 @@ class ScanStrategy(Instrument, qp.QMap):
             # Convert qpoint output to input healpy (in-place),
             # needed for interpolation later.
             tools.radec2colatlong(ra, dec)
-
+            import matplotlib.pyplot as plt
+            plt.plot(ra)
+            plt.show()
+            plt.plot(dec)
+            plt.show()
         else:
             # In no interpolation is required, we can go straight
             # from quaternion to pix and pa.
@@ -3347,7 +3352,44 @@ class ScanStrategy(Instrument, qp.QMap):
             del tod_tmp
                                     
             # Normal unpolarized part.
-            self._scan_modulate_pa(tod, pix, pa,
+            if spinmaps['s0a0']['interpolators'] is not None:
+                print("Interpolator found!")
+                print("nspinmaps: ",  len(spinmaps['s0a0']['maps']))
+                print(spinmaps['s0a0']['s_vals'])
+                pa[()]=0.
+                if interp:
+                    ptg = np.zeros((pix[0].shape[0], 3))
+                    ptg[:, 0] = pix[1]
+                    ptg[:, 1] = pix[0]
+                else:
+                    nside = hp.npix2nside(len(spinmaps['s0a0']['maps'][0]))
+                    print("nside=",nside)
+                    ptg = np.zeros((len(pix), 3))
+                    tptg = hp.pix2ang(nside,pix,nest=False)
+                    ptg[:, 0] = tptg[0]
+                    ptg[:, 1] = tptg[1]
+                ptg[:, 2] = np.pi
+                print(pa)
+                print(np.min(pa), np.max(pa))
+                tmp = spinmaps['s0a0']['interpolators'].interpol(ptg)
+                tod += 2*tmp[0]
+                xtmp = tod.copy()*0
+                self._scan_modulate_pa(xtmp, pix, pa,
+                                   spinmaps['s0a0']['maps'],
+                                   spinmaps['s0a0']['s_vals'],
+                                   reality=True, interp=interp)
+                import matplotlib.pyplot as plt
+  #              xtmp -= np.mean(xtmp)
+  #              tmp[0] -= np.mean(tmp[0])
+  #              tmp[0] *= np.max(xtmp)/np.max(tmp[0])
+                plt.plot(xtmp)
+                plt.plot(2*tmp[0])
+  #              plt.plot(ptg[:,0])
+  #              plt.plot(ptg[:,1])
+                plt.show()
+                print("blaaah",xtmp-2*tmp[0])
+            else:
+                self._scan_modulate_pa(tod, pix, pa,
                                    spinmaps['s0a0']['maps'],
                                    spinmaps['s0a0']['s_vals'],
                                    reality=True, interp=interp)
@@ -3652,6 +3694,9 @@ class ScanStrategy(Instrument, qp.QMap):
         almB = alm[2]
 
 
+        xspin = 0 if symmetric else max_spin
+        nblm = ((xspin+1)*(xspin+2))//2 + (xspin+1)*(lmax-xspin)
+
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
@@ -3663,12 +3708,21 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
 
+
             if input_v:
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v',
                                                     beam_v=beam_v)
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm_s0a0_v, spin_values_unpol, nside)
+                t_slm = np.array([alm[0],alm[3]])
+                t_blm = np.array([blm_s0a0[:nblm],blm_s0a0_v[:nblm]])
                 del blm_s0a0_v
+            else:
+                t_slm = np.array([alm[0]])
+                t_blm = np.array([blm_s0a0[:nblm]])
+
+            spinmap_dict['s0a0']['interpolators'] = ducc0.totalconvolve.Interpolator(
+                t_slm.copy(), t_blm.copy(), False, lmax, xspin, 1e-6, 2., 1)
 
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
