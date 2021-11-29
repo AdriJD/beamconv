@@ -3268,6 +3268,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             # New behaviour.
 
+            # obtain theta, phi, psi pointings
             if interp:
                 theta, phi = pix[1], pix[0]
             else:
