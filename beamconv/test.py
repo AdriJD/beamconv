@@ -122,8 +122,8 @@ def scan_bicep(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
         # plot smoothed input maps
         nside = hp.get_nside(maps[0])
-        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-        maps_raw = hp.alm2map(alm, nside, verbose=False)
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.))
+        maps_raw = hp.alm2map(alm, nside)
 
         plot_iqu(maps_raw, img_out_path, 'raw_bicep',
                  sym_limits=[250, 5, 5],
@@ -265,8 +265,8 @@ def scan_atacama(lmax=700, mmax=5, fwhm=40,
 
         # plot smoothed input maps
         nside = hp.get_nside(maps[0])
-        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-        maps_raw = hp.alm2map(alm, nside, verbose=False)
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.))
+        maps_raw = hp.alm2map(alm, nside)
 
         plot_iqu(maps_raw, img_out_path, 'raw_atacama',
                  sym_limits=[250, 5, 5],
@@ -925,8 +925,8 @@ def test_ghosts(lmax=700, mmax=5, fwhm=43, ra0=-10, dec0=-57.5,
 
         # plot smoothed input maps
         nside = hp.get_nside(maps[0])
-        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-        maps_raw = hp.alm2map(alm, nside, verbose=False)
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.))
+        maps_raw = hp.alm2map(alm, nside)
 
         plot_iqu(maps_raw, '../scratch/img/', 'raw_ghost',
                  sym_limits=[250, 5, 5],
@@ -1162,8 +1162,8 @@ def idea_jon():
 
     # plot smoothed input maps
     nside = hp.get_nside(maps_g[0])
-    hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-    maps_raw = hp.alm2map(alm, nside, verbose=False)
+    hp.smoothalm(alm, fwhm=np.radians(fwhm/60.))
+    maps_raw = hp.alm2map(alm, nside)
 
     plot_iqu(maps_raw, '../scratch/img/', 'raw_delta',
              sym_limits=[1, 1, 1],
@@ -1334,8 +1334,8 @@ def test_satellite_scan(lmax=700, mmax=2, fwhm=43,
 
         # plot smoothed input maps
         nside = hp.get_nside(maps[0])
-        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.), verbose=False)
-        maps_raw = hp.alm2map(alm, nside, verbose=False)
+        hp.smoothalm(alm, fwhm=np.radians(fwhm/60.))
+        maps_raw = hp.alm2map(alm, nside)
 
         plot_iqu(maps_raw, '../scratch/img/', 'raw_satellite',
                  sym_limits=[250, 5, 5],

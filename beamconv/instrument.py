@@ -3274,7 +3274,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 else:
                     nside = hp.npix2nside(len(spinmaps['s0a0']['maps'][0]))
                     theta, phi = hp.pix2ang(nside,pix,nest=False)
-                psi = pa  # FIXME: np.radians(pa)?
+                psi = pa
 
             tod_c += spinmaps['s2a4']['interpolators'].interpol(theta, phi, psi)
 
@@ -3899,7 +3899,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if s == 0: # Scalar transform.
 
                 flms = hp.almxfl(alm, bell, inplace=False)
-                func[sidx,:] = hp.alm2map(flms, nside, verbose=False)
+                func[sidx,:] = hp.alm2map(flms, nside)
 
             else: # Spin transforms.
 
@@ -3982,8 +3982,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
             if s == 0:
                 # The (-1) factor for spin 0 is explained in HEALPix doc.
-                spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
-                            hp.alm2map(ms_flm_m, nside, verbose=False)]
+                spinmaps = [hp.alm2map(-ps_flm_p, nside),
+                            hp.alm2map(ms_flm_m, nside)]
                 func_c[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
             if s > 0:

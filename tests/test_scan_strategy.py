@@ -156,7 +156,7 @@ class TestTools(unittest.TestCase):
         # Since we have a infinitely narrow Gaussian the convolved
         # maps should just match the input (up to healpix quadrature
         # wonkyness).
-        input_map = hp.alm2map(self.alm, nside, verbose=False) # I, Q, U
+        input_map = hp.alm2map(self.alm, nside) # I, Q, U
         zero_map = np.zeros_like(input_map[0])
         np.testing.assert_array_almost_equal(input_map[0],
                                              func[0], decimal=6)
@@ -264,7 +264,7 @@ class TestTools(unittest.TestCase):
 
         # Construct TOD manually.
         polang = beam.polang
-        maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
+        maps_sm = np.asarray(hp.alm2map(self.alm, nside,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
         np.testing.assert_almost_equal(maps_sm[0],
@@ -346,7 +346,7 @@ class TestTools(unittest.TestCase):
 
         # Construct TOD manually.
         polang = beam.polang
-        maps_sm = np.asarray(hp.alm2map(alm, nside, verbose=False,
+        maps_sm = np.asarray(hp.alm2map(alm, nside,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
         np.testing.assert_almost_equal(maps_sm[0],
@@ -407,9 +407,8 @@ class TestTools(unittest.TestCase):
         # Solve for the maps.
         maps, cond = scs.solve_for_map(fill=np.nan)
 
-        alm = hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.),
-                     verbose=False)
-        maps_raw = np.asarray(hp.alm2map(self.alm, nside, verbose=False))
+        alm = hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.))
+        maps_raw = np.asarray(hp.alm2map(self.alm, nside))
 
         cond[~np.isfinite(cond)] = 10
 
@@ -1256,7 +1255,7 @@ class TestTools(unittest.TestCase):
 
         # Construct TOD manually.
         polang = beam.polang
-        maps_sm = np.asarray(hp.alm2map(self.alm, nside, verbose=False,
+        maps_sm = np.asarray(hp.alm2map(self.alm, nside,
                                         fwhm=np.radians(beam.fwhm / 60.)))
 
         np.testing.assert_almost_equal(maps_sm[0],
@@ -1326,9 +1325,8 @@ class TestTools(unittest.TestCase):
         # Solve for the maps.
         maps, cond = scs.solve_for_map(fill=np.nan)
 
-        alm = hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.),
-                     verbose=False)
-        maps_raw = np.asarray(hp.alm2map(self.alm, nside, verbose=False))
+        alm = hp.smoothalm(self.alm, fwhm=np.radians(fwhm/60.))
+        maps_raw = np.asarray(hp.alm2map(self.alm, nside))
 
         cond[~np.isfinite(cond)] = 10
 
