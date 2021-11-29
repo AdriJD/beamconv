@@ -9,9 +9,9 @@ import pickle
 import numpy as np
 import qpoint as qp
 import healpy as hp
-import ducc0.totalconvolve
 
 from . import tools
+from . import totalconvolve
 from .detector import Beam
 
 class MPIBase(object):
@@ -3267,10 +3267,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
         else:
             # New behaviour.
-            self._scan_modulate_pa(tod_c, pix, pa,
-                                   spinmaps['s2a4']['maps'],
-                                   spinmaps['s2a4']['s_vals'],
-                                   reality=False, interp=interp)
+
+            if spinmaps['s0a0']['interpolators'] is not None:
+                if interp:
+                    theta, phi = pix[1], pix[0]
+                else:
+                    nside = hp.npix2nside(len(spinmaps['s0a0']['maps'][0]))
+                    theta, phi = hp.pix2ang(nside,pix,nest=False)
+                psi = pa  # FIXME: np.radians(pa)?
+
+            tod_c += spinmaps['s2a4']['interpolators'].interpol(theta, phi, psi)
 
             # Modulate by HWP angle and polarization angle.
             expm2 = np.exp(1j * (4 * hwp_ang + 2 * np.radians(polang)))
@@ -3279,20 +3285,22 @@ class ScanStrategy(Instrument, qp.QMap):
             tod = np.real(tod_c).copy()
 
             tod_c *= 0.
-            self._scan_modulate_pa(tod_c, pix, pa,
-                                   spinmaps['s2a2']['maps'],
-                                   spinmaps['s2a2']['s_vals'],
-                                   reality=False, interp=interp)
+            # self._scan_modulate_pa(tod_c, pix, pa,
+                                   # spinmaps['s2a2']['maps'],
+                                   # spinmaps['s2a2']['s_vals'],
+                                   # reality=False, interp=interp)
+            tod_c += spinmaps['s2a2']['interpolators'].interpol(theta, phi, psi)
 
             expm2 = np.exp(1j * (2 * hwp_ang))
             tod_c *= expm2
             tod += np.real(tod_c)
 
             tod_c *= 0
-            self._scan_modulate_pa(tod_c, pix, pa,
-                                   spinmaps['s2a0']['maps'],
-                                   spinmaps['s2a0']['s_vals'],
-                                   reality=False, interp=interp)
+            # self._scan_modulate_pa(tod_c, pix, pa,
+                                   # spinmaps['s2a0']['maps'],
+                                   # spinmaps['s2a0']['s_vals'],
+                                   # reality=False, interp=interp)
+            tod_c += spinmaps['s2a0']['interpolators'].interpol(theta, phi, psi)
 
             tod += np.real(tod_c)
             del tod_c
@@ -3347,26 +3355,7 @@ class ScanStrategy(Instrument, qp.QMap):
             tod += tod_tmp
             del tod_tmp
                                     
-            # Normal unpolarized part.
-            if spinmaps['s0a0']['interpolators'] is not None:
-                if interp:
-                    ptg = np.zeros((pix[0].shape[0], 3))
-                    ptg[:, 0] = pix[1]
-                    ptg[:, 1] = pix[0]
-                else:
-                    nside = hp.npix2nside(len(spinmaps['s0a0']['maps'][0]))
-                    print("nside=",nside)
-                    ptg = np.zeros((len(pix), 3))
-                    tptg = hp.pix2ang(nside,pix,nest=False)
-                    ptg[:, 0] = tptg[0]
-                    ptg[:, 1] = tptg[1]
-                ptg[:, 2] = pa  # FIXME: np.radians(pa)?
-                tod += spinmaps['s0a0']['interpolators'].interpol(ptg)[0]
-            else:
-                self._scan_modulate_pa(tod, pix, pa,
-                                   spinmaps['s0a0']['maps'],
-                                   spinmaps['s0a0']['s_vals'],
-                                   reality=True, interp=interp)
+            tod += spinmaps['s0a0']['interpolators'].interpol(theta, phi, psi)
 
         if add_to_tod and hasattr(self, 'tod'):
             self.tod += tod
@@ -3668,9 +3657,6 @@ class ScanStrategy(Instrument, qp.QMap):
         almB = alm[2]
 
 
-        xspin = 0 if symmetric else max_spin
-        nblm = ((xspin+1)*(xspin+2))//2 + (xspin+1)*(lmax-xspin)
-
         if hwp_mueller is not None:
 
             hwp_spin = tools.mueller2spin(hwp_mueller)
@@ -3682,26 +3668,17 @@ class ScanStrategy(Instrument, qp.QMap):
             spinmap_dict['s0a0']['maps'] = ScanStrategy._spinmaps_real(
                 alm[0], blm_s0a0, spin_values_unpol, nside)
 
-
             if input_v:
                 blm_s0a0_v = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a0_v',
                                                     beam_v=beam_v)
+                spinmap_dict['s0a0']['interpolators'] = totalconvolve.Interpolator_real(
+                    [alm[0], alm[3]], [blm_s0a0, blm_s0a0_v], lmax, 0 if symmetric else max_spin)
                 spinmap_dict['s0a0']['maps'] += ScanStrategy._spinmaps_real(
                     alm[3], blm_s0a0_v, spin_values_unpol, nside)
-                t_slm = np.array([alm[0].copy(),alm[3].copy()])
-                t_blm = np.array([blm_s0a0[:nblm].copy(),blm_s0a0_v[:nblm].copy()])
                 del blm_s0a0_v
             else:
-                t_slm = np.array([alm[0].copy()])
-                t_blm = np.array([blm_s0a0[:nblm].copy()])
-
-            lfac = np.sqrt((1.+2*np.arange(lmax+1.))/(4*np.pi))
-            ofs=0
-            for m in range(xspin+1):
-                t_blm[:, ofs:ofs+lmax+1-m] *= lfac[m:].reshape((1,-1))
-                ofs += lmax+1-m
-            spinmap_dict['s0a0']['interpolators'] = ducc0.totalconvolve.Interpolator(
-                t_slm, t_blm, False, lmax, xspin, 1e-11, 2., 1)
+                spinmap_dict['s0a0']['interpolators'] = totalconvolve.Interpolator_real(
+                    [alm[0]], [blm_s0a0], lmax, 0 if symmetric else max_spin)
 
             spinmap_dict['s0a0']['s_vals'] = spin_values_unpol
             del blm_s0a0
@@ -3712,6 +3689,8 @@ class ScanStrategy(Instrument, qp.QMap):
             blmE, blmB = tools.spin2eb(blmm2, blmp2)
             spinmap_dict['s2a4']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a4']['interpolators'] = totalconvolve.Interpolator_complex(
+                almE, almB, blmE, blmB, lmax, 0 if symmetric else max_spin)
             spinmap_dict['s2a4']['s_vals'] = spin_values_pol
 
             # s0a2.
@@ -3736,6 +3715,8 @@ class ScanStrategy(Instrument, qp.QMap):
             blmE, blmB = tools.spin2eb(blmm2, blmp2)
             spinmap_dict['s2a2']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a2']['interpolators'] = totalconvolve.Interpolator_complex(
+                almE, almB, blmE, blmB, lmax, 0 if symmetric else max_spin)
             spinmap_dict['s2a2']['s_vals'] = spin_values_pol
 
             # s2a0.
@@ -3744,6 +3725,8 @@ class ScanStrategy(Instrument, qp.QMap):
             blmE, blmB = tools.spin2eb(blmm2, blmp2)
             spinmap_dict['s2a0']['maps'] = ScanStrategy._spinmaps_complex(
                 almE, almB, blmE, blmB, spin_values_pol, nside)
+            spinmap_dict['s2a0']['interpolators'] = totalconvolve.Interpolator_complex(
+                almE, almB, blmE, blmB, lmax, 0 if symmetric else max_spin)
             spinmap_dict['s2a0']['s_vals'] = spin_values_pol
 
         else:
