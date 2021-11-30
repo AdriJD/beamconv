@@ -577,7 +577,7 @@ class Beam(object):
                 indices=indices, losses=losses, angles=angles)
 
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
-                vartheta=np.radians(self.el))
+                vartheta=np.radians(np.sqrt(self.el**2+self.az**2)))
 
 class HWP(object):
     '''
