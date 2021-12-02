@@ -64,11 +64,19 @@ def apply_mueller_to_sky(slm, lmax, m_hwp, alpha, nthreads=1):
     m_alpha[1,2] = np.sin(2*alpha)
     m_alpha[2,1] = -np.sin(2*alpha)
     m_hwp_alpha = m_alpha.T.dot(m_hwp.dot(m_alpha))
+    T = np.zeros((4,4),dtype=np.complex128)
+    T[0,0] = T[3,3] = 1.
+    T[1,1] = T[2,1] = 1./np.sqrt(2.)
+    T[1,2] = 1j/np.sqrt(2.)
+    T[2,2] = -1j/np.sqrt(2.)
+    C = T.dot(m_hwp.dot(np.conj(T.T)))
+    X = T.dot(m_alpha.dot(np.conj(T.T)))
+    fullmat = np.conj(T.T).dot(np.conj(X.T).dot(C.dot(X.dot(T))))
     # there must be a better way to do this ...
     for i in range(ntheta):
         for j in range(nphi):
-            skymap[:, i, j] = m_hwp_alpha.dot(skymap[:, i, j])
-
+            tmp = fullmat.dot(skymap[:,i,j])
+            skymap[:, i, j] = tmp.real
     # go back to spherical harmonics
     res = np.empty_like(slm)
     res[0:1] = ducc0.sht.experimental.analysis_2d(
