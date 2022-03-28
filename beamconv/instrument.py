@@ -2530,7 +2530,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def taurus_scan(self, el0=35., az0, scan_speed=30.,
+    def taurus_scan(self, el0=35., az0=0., scan_speed=30.,
         use_precomputed=False, ground=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,
         ctime_kwargs=None, **kwargs):
@@ -2695,7 +2695,7 @@ class ScanStrategy(Instrument, qp.QMap):
             # wait for I/O
             if self.mpi:
                 self._comm.barrier()
-                
+
 
     def parse_schedule_file(self, schedule_file=None):
         '''
