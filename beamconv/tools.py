@@ -926,3 +926,53 @@ def mueller2spin(mueller_mat):
     
     return np.dot(np.dot(tmat, mueller_mat), tmatinv)        
 
+def load_mueller(hwp_filename, freq, vartheta=0.0):
+    '''
+    Load a pre-computed Mueller matrix from a Pickle file.
+
+    The function looks for the Mueller matrix computed for the frequency and
+    incidence angle (vartheta) pair that most closely matches the (freq, vartheta)
+    pair that is input to the function.
+
+    mueller is a N x M x 4 x 4 numpy array where N, and M, stand for the number
+    of elements along the vartheta and frequency directions.
+
+    Arguments
+    ---------
+    hwp_filename : string/path
+        absolute path to pickle file
+    freq : float
+        the frequency (in GHz) of the HWP mueller elements
+
+    Keyword arguments
+    -----------------
+    vartheta : float
+
+    Returns
+    -------
+
+    mueller_mat : array-like, size (4,4)
+
+    '''
+
+    fid = open(hwp_filename, 'rb')
+    hwp_data = pickle.load(fid)
+
+    print('Debugging:')
+    print(hwp_data.keys())
+
+    print('mueller' in hwp_data.keys())
+
+    # assert ['muellers', 'freqs', 'varthetas'] in hwp_data.keys(), \
+    #     'keys/parameters (muellers, freqs, and varthetas) should be part of dictionary'
+
+    muellers = hwp_data['muellers']
+    freqs = hwp_data['freqs']
+    varthetas = hwp_data['varthetas']
+
+    freqi = np.argmin(np.abs(freq - np.array(freqs)))
+    vi = np.argmin(np.abs(vartheta - np.array(varthetas)))
+
+    print('Frequency for HWP found to be: {}'.format(freqs[freqi]))
+
+    return np.squeeze(muellers[vi, freqi, :, :])
