@@ -4,3 +4,7 @@
 *.synctex.gz
 tests/*
 .ipynb_checkpoints
+.DS_Store
+/tests/test_data*
+!/tests/test_data/test_fpu/.gitignore
+beamconv.egg-info

@@ -9,5 +9,5 @@ setup(name='beamconv',
       license='MIT',
       packages=['beamconv'],
       install_requires=['healpy', 'numpy', 'qpoint'],
-      test_suite='tests',
+      extras_require={'test' : ['pytest']},
       zip_safe=False)

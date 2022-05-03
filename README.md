@@ -1,8 +1,10 @@
 # beamconv
 
+**This branch is for implementing and testing a spinning-top satellite scanning strategy**
+
 **Authors**: Adri J. Duivenvoorden and Jon E. Gudmundsson
 
-**contact**: adri.duivenvoorden@fysik.su.se
+**contact**: adriaand@princeton.edu
 
 Simulate the scanning of the CMB sky while incorporating realistic beams and
 scan strategies.
@@ -11,6 +13,8 @@ This code uses (spin-)spherical harmonic representations of the (polarized) beam
 and sky to generate simulated CMB detector signal timelines. Beams can be arbitrarily shaped.
 Pointing timelines can be read in or calculated on the fly. Optionally, the results can be
 binned on the sphere.
+
+The code and some results based on its use are described in: [1809.05034](https://arxiv.org/abs/1809.05034)
 
 ### Usage
 
@@ -24,11 +28,26 @@ Apart from the standard libraries, [NumPy](https://github.com/numpy/numpy), [Hea
 ```
 python setup.py install --user
 ```
-run unittests:
+
+or, when using pip and virtuelenv:
 
 ```
-python setup.py test
+pip install .
 ```
+
+Run tests:
+
+```
+python -m pytest tests
+```
+
+Testing requires the `pytest` package, this can be automatically obtained during installation by running:
+
+```
+pip install .[test]
+```
+
+Consider adding the `-e` flag to the `pip install` command to enable automatic updating of code changes when developing.
 
 
 
