@@ -8,7 +8,7 @@ from numpy.random import default_rng
 h = 6.62e-34
 c = 3e8
 k_b = 1.38e-23
-nside=512
+nside=4096
 #scope
 freq=95e9
 deltanu = 30.e9
@@ -87,7 +87,7 @@ dcerro = 400./np.tan(np.radians(15))
 t_cmb_ground = band_avg_tcmb(280, freq, .2)*1e6#uK
 #ground temperature
 npix_under_horizon = len(gtemplate[theta>=np.pi/2.])
-gtemplate[:] = np.exp(- 0.5 * (theta - np.pi / 2) ** 2 / np.radians(0.3) ** 2) * t_cmb_ground#Adri fix
+gtemplate[:] = np.exp(- 0.5 * (theta - np.pi / 2) ** 2 / np.radians(1.0) ** 2) * t_cmb_ground#Adri fix
 gtemplate[theta>=np.pi/2.] = t_cmb_ground
 #gtemplate[theta>=np.pi/2.]=rng.normal(loc=t_cmb_ground, scale=sigmaT, 
 #    size= npix_under_horizon)
@@ -108,9 +108,15 @@ for i in range(el.size):
 
 #Apply the edge treatment to the boundary of the mountains
 boundary = np.array(boundary(az, el, hwidth, gtemplate))
+print(boundary.size)
+count = 0
 for pix in boundary:
-    gtemplate = np.maximum(gtemplate, (np.exp(-0.5*((theta - theta[pix])**2+(phi-phi[pix])**2) / np.radians(0.3)**2) 
+    gtemplate = np.maximum(gtemplate, (np.exp(-0.5*((theta - theta[pix])**2+(phi-phi[pix])**2) / np.radians(1.0)**2) 
         * (t_cmb_ground+(t_cmb_cerro-t_cmb_ground)/400.*dcerro*np.tan(np.pi/2.-theta[pix]))))
+    if count%10==0:
+        print(count)
+    count+=1
+
 
 hp.mollview(gtemplate, cmap='plasma', flip='geo', rot=(180,0,0), 
     min=3e8, max=3.51e8, unit=r"T $(\mu K_{CMB})$", bgcolor='#FFFFFF')#
@@ -119,4 +125,4 @@ hp.graticule(dpar=15, dmer=30)
 #plt.savefig("ata_95.png", transparent=True)
 plt.show()
 #hp.write_map('ground_ata_95_variance5.fits', gtemplate, overwrite=True)
-hp.write_map('ground_ata95Adri.fits', gtemplate, overwrite=True)
+hp.write_map('ground_ata4096.fits', gtemplate, overwrite=True)
