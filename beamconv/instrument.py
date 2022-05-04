@@ -10,7 +10,7 @@ import numpy as np
 import qpoint as qp
 import healpy as hp
 
-import scanning
+from . import scanning
 
 from . import tools
 from .detector import Beam

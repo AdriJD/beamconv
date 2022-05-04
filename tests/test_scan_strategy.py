@@ -235,7 +235,7 @@ class TestTools(unittest.TestCase):
         ces_opts.update(chunk)
 
         # Populate boresight.
-        scs.constant_el_scan(**ces_opts)
+        scs.implement_scan(**ces_opts)
 
         # Test without returning anything (default behaviour).
         scs.scan(beam, **chunk)
@@ -317,7 +317,7 @@ class TestTools(unittest.TestCase):
         ces_opts.update(chunk)
 
         # Populate boresight.
-        scs.constant_el_scan(**ces_opts)
+        scs.implement_scan(**ces_opts)
 
         # Test without returning anything (default behaviour).
         scs.scan(beam, **chunk)
@@ -1246,7 +1246,7 @@ class TestTools(unittest.TestCase):
         ces_opts.update(chunk)
 
         # Populate boresight.
-        scs.constant_el_scan(**ces_opts)
+        scs.implement_scan(**ces_opts)
 
         # Turn on HWP
         scs.set_hwp_mod(mode='continuous', freq=1., start_ang=0)
