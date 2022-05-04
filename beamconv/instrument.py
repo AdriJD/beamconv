@@ -2124,8 +2124,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def implement_scan(self, ra0=-10, dec0=-57.5, az_throw=90, scan_speed=1,
         az_prf='triangle', check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, ground=False, q_bore_func=None,
-        q_bore_kwargs=None, ctime_func=None,
-        ctime_kwargs=None, use_litebird_scan=False, **kwargs):
+        q_bore_kwargs=None, ctime_func=None,ctime_kwargs=None, 
+        use_litebird_scan=False, use_taurus_scan=False,**kwargs):
 
         '''
         Populates scanning quaternions.
@@ -2227,6 +2227,19 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
             return
+        elif use_taurus_scan:
+            print('Implementing Taurus scan')
+            ctime = np.arange(start, end, dtype=float)
+            ctime /= float(self.fsamp)
+            ctime += self.ctime0
+            self.ctime = ctime
+            if ground:
+                self.q_bore, self.q_boreground = q_bore_func(start=start, 
+                                    end=end, ground=True, **q_bore_kwargs)
+            else:
+                self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
+            return
+
 
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
@@ -2352,12 +2365,17 @@ class ScanStrategy(Instrument, qp.QMap):
                 saz = np.sin(np.radians(az[sub_start:sub_end])/2.)
                 cel = np.cos(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
                 sel = np.sin(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
-                q_boresubground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                q_boresubground = np.array([-saz*cel, caz*sel, 
+                                             saz*sel, caz*cel]).swapaxes(0,1)
                 q_boresubground = q_boresubground.ravel()
                 ground_offsets = np.zeros(self.mpi_size)
                 ground_offsets[1:] = np.cumsum(4*sub_size)[:-1] # start * 4
                 self._comm.Allgatherv(q_boresubground,
-                                [q_boreground, 4*sub_size, ground_offsets, self._mpi_double])
+                                     [q_boreground, 
+                                      4*sub_size, 
+                                      ground_offsets, 
+                                      self._mpi_double])
+
                 self.q_boreground = q_boreground.reshape(chunk_size, 4)
 
             # calculate section of q_bore
@@ -2383,7 +2401,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                self.q_boreground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                self.q_boreground = np.array([-saz*cel, caz*sel, 
+                                               saz*sel, caz*cel]).swapaxes(0,1)
 
             self.q_bore = self.azel2bore(az, el, None, None, self.lon,
                                      self.lat, ctime)
@@ -2667,12 +2686,10 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def taurus_scan(self, el0=35., az0=0., scan_speed=30.,
-        use_precomputed=False, ground=False, q_bore_func=None,
-        q_bore_kwargs=None, ctime_func=None,
-        ctime_kwargs=None, **kwargs):
+    def taurus_scan(self, el0=35., az0=0., scan_speed=30., ground=False, 
+                          **kwargs):
         '''
-        Populates scanning quaternions.
+        Populates scanning quaternions for a Taurus-like scan strategy
         Let boresight scan at a fixed elevation, rotating at a given speed
         in azimuth
         Keyword Arguments
@@ -2683,27 +2700,6 @@ class ScanStrategy(Instrument, qp.QMap):
             Boresight start azimuth in degrees
         scan_speed : float
             Scan speed in degrees per second
-        use_precomputed : bool
-            Load up precomputed boresight quaternion if
-            memory-map is present (default : False)
-        ground : bool
-            If True, will compute q_boreground, the pointing quaternion in
-            az, el coordinates
-        q_bore_func : callable, None
-            A user-defined function that takes `start` and `end` (kw)args and
-            outputs a (unit) quaternion array of shape=(nsamp, 4) on all ranks.
-            Here, nsamp = end-start. Used when `external_pointing` is set in
-            `ScanStrategy.__init__`. (default : None)
-        q_bore_kwargs : dict, None
-            Keyword arguments to q_bore_func (default: None)
-        ctime_func : callable, None
-            A user-defined function that takes `start` and `end` (kw)args and
-            outputs a ctime array of shape=(nsamp) on all ranks.
-            Here, nsamp = end-start. Used when `external_pointing` is set in
-            `ScanStrategy.__init__`. (default : None)
-        ctime_kwargs : dict, None
-            Keyword arguments to ctime_func (default: None)
-
         '''
 
         start = kwargs.pop('start')
@@ -2717,29 +2713,8 @@ class ScanStrategy(Instrument, qp.QMap):
             raise TypeError("taurus_scan() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
-        if self.ext_point:
-            # Use external pointing, so skip rest of function.
-            self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
-            self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, **q_bore_kwargs)
 
-            return
-
-
-        ctime = np.arange(start, end, dtype=float)
-        ctime /= float(self.fsamp)
-        ctime += self.ctime0
-        self.ctime = ctime
-
-        # Read q_bore from disk if needed (and skip rest).
-        if use_precomputed and hasattr(self, 'mmap'):
-            if self.mpi_rank == 0:
-                self.q_bore = self.mmap[start:end]
-            else:
-                self.q_bore = None
-
-            self.q_bore = self.broadcast_array(self.q_bore)
-
-            return
+        ctime = self.ctime
 
         chunk_size = end - start
         check_len = int(check_interval * self.fsamp) # min_el checks
@@ -2782,20 +2757,6 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_end = sub_start + sub_size[self.mpi_rank]
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
-            
-            if ground:
-                q_boreground = np.empty(chunk_size * 4, dtype=float)
-                caz = np.cos(np.radians(az[sub_start:sub_end])/2.)
-                saz = np.sin(np.radians(az[sub_start:sub_end])/2.)
-                cel = np.cos(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
-                sel = np.sin(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
-                q_boresubground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
-                q_boresubground = q_boresubground.ravel()
-                ground_offsets = np.zeros(self.mpi_size)
-                ground_offsets[1:] = np.cumsum(4*sub_size)[:-1] # start * 4
-                self._comm.Allgatherv(q_boresubground,
-                                [q_boreground, 4*sub_size, ground_offsets, self._mpi_double])
-                self.q_boreground = q_boreground.reshape(chunk_size, 4)
 
             # calculate section of q_bore
             q_boresub = self.azel2bore(az[sub_start:sub_end],
@@ -2812,26 +2773,41 @@ class ScanStrategy(Instrument, qp.QMap):
             # Combine all sections on all ranks.
             self._comm.Allgatherv(q_boresub,
                             [q_bore, sub_size, offsets, self._mpi_double])
-            self.q_bore = q_bore.reshape(chunk_size, 4)
+            q_bore = q_bore.reshape(chunk_size, 4)
+
+            #Ground 
+            if ground:
+                q_boreground = np.empty(chunk_size * 4, dtype=float)
+                caz = np.cos(np.radians(az[sub_start:sub_end])/2.)
+                saz = np.sin(np.radians(az[sub_start:sub_end])/2.)
+                cel = np.cos(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
+                sel = np.sin(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
+
+                q_boresubground = np.array([-saz*cel, caz*sel, 
+                                             saz*sel, caz*cel]).swapaxes(0,1)
+                q_boresubground = q_boresubground.ravel()
+
+                ground_offsets = np.zeros(self.mpi_size)
+                ground_offsets[1:] = np.cumsum(4*sub_size)[:-1] # start * 4
+                self._comm.Allgatherv(q_boresubground,
+                                [q_boreground, 4*sub_size, ground_offsets, 
+                                 self._mpi_double])
+                q_boreground = q_boreground.reshape(chunk_size, 4)
 
         else:
+            q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
             if ground:
                 caz = np.cos(np.radians(az)/2.)
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                self.q_boreground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                q_boreground = np.array([-saz*cel, caz*sel, 
+                                          saz*sel, caz*cel]).swapaxes(0,1)
+        if ground:
+            return q_bore, q_boreground
+        else:
+            return q_bore
 
-            self.q_bore = self.azel2bore(az, el, None, None, self.lon,
-                                     self.lat, ctime)
-
-        # Store boresight quat in memmap if needed.
-        if hasattr(self, 'mmap'):
-            if self.mpi_rank == 0:
-                self.mmap[start:end] = self.q_bore
-            # wait for I/O
-            if self.mpi:
-                self._comm.barrier()
 
 
     def parse_schedule_file(self, schedule_file=None):
