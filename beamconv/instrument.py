@@ -3677,11 +3677,14 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s0a0']['s_vals'],
                                    reality=True, interp=interp)
 
+        tod_mean = 0.
+        if 'ground' in kwargs:
+            tod_mean = np.average(tod) #Very rough filtering method
 
         if add_to_tod and hasattr(self, 'tod'):
-            self.tod += tod
+            self.tod += tod - tod_mean
         else:
-            self.tod = tod
+            self.tod = tod - tod_mean
 
         # Handle returned values.
         if return_tod:
