@@ -2235,7 +2235,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.ctime = ctime
             if ground:
                 self.q_bore, self.q_boreground = q_bore_func(start=start, 
-                                    end=end, ground=True, **q_bore_kwargs)
+                                    end=end, ground=ground, **q_bore_kwargs)
             else:
                 self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
             return
@@ -2701,7 +2701,6 @@ class ScanStrategy(Instrument, qp.QMap):
         scan_speed : float
             Scan speed in degrees per second
         '''
-
         start = kwargs.pop('start')
         end = kwargs.pop('end')
 
@@ -2717,10 +2716,6 @@ class ScanStrategy(Instrument, qp.QMap):
         ctime = self.ctime
 
         chunk_size = end - start
-        check_len = int(check_interval * self.fsamp) # min_el checks
-
-        nchecks = int(np.ceil(chunk_size / float(check_len)))
-        p_len = check_len * nchecks # longer than chunk for nicer slicings
 
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if scan_speed == 0:
@@ -2729,18 +2724,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Slightly complicated way to add az to az0
         # while avoiding expanding az0 to p_len.
-        az = np.arange(p_len, dtype=float)
+        az = np.arange(chunk_size, dtype=float)
         az *= scan_speed
-        az = az.reshape(nchecks, check_len)
-        az += az0[:, np.newaxis]
-        az = az.ravel()
-        az = az[:chunk_size] # Discard extra entries.
+        az += az0
 
-        el = np.zeros((nchecks, check_len), dtype=float)
-        el += el0[:, np.newaxis]
-        el = el.ravel()
-        el = el[:chunk_size]
-
+        el = np.zeros(chunk_size, dtype=float)
+        el += el0
         # Transform from horizontal frame to celestial, i.e. az, el -> ra, dec.
         if self.mpi:
             # Calculate boresight quaternion in parallel.
@@ -2748,14 +2737,13 @@ class ScanStrategy(Instrument, qp.QMap):
             quot, remainder = divmod(chunk_size,
                                         self.mpi_size)
             sub_size += quot
-
             if remainder:
+
                 # Give first ranks one extra quaternion.
                 sub_size[:int(remainder)] += 1
 
             sub_start = np.sum(sub_size[:self.mpi_rank], dtype=int)
             sub_end = sub_start + sub_size[self.mpi_rank]
-
             q_bore = np.empty(chunk_size * 4, dtype=float)
 
             # calculate section of q_bore
@@ -2769,12 +2757,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
             offsets = np.zeros(self.mpi_size)
             offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
-
             # Combine all sections on all ranks.
             self._comm.Allgatherv(q_boresub,
                             [q_bore, sub_size, offsets, self._mpi_double])
             q_bore = q_bore.reshape(chunk_size, 4)
-
             #Ground 
             if ground:
                 q_boreground = np.empty(chunk_size * 4, dtype=float)
