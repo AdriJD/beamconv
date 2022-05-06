@@ -2228,7 +2228,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return
         elif use_taurus_scan:
-            print('Implementing Taurus scan')
+            
             ctime = np.arange(start, end, dtype=float)
             ctime /= float(self.fsamp)
             ctime += self.ctime0
