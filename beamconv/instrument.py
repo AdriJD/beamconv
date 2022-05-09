@@ -1725,7 +1725,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, input_v=False,
-            beam_v=False, **kwargs):
+            beam_v=False, filter_ground=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -3664,7 +3664,7 @@ class ScanStrategy(Instrument, qp.QMap):
                                    reality=True, interp=interp)
 
         tod_mean = 0.
-        if 'ground' in kwargs:
+        if ('ground' in kwargs) and ('filter_ground' in kwargs):
             tod_mean = np.average(tod) #Very rough filtering method
 
         if add_to_tod and hasattr(self, 'tod'):
