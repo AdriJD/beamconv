@@ -1960,8 +1960,10 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_a = self.tod.copy()
                         elif binning:
-                            self.bin_tod(beam_a, add_to_global=True, filter_4fhwp=filter_4fhwp,
-                                **subchunk)
+                            self.bin_tod(beam_a, add_to_global=True, 
+                                         filter_4fhwp=filter_4fhwp, 
+                                         filter_ground=filter_ground,
+                                         **subchunk)
 
                     if beam_b and not beam_b.dead:
                         self._scan_detector(beam_b, interp=interp,
@@ -1973,8 +1975,10 @@ class ScanStrategy(Instrument, qp.QMap):
                         if do_ctalk:
                             tod_b = self.tod
                         elif binning:
-                            self.bin_tod(beam_b, add_to_global=True, filter_4fhwp=filter_4fhwp,
-                                **subchunk)
+                            self.bin_tod(beam_b, add_to_global=True, 
+                                         filter_4fhwp=filter_4fhwp, 
+                                         filter_ground=filter_ground,
+                                         **subchunk)
 
                     if do_ctalk:
                         tools.cross_talk(tod_a, tod_b, ctalk=ctalk)
@@ -1986,8 +1990,10 @@ class ScanStrategy(Instrument, qp.QMap):
 
                         if binning:
                             self.bin_tod(beam_a, tod=tod_a, add_to_global=True,
-                            filter_4fhwp=filter_4fhwp, **subchunk)
+                            filter_4fhwp=filter_4fhwp, 
+                            filter_ground=filter_ground, **subchunk)
                             self.bin_tod(beam_b, tod=tod_b, add_to_global=True,
+                            filter_ground=filter_ground,
                             filter_4fhwp=filter_4fhwp, **subchunk)
 
     def _chunk2idx(self, **kwargs):
@@ -3663,14 +3669,11 @@ class ScanStrategy(Instrument, qp.QMap):
                                    spinmaps['s0a0']['s_vals'],
                                    reality=True, interp=interp)
 
-        tod_mean = 0.
-        if ('ground' in kwargs) and ('filter_ground' in kwargs):
-            tod_mean = np.average(tod) #Very rough filtering method
 
         if add_to_tod and hasattr(self, 'tod'):
-            self.tod += tod - tod_mean
+            self.tod += tod
         else:
-            self.tod = tod - tod_mean
+            self.tod = tod
 
         # Handle returned values.
         if return_tod:
@@ -4328,7 +4331,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
     def bin_tod(self, beam, tod=None, flag=None, init=True, add_to_global=True,
-                filter_4fhwp=False, **kwargs):
+                filter_4fhwp=False, filter_ground=False, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -4396,6 +4399,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 raise ValueError(
                     'filter_4fhwp not valid with hwp mode : {}'.format(
                     self.hwp_dict['mode']))
+        if filter_ground:
+            tod  -= np.average(tod) #Very rough filtering method
 
         # Note that qpoint wants (,nsamples) shaped tod array.
         tod = tod[np.newaxis]
