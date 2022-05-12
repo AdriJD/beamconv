@@ -2732,6 +2732,7 @@ class ScanStrategy(Instrument, qp.QMap):
         # while avoiding expanding az0 to p_len.
         az = np.arange(chunk_size, dtype=float)
         az *= scan_speed
+        az /= self.fsamp
         az += az0
 
         el = np.zeros(chunk_size, dtype=float)
