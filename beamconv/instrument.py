@@ -2750,30 +2750,12 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_end = sub_start + sub_size[self.mpi_rank]
             q_bore = np.empty(chunk_size * 4, dtype=float)
 
-            # calculate section of q_bore
-            q_boresub = self.azel2bore(az[sub_start:sub_end],
-                                    el[sub_start:sub_end],
-                                    None, None, self.lon, self.lat,
-                                    ctime[sub_start:sub_end])
-            q_boresub = q_boresub.ravel()
-
-            sub_size *= 4 # For the flattened quat array.
-
-            offsets = np.zeros(self.mpi_size)
-            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
-            # Combine all sections on all ranks.
-            self._comm.Allgatherv(q_boresub,
-                            [q_bore, sub_size, offsets, self._mpi_double])
-            q_bore = q_bore.reshape(chunk_size, 4)
-            print(self.mpi_rank, q_bore[:6])
-            #Ground 
             if ground:
                 q_boreground = np.empty(chunk_size * 4, dtype=float)
                 caz = np.cos(np.radians(az[sub_start:sub_end])/2.)
                 saz = np.sin(np.radians(az[sub_start:sub_end])/2.)
                 cel = np.cos(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
                 sel = np.sin(np.pi/4.-np.radians(el[sub_start:sub_end])/2.)
-
                 q_boresubground = np.array([-saz*cel, caz*sel, 
                                              saz*sel, caz*cel]).swapaxes(0,1)
                 q_boresubground = q_boresubground.ravel()
@@ -2783,9 +2765,24 @@ class ScanStrategy(Instrument, qp.QMap):
                                 [q_boreground, 4*sub_size, ground_offsets, 
                                  self._mpi_double])
                 self.q_boreground = q_boreground.reshape(chunk_size, 4)
-                print(self.mpi_rank, self.q_boreground[:5])
+
+            # calculate section of q_bore
+            q_boresub = self.azel2bore(az[sub_start:sub_end],
+                                       el[sub_start:sub_end],
+                                       None, None, self.lon, self.lat,
+                                       ctime[sub_start:sub_end])
+            q_boresub = q_boresub.ravel()
+
+            sub_size *= 4 # For the flattened quat array.
+
+            offsets = np.zeros(self.mpi_size)
+            offsets[1:] = np.cumsum(sub_size)[:-1] # start * 4
+            # Combine all sections on all ranks.
+            self._comm.Allgatherv(q_boresub,
+                            [q_bore, sub_size, offsets, self._mpi_double])
+            q_bore = q_bore.reshape(chunk_size, 4)            
+
         else:
-            q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
             if ground:
                 caz = np.cos(np.radians(az)/2.)
                 saz = np.sin(np.radians(az)/2.)
@@ -2793,6 +2790,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
                 self.q_boreground = np.array([-saz*cel, caz*sel, 
                                           saz*sel, caz*cel]).swapaxes(0,1)
+            q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
+        self.flag = np.zeros_like(az, dtype=bool)
         return q_bore
 
 
