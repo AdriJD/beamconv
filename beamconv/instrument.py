@@ -2239,11 +2239,8 @@ class ScanStrategy(Instrument, qp.QMap):
             ctime /= float(self.fsamp)
             ctime += self.ctime0
             self.ctime = ctime
-            if ground:
-                self.q_bore, self.q_boreground = q_bore_func(start=start, 
-                                    end=end, ground=ground, **q_bore_kwargs)
-            else:
-                self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
+            self.q_bore = q_bore_func(start=start, end=end, ground=ground,
+                                                          **q_bore_kwargs)
             return
 
 
@@ -2768,6 +2765,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self._comm.Allgatherv(q_boresub,
                             [q_bore, sub_size, offsets, self._mpi_double])
             q_bore = q_bore.reshape(chunk_size, 4)
+            print(self.mpi_rank, q_bore[:6])
             #Ground 
             if ground:
                 q_boreground = np.empty(chunk_size * 4, dtype=float)
@@ -2779,14 +2777,13 @@ class ScanStrategy(Instrument, qp.QMap):
                 q_boresubground = np.array([-saz*cel, caz*sel, 
                                              saz*sel, caz*cel]).swapaxes(0,1)
                 q_boresubground = q_boresubground.ravel()
-
                 ground_offsets = np.zeros(self.mpi_size)
                 ground_offsets[1:] = np.cumsum(4*sub_size)[:-1] # start * 4
                 self._comm.Allgatherv(q_boresubground,
                                 [q_boreground, 4*sub_size, ground_offsets, 
                                  self._mpi_double])
-                q_boreground = q_boreground.reshape(chunk_size, 4)
-
+                self.q_boreground = q_boreground.reshape(chunk_size, 4)
+                print(self.mpi_rank, self.q_boreground[:5])
         else:
             q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
             if ground:
@@ -2794,12 +2791,9 @@ class ScanStrategy(Instrument, qp.QMap):
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                q_boreground = np.array([-saz*cel, caz*sel, 
+                self.q_boreground = np.array([-saz*cel, caz*sel, 
                                           saz*sel, caz*cel]).swapaxes(0,1)
-        if ground:
-            return q_bore, q_boreground
-        else:
-            return q_bore
+        return q_bore
 
 
 
