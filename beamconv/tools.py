@@ -904,6 +904,26 @@ def filter_tod_hwp(tod, fsamp, hwp_freq):
 
     return
 
+def filter_tod_highpass(tod, fsamp, w_c, m):
+    '''
+    Convolve TOD with a high-pass butterworth filter
+
+    Arguments
+    ---------
+    tod : ndarray
+    fsamp : float
+        Sample frequency of TOD in Hz
+    w_c : float
+        cut-off filter frequency in Hz.
+    m : int
+        order of the filter in 
+    '''
+    fd = np.fft.rfft(tod)
+    freq = np.fft.rfftfreq(n=tod.size, d=1./fsamp)
+    fd[:] *= np.sqrt(1/(1+(w_c/freq)**(2*m)))
+    tod[:] = np.fft.irfft(fd, n=tod.size)
+    return
+
 def mueller2spin(mueller_mat):
     '''
     Transform input Mueller matrix to complex

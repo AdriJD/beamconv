@@ -1290,6 +1290,7 @@ class ScanStrategy(Instrument, qp.QMap):
         self.rot_dict = {}
         self.hwp_dict = {}
         self.step_dict = {}
+        self.filter_dict = {}
         self.set_instr_rot()
         self.set_hwp_mod()
 
@@ -1494,6 +1495,22 @@ class ScanStrategy(Instrument, qp.QMap):
             self.step_dict['steps'])
         self.step_dict['step'] = self.step_dict['steps'][0]
         self.step_dict['remainder'] = 0
+
+    def set_filter_dict(self, w_c, m=1):
+        '''
+        Set options for the high-pass filtering of data chunks
+        Arguments
+        ---------
+        w_c : float
+            Cutoff frequency in Hertz
+
+        Keyword arguments
+        ---------
+        m : int
+            Order of the filter (default: 1)
+        '''
+        self.filter_dict["w_c"] = w_c
+        self.filter_dict["m"] = m
 
     def partition_mission(self, chunksize=None):
         '''
@@ -1725,7 +1742,7 @@ class ScanStrategy(Instrument, qp.QMap):
             create_memmap=False, scatter=True, reuse_spinmaps=False,
             interp=False, save_tod=False, save_point=False, ctalk=0.,
             preview_pointing=False, filter_4fhwp=False, input_v=False,
-            beam_v=False, filter_ground=False, **kwargs):
+            beam_v=False, filter_highpass=False, **kwargs):
         '''
         Loop over beam pairs, calculates boresight pointing
         in parallel, rotates or modulates instrument if
@@ -1962,7 +1979,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         elif binning:
                             self.bin_tod(beam_a, add_to_global=True, 
                                          filter_4fhwp=filter_4fhwp, 
-                                         filter_ground=filter_ground,
+                                         filter_highpass=filter_highpass,
                                          **subchunk)
 
                     if beam_b and not beam_b.dead:
@@ -1977,7 +1994,7 @@ class ScanStrategy(Instrument, qp.QMap):
                         elif binning:
                             self.bin_tod(beam_b, add_to_global=True, 
                                          filter_4fhwp=filter_4fhwp, 
-                                         filter_ground=filter_ground,
+                                         filter_highpass=filter_highpass,
                                          **subchunk)
 
                     if do_ctalk:
@@ -1991,9 +2008,9 @@ class ScanStrategy(Instrument, qp.QMap):
                         if binning:
                             self.bin_tod(beam_a, tod=tod_a, add_to_global=True,
                             filter_4fhwp=filter_4fhwp, 
-                            filter_ground=filter_ground, **subchunk)
+                            filter_highpass=filter_highpass, **subchunk)
                             self.bin_tod(beam_b, tod=tod_b, add_to_global=True,
-                            filter_ground=filter_ground,
+                            filter_highpass=filter_highpass,
                             filter_4fhwp=filter_4fhwp, **subchunk)
 
     def _chunk2idx(self, **kwargs):
@@ -2793,7 +2810,6 @@ class ScanStrategy(Instrument, qp.QMap):
             q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
         self.flag = np.zeros_like(az, dtype=bool)
         return q_bore
-
 
 
     def parse_schedule_file(self, schedule_file=None):
@@ -4325,7 +4341,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
     def bin_tod(self, beam, tod=None, flag=None, init=True, add_to_global=True,
-                filter_4fhwp=False, filter_ground=False, **kwargs):
+                filter_4fhwp=False, filter_highpass=False, **kwargs):
         '''
         Take internally stored tod and boresight
         pointing, combine with detector offset,
@@ -4393,8 +4409,14 @@ class ScanStrategy(Instrument, qp.QMap):
                 raise ValueError(
                     'filter_4fhwp not valid with hwp mode : {}'.format(
                     self.hwp_dict['mode']))
-        if filter_ground:
-            tod  -= np.average(tod) #Very rough filtering method
+        if filter_highpass:
+            if bool(self.fiter_dict):
+                w_c =  self.filter_dict['w_c']
+                filter_order = self.filter_dict['order']
+                #Butterworth filter
+                tools.filter_tod_highpass(tod, self.fsamp, w_c, order)
+            else:
+                tod  -= np.average(tod) #Very rough filtering method
 
         # Note that qpoint wants (,nsamples) shaped tod array.
         tod = tod[np.newaxis]
