@@ -4410,11 +4410,11 @@ class ScanStrategy(Instrument, qp.QMap):
                     'filter_4fhwp not valid with hwp mode : {}'.format(
                     self.hwp_dict['mode']))
         if filter_highpass:
-            if bool(self.fiter_dict):
+            if bool(self.filter_dict):
                 w_c =  self.filter_dict['w_c']
-                filter_order = self.filter_dict['order']
+                forder = self.filter_dict['m']
                 #Butterworth filter
-                tools.filter_tod_highpass(tod, self.fsamp, w_c, order)
+                tools.filter_tod_highpass(tod, self.fsamp, w_c, forder)
             else:
                 tod  -= np.average(tod) #Very rough filtering method
 
