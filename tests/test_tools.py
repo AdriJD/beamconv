@@ -149,13 +149,13 @@ class TestTools(unittest.TestCase):
 
     def test_filter_ft_hwp(self):
 
-        fd = np.ones(10, dtype=np.complex)
+        fd = np.ones(10, dtype=np.complex128)
         fd += 1j
         center_idx = 4
         filter_width = 4
         tools.filter_ft_hwp(fd, center_idx, filter_width)
 
-        exp_ans = np.zeros(10, dtype=np.complex)
+        exp_ans = np.zeros(10, dtype=np.complex128)
         exp_ans[3] = .75 + .75j
         exp_ans[4] = 1. + 1.j
         exp_ans[5] = .75 + .75j
@@ -167,7 +167,7 @@ class TestTools(unittest.TestCase):
         fsamp = 10.3
         nsamp = 103 # I.e. 10 sec of data.
         
-        t = np.arange(nsamp, dtype=np.float) # Samples.
+        t = np.arange(nsamp, dtype=np.float64) # Samples.
         
         tod = np.sin(2 * t * (2 * np.pi) / float(nsamp)) # f = .2 Hz
         tod += np.sin(4 * t * (2 * np.pi) / float(nsamp)) # f = .4 Hz
@@ -207,6 +207,9 @@ class TestTools(unittest.TestCase):
         blmB = np.random.randn(hp.Alm.getsize(lmax)).astype(np.complex128)
         blmB += 1j * np.random.randn(hp.Alm.getsize(lmax))        
 
+        blmE[:lmax+1] = np.real(blmE[:lmax+1])
+        blmB[:lmax+1] = np.real(blmB[:lmax+1])
+
         blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 0)
 
         np.testing.assert_almost_equal(blmE_new, blmE)
@@ -214,18 +217,16 @@ class TestTools(unittest.TestCase):
 
     def test_shift_blm_shift4(self):
 
-        blmp2 = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2, 3, 3, 3, 4, 4, 5],
+        blmp2 = np.array([0, 0, -1j, -1j, -1j, 0, 2, 2, 2, 3, 3, 3, 4, 4, 5],
                           dtype=np.complex128)
         blmm2 = np.array(
             [0, 0, 1j, 1j, 1j, 0, 2j, 2j, 2j, 3j, 3j, 3j, 4j, 4j, 5j],
             dtype=np.complex128)
-        blmE, blmB = tools.spin2eb(blmm2, blmp2)
         
-        blmE_new, blmB_new = tools.shift_blm(blmE, blmB, 4)
-        blmm2_new, blmp2_new = tools.eb2spin(blmE_new, blmB_new)
+        blmm2_new, blmp2_new = tools.shift_blm(blmm2, blmp2, 4, eb=False)
         
         blmp2_exp = np.array(
-            [0, 0, 0, 0, -5j, 0, 0, 4j, 4j, -3j, -3j, -3j, 2j, 2j, 1],
+            [0, 0, 0, 0, -5j, 0, 0, 4j, 4j, -3j, -3j, -3j, 2j, 2j, -1j],
             dtype=np.complex128)
 
         blmm2_exp = np.array(
@@ -260,7 +261,7 @@ class TestTools(unittest.TestCase):
 
         # We now expect that blmm2 and blmp2 are equal to blm again.
         # The only difference is that we have lost some l=0 and l=1
-        # elements along the way.
+        # elements and some imaginary parts along the way.
 
         blmm2_exp = np.array([0, 0, 1, 1, 1, 0, 0, 2, 2j, 0, 0, 3j, 0, 0, 0])
         blmp2_exp = np.array([0, 0, 1, 1, 1, 0, 2, 2, 2j, 3, 3, 3j, 4, 4j, 5j])

@@ -243,9 +243,12 @@ def shift_blm(blmE, blmB, shift, eb=True):
         blmm2_new[start:end] = bell_old[m:]
 
     if eb:
-        return spin2eb(blmm2_new, blmp2_new)
-    else:
-        return blmm2_new, blmp2_new
+        blmm2_new, blmp2_new = spin2eb(blmm2_new, blmp2_new)
+        # Make sure m=0 elements are real.
+        blmm2_new[:lmax+1] = np.real(blmm2_new[:lmax+1])
+        blmp2_new[:lmax+1] = np.real(blmp2_new[:lmax+1])
+
+    return blmm2_new, blmp2_new
         
 def unpol2pol(blm):
     '''

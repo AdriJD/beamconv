@@ -4,168 +4,6 @@ import healpy as hp
 from beamconv import tools
 from . import transfer_matrix as tm
 
-class HWP(object):
-    '''
-    A class representing the half wave plate, as a transfermatrix stack on which operations are done
-    '''
-    def __init__(self, stack=None):
-        #needs a fix before deployment.
-        self.stack = stack
-
-    def __call__(self):
-        return self
-
-    def stack_builder(self, thicknesses, indices, losses, angles):
-
-        '''
-        Creates a stack of materials, as defined in transfer_matrix.py
-        Arguments:
-        ------------
-        thicknesses : (N,1) array of floats 
-            thickness of each HWP layer in mm
-        indices     : (N,2) array of floats 
-            ordinary and extraordinary indices for each layer
-        losses      : (N,2) array of floats 
-            loss tangents in each layer.
-        angles      : (N,1) array of floats 
-            angle between (extraordinary) axis and stack axis for each layer, in radians
-        '''
-
-        if (thicknesses.size != angles.size or 2 * thicknesses.size != indices.size
-            or 2*thicknesses.size != losses.size):
-            raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
-
-        # Make a list of materials, with a name that corresponds to their position in the stack
-        material_stack=[]
-        for i in range(thicknesses.size):
-
-            if (indices[i,0]==indices[i,1] and losses[i,0]==losses[i,1]):
-                isotro_str = 'isotropic'
-            else:
-                isotro_str = 'uniaxial'
-
-            material_stack.append(tm.material(indices[i,0], indices[i,1],
-                losses[i,0], losses[i,1], str(i), materialType=isotro_str))
-
-        self.stack = tm.Stack( thicknesses*tm.mm, material_stack, angles)
-
-    def choose_HWP_model(self, model_name):
-        '''
-        Set a particlar stack from a few predefined models
-        Argument 
-        ---------------
-        model_name  : (string) 
-            Name of one of the predefined HWP models
-        '''
-
-        spider_sapphire = tm.material(3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
-        #Spider coatings
-        quartz = tm.material(1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
-        circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
-        hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
-        #Optimization results coatings
-        art_ar1_mono = tm.material(3.439, 3.439, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        art_ar2_mono = tm.material(2.644, 2.644, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        art_ar3_mono = tm.material(1.524, 1.524, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        #New 3AR1BR & 3AR3BR & 3AR5BR AR coatings
-        equal_ar1 = tm.material(2.855, 2.855, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        equal_ar2 = tm.material(1.979, 1.979, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        equal_ar3 = tm.material(1.268, 1.268, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        #From optimization
-        a3b3_ar1 = tm.material(2.350, 2.350, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        a3b3_ar2 = tm.material(1.542, 1.542, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        a3b3_ar3 = tm.material(1.344, 1.344, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
-        a3b5_ar1 = tm.material(2.511, 2.511, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
-        a3b5_ar2 = tm.material(1.782, 1.782, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
-        a3b5_ar3 = tm.material(1.279, 1.279, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
-
-        if (model_name=='SPIDER_95'):
-
-            thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
-            materials = [quartz, spider_sapphire, quartz]
-            angles = [0.0, 0.0, 0.0]
-
-        elif(model_name=='SPIDER_150'):
-
-            thicknesses = [0.254*tm.mm, 0.006*tm.mm, 3.16*tm.mm, 0.006*tm.mm, 0.254*tm.mm]
-            materials = [circlex, hdpe, spider_sapphire, hdpe, circlex]
-            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
-
-        elif (model_name == '3AR1BRopti'):
-
-            thicknesses = [0.358*tm.mm,1.849*tm.mm, 1.978*tm.mm, 3.6*tm.mm, 1.978*tm.mm, 1.849*tm.mm, 0.358*tm.mm]
-            materials = [art_ar3_mono, art_ar2_mono ,art_ar1_mono, spider_sapphire, art_ar1_mono, art_ar2_mono, art_ar3_mono]
-            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-        elif (model_name == '1BR'):#New 1AR3BR- same thicknesses for New 3AR3BR_new, 3AR5BR_new
-
-            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
-            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
-            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-        elif (model_name == '3AR3BRopti'):#NEW: A AHWP with the best 3 layer of AR centered at 122.5GHz
-
-            thicknesses = [0.338*tm.mm, 0.132*tm.mm, 0.240*tm.mm, 3.86*tm.mm, 3.86*tm.mm, 3.86*tm.mm,
-                           0.240*tm.mm, 0.132*tm.mm, 0.338*tm.mm]
-            materials = [a3b3_ar3, a3b3_ar2, a3b3_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
-                        a3b3_ar1, a3b3_ar2, a3b3_ar3]
-            angles = np.array([0.,0. ,0.,0.,52.5,0.,0.,0., 0.])*np.pi/180.
-
-        elif (model_name == '3BR'):#New 3AR3BR- same thicknesses for New 3AR1BR_new, 3AR5BR_new
-
-            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
-            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
-                         equal_ar1, equal_ar2, equal_ar3]
-            angles = np.array([0.,0. ,0.,0.,54,0.,0.,0., 0.])*np.pi/180.
-
-        elif (model_name=='3AR5BRopti'):#angles from Matsumura, AR from our optimization
-
-            thicknesses = [0.356*tm.mm, 0.225*tm.mm, 0.188*tm.mm,
-                            3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,
-                            0.188*tm.mm, 0.225*tm.mm, 0.356*tm.mm]
-            materials = [a3b5_ar3, a3b5_ar2, a3b5_ar1, spider_sapphire,
-                         spider_sapphire, spider_sapphire, spider_sapphire,
-                         spider_sapphire, a3b5_ar1, a3b5_ar2, a3b5_ar3]
-            angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
-
-
-        elif (model_name == '3AR5BRstd'): #New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
-
-            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
-                           3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
-            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire,
-                         spider_sapphire, spider_sapphire, spider_sapphire,
-                         spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
-            angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
-
-        elif (model_name == '5BR'): #A 5BR layereed HWP with varphi = 0 over our two frequency bands
-
-            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
-                           3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
-            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire,
-                         spider_sapphire, spider_sapphire, spider_sapphire,
-                         spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
-            angles = np.array([0.,0.,0.,22.9, -50,0,  50,  -22.9 ,0.,0.,0.])*np.pi/180.0
-        else:
-            raise ValueError('Unknown type of HWP entered')
-
-        self.stack = tm.Stack( thicknesses, materials, angles)
-
-    def compute_mueller(self, freq, vartheta):
-        '''
-        Compute the unrotated Mueller Matrix
-
-        Arguments
-        -------
-        freq : float
-            Frequency in GHz
-        vartheta : float
-            Incidence angle on HWP in radians
-        '''
-        return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
-            rotation=0., reflected=False))
-
-
 class Beam(object):
     '''
     A class representing detector and beam properties.
@@ -175,7 +13,7 @@ class Beam(object):
                  dead=False, ghost=False, amplitude=1., po_file=None,
                  eg_file=None, cross_pol=True, deconv_q=True,
                  normalize=True, polang_error=0., idx=None,
-                 symmetric=False, hwp=HWP(), 
+                 symmetric=False, hwp=None, 
                  hwp_mueller=None):
         '''
         Initialize a detector beam.
@@ -244,8 +82,8 @@ class Beam(object):
             Identifier of beam. (default : None)
         symmetric : bool
             If set, beam is assumed azimuthally symmetric.
-        hwp : HWP class, Empty constructor
-            An empty HWP with no characteristics, that are to be set afterwards
+        hwp : HWP class, None
+            HWP class instance, can be empty HWP with no characteristics to be set afterwards
             by the setters
         hwp_mueller : (4,4) array, None
             Full unrotated Mueller matrix of the stack for a given incidence angle
@@ -726,6 +564,8 @@ class Beam(object):
             angle between (extraordinary) axis and stack axis for each layer, in radians
         '''
 
+        if self.hwp is None:
+            self.hwp = HWP()
         if(model_name is None and any(elem is None for elem in 
             [thicknesses, indices, losses, angles])):
             raise ValueError('You must give either a model or parameters for a stack !')
@@ -737,8 +577,169 @@ class Beam(object):
                 indices=indices, losses=losses, angles=angles)
 
         self.hwp_mueller = self.hwp.compute_mueller(freq=self.sensitive_freq,
-                vartheta=np.radians(self.el))
+                vartheta=np.radians(np.sqrt(self.el**2+self.az**2)))
+
+class HWP(object):
+    '''
+    A class representing the half wave plate, as a transfermatrix stack on which operations are done
+    '''
+    def __init__(self, stack=None):
+        #needs a fix before deployment.
+        self.stack = stack
+
+    def __call__(self):
+        return self
+
+    def stack_builder(self, thicknesses, indices, losses, angles):
+
+        '''
+        Creates a stack of materials, as defined in transfer_matrix.py
+        Arguments:
+        ------------
+        thicknesses : (N,1) array of floats 
+            thickness of each HWP layer in mm
+        indices     : (N,2) array of floats 
+            ordinary and extraordinary indices for each layer
+        losses      : (N,2) array of floats 
+            loss tangents in each layer.
+        angles      : (N,1) array of floats 
+            angle between (extraordinary) axis and stack axis for each layer, in radians
+        '''
+
+        if (thicknesses.size != angles.size or 2 * thicknesses.size != indices.size
+            or 2*thicknesses.size != losses.size):
+            raise ValueError('There is a mismatch in the sizes of the inputs for the HWP stack')
+
+        # Make a list of materials, with a name that corresponds to their position in the stack
+        material_stack=[]
+        for i in range(thicknesses.size):
+
+            if (indices[i,0]==indices[i,1] and losses[i,0]==losses[i,1]):
+                isotro_str = 'isotropic'
+            else:
+                isotro_str = 'uniaxial'
+
+            material_stack.append(tm.material(indices[i,0], indices[i,1],
+                losses[i,0], losses[i,1], str(i), materialType=isotro_str))
+
+        self.stack = tm.Stack( thicknesses*tm.mm, material_stack, angles)
+
+    def choose_HWP_model(self, model_name):
+        '''
+        Set a particlar stack from a few predefined models
+        Argument 
+        ---------------
+        model_name  : (string) 
+            Name of one of the predefined HWP models
+        '''
+
+        spider_sapphire = tm.material(3.019, 3.336, 2.3e-4, 1.25e-4, 'Sapphire at 4K', materialType='uniaxial')
+        #Spider coatings
+        quartz = tm.material(1.951, 1.951, 1.2e-3, 1.2e-3, 'Quartz', materialType='isotropic')
+        circlex = tm.material(1.935, 1.935, 1.2e-3, 1.2e-3, 'Circlex', materialType='isotropic')
+        hdpe = tm.material(1.51, 1.51, 1e-3, 1e-3, 'HDPE', materialType='isotropic' )
+        #Optimization results coatings
+        art_ar1_mono = tm.material(3.439, 3.439, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar2_mono = tm.material(2.644, 2.644, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        art_ar3_mono = tm.material(1.524, 1.524, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        #New 3AR1BR & 3AR3BR & 3AR5BR AR coatings
+        equal_ar1 = tm.material(2.855, 2.855, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        equal_ar2 = tm.material(1.979, 1.979, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        equal_ar3 = tm.material(1.268, 1.268, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        #From optimization
+        a3b3_ar1 = tm.material(2.350, 2.350, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        a3b3_ar2 = tm.material(1.542, 1.542, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        a3b3_ar3 = tm.material(1.344, 1.344, 1.2e-3, 1.2e-3, 'fiducial AR', materialType='isotropic')
+        a3b5_ar1 = tm.material(2.511, 2.511, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
+        a3b5_ar2 = tm.material(1.782, 1.782, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
+        a3b5_ar3 = tm.material(1.279, 1.279, 1.2e-3, 1.2e-3, 'composite AR', materialType='isotropic')
+
+        if (model_name=='SPIDER_95'):
+
+            thicknesses = [0.427*tm.mm, 4.930*tm.mm, 0.427*tm.mm]
+            materials = [quartz, spider_sapphire, quartz]
+            angles = [0.0, 0.0, 0.0]
+
+        elif(model_name=='SPIDER_150'):
+
+            thicknesses = [0.254*tm.mm, 0.006*tm.mm, 3.16*tm.mm, 0.006*tm.mm, 0.254*tm.mm]
+            materials = [circlex, hdpe, spider_sapphire, hdpe, circlex]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == '3AR1BRopti'):
+
+            thicknesses = [0.358*tm.mm,1.849*tm.mm, 1.978*tm.mm, 3.6*tm.mm, 1.978*tm.mm, 1.849*tm.mm, 0.358*tm.mm]
+            materials = [art_ar3_mono, art_ar2_mono ,art_ar1_mono, spider_sapphire, art_ar1_mono,
+                         art_ar2_mono, art_ar3_mono]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == '1BR'):#New 1AR3BR- same thicknesses for New 3AR3BR_new, 3AR5BR_new
+
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
+            angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        elif (model_name == '3AR3BRopti'):#NEW: A AHWP with the best 3 layer of AR centered at 122.5GHz
+
+            thicknesses = [0.338*tm.mm, 0.132*tm.mm, 0.240*tm.mm, 3.86*tm.mm, 3.86*tm.mm, 3.86*tm.mm,
+                           0.240*tm.mm, 0.132*tm.mm, 0.338*tm.mm]
+            materials = [a3b3_ar3, a3b3_ar2, a3b3_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
+                        a3b3_ar1, a3b3_ar2, a3b3_ar3]
+            angles = np.array([0.,0. ,0.,0.,52.5,0.,0.,0., 0.])*np.pi/180.
+
+        elif (model_name == '3BR'):#New 3AR3BR- same thicknesses for New 3AR1BR_new, 3AR5BR_new
+
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
+                           0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire, spider_sapphire, spider_sapphire,
+                         equal_ar1, equal_ar2, equal_ar3]
+            angles = np.array([0.,0. ,0.,0.,54,0.,0.,0., 0.])*np.pi/180.
+
+        elif (model_name=='3AR5BRopti'):#angles from Matsumura, AR from our optimization
+
+            thicknesses = [0.356*tm.mm, 0.225*tm.mm, 0.188*tm.mm,
+                            3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,3.86*tm.mm,
+                            0.188*tm.mm, 0.225*tm.mm, 0.356*tm.mm]
+            materials = [a3b5_ar3, a3b5_ar2, a3b5_ar1, spider_sapphire,
+                         spider_sapphire, spider_sapphire, spider_sapphire,
+                         spider_sapphire, a3b5_ar1, a3b5_ar2, a3b5_ar3]
+            angles = np.array([0.,0.,0., 0.,29.,94.5,29.,2., 0.,0.,0.])*np.pi/180.0
 
 
+        elif (model_name == '3AR5BRstd'): #New 3AR5BR- same thicknesses for New 3AR1BR_new, 3AR3BR_new
+
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
+                           3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire,
+                         spider_sapphire, spider_sapphire, spider_sapphire,
+                         spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
+            angles = np.array([0.,0.,0., 0.,26.5,94.8,28.1,-2.6 ,0.,0.,0.])*np.pi/180.0
+
+        elif (model_name == '5BR'): #A 5BR layereed HWP with varphi = 0 over our two frequency bands
+
+            thicknesses = [0.5*tm.mm,0.31*tm.mm, 0.257*tm.mm, 3.75*tm.mm, 3.75*tm.mm, 3.75*tm.mm,
+                           3.75*tm.mm, 3.75*tm.mm, 0.257*tm.mm, 0.31*tm.mm, 0.5*tm.mm]
+            materials = [equal_ar3, equal_ar2, equal_ar1, spider_sapphire,
+                         spider_sapphire, spider_sapphire, spider_sapphire,
+                         spider_sapphire, equal_ar1, equal_ar2, equal_ar3]
+            angles = np.array([0.,0.,0.,22.9, -50,0,  50,  -22.9 ,0.,0.,0.])*np.pi/180.0
+        else:
+            raise ValueError('Unknown type of HWP entered')
+
+        self.stack = tm.Stack( thicknesses, materials, angles)
+
+    def compute_mueller(self, freq, vartheta):
+        '''
+        Compute the unrotated Mueller Matrix
+
+        Arguments
+        -------
+        freq : float
+            Frequency in GHz
+        vartheta : float
+            Incidence angle on HWP in radians
+        '''
+        return(tm.Mueller(self.stack, frequency=1.0e9*freq, incidenceAngle=vartheta,
+            rotation=0., reflected=False))
 
 
