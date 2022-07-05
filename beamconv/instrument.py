@@ -2189,7 +2189,7 @@ class ScanStrategy(Instrument, qp.QMap):
         az_prf='triangle', check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, ground=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,ctime_kwargs=None, 
-        use_litebird_scan=False, use_taurus_scan=False,**kwargs):
+        use_litebird_scan=False, use_strictly_az=False,**kwargs):
 
         '''
         Populates scanning quaternions.
@@ -2291,7 +2291,7 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
             return
-        elif use_taurus_scan:
+        elif use_strictly_az:
             
             ctime = np.arange(start, end, dtype=float)
             ctime /= float(self.fsamp)
@@ -2747,12 +2747,12 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def taurus_scan(self, el0=35., az0=0., scan_speed=30., ground=False, 
+    def strictly_az(self, el0=35., az0=0., scan_speed=30., ground=False, 
                           **kwargs):
         '''
-        Populates scanning quaternions for a Taurus-like scan strategy
-        Let boresight scan at a fixed elevation, rotating at a given speed
-        in azimuth
+        Populates scanning quaternions for a scan strategy with no 
+        elevation change. Let boresight rotate at a given speed
+        in azimuth.
         Keyword Arguments
         ---------
         el0 : float
@@ -2770,7 +2770,7 @@ class ScanStrategy(Instrument, qp.QMap):
         hwpang = kwargs.pop('hwpang', None)
 
         if kwargs:
-            raise TypeError("taurus_scan() got unexpected "
+            raise TypeError("strictly_az() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
 
