@@ -2189,7 +2189,7 @@ class ScanStrategy(Instrument, qp.QMap):
         az_prf='triangle', check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, ground=False, q_bore_func=None,
         q_bore_kwargs=None, ctime_func=None,ctime_kwargs=None, 
-        use_litebird_scan=False, use_strictly_az=False,**kwargs):
+        use_l2_scan=False, use_strictly_az=False,**kwargs):
 
         '''
         Populates scanning quaternions.
@@ -2243,8 +2243,8 @@ class ScanStrategy(Instrument, qp.QMap):
             `ScanStrategy.__init__`. (default : None)
         ctime_kwargs : dict, None
             Keyword arguments to ctime_func (default: None)
-        use_litebird_scan : bool
-            If true, implements a LiteBIRD-like scan strategy
+        use_l2_scan : bool
+            If true, implements a l2-like scan strategy
         start : int
             Start index
         end : int
@@ -2277,16 +2277,16 @@ class ScanStrategy(Instrument, qp.QMap):
             raise TypeError("implement_scan() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
-        if self.ext_point and not use_litebird_scan:
+        if self.ext_point and not use_l2_scan:
             # Use external pointing, so skip rest of function.
             self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, **q_bore_kwargs)
 
             return
 
-        elif use_litebird_scan:
+        elif use_l2_scan:
 
-            print('Implementing litebird scan')
+            print('Implementing l2 scan')
             self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
@@ -2476,7 +2476,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if self.mpi:
                 self._comm.barrier()
 
-    def litebird_ctime(self, **kwargs):
+    def l2_ctime(self, **kwargs):
         '''
         A function to produce unix time (ctime) for a given chunk
 
@@ -2502,7 +2502,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return ctime
 
-    def litebird_scan(self, theta_antisun=45., theta_boresight = 50.,
+    def l2_scan(self, theta_antisun=45., theta_boresight = 50.,
         freq_antisun = 192.348, freq_boresight = 0.314, sample_rate = 19.1,
         jitter_amp=0.0, **kwargs):
         '''
