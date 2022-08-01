@@ -1,11 +1,3 @@
-# import os
-# import sys
-# import time
-# import copy
-# from warnings import warn, catch_warnings, filterwarnings
-# import glob
-# import pickle
-
 import numpy as np
 import healpy as hp
 import qpoint as qp
@@ -15,22 +7,61 @@ Q = qp.QPoint()
 pi = np.pi
 radeg = (180./pi)
 
-####################################################
-# MARTA: I pasted here all the functions that were
-# called (except for liblbscanc.LB_rotmatrix_multi2
-# and liblbscanc.Maps_summingup)
-####################################################
+'''
+This module is used to generate scan strategies specifically for satellite missions.
+Code based on pyScan written Tomotake Matsumura at IPMU.
+See: https://github.com/tmatsumu/LB_SYSPL_v4.2
+'''
 
 def convert_Julian2Dublin(JD):
+    '''
+    Calculate the Julian day (JD) to Dublin Julian day (DJD)
+
+    Arguments
+    ---------
+    JD : array-like
+
+    Returns
+    -------
+    DJD : array-like
+
+    '''
     DJD = JD - 2415020.
     return np.array(DJD)
 
 def wraparound_2pi(x):
+    '''
+    Wraps around x so that it falls within the proper range in multiples of 2pi
+
+    Arguments
+    ---------
+    x : array-like
+
+    Returns
+    -------
+    arr : array-like
+
+    '''
+
     if len(x)==1: n = np.int(x/(2.*pi))
     if len(x)>1: n = np.int_(x/(2.*pi))
-    return x-n*2.*pi
+    arr = x - n * 2.*pi
+    return arr
 
 def wraparound_npi(x, n_):
+    '''
+    Wraps around x so that it falls within the proper range in multiples of 2pi
+
+    Arguments
+    ---------
+    x : array-like
+
+    Returns
+    -------
+    arr : array-like
+
+    '''
+
     n_ = float(n_)
     if len(x)==1:
         n_wrap = np.int(x/(n_*pi))
@@ -42,11 +73,40 @@ def wraparound_npi(x, n_):
     return x-n_wrap*n_*pi
 
 def sun_position_quick(DJD):
+    '''
+    Roughly estimates the phase of the sun on the sky
+
+    Arguments
+    ---------
+    DJD : array-like
+
+    Returns
+    -------
+    arr : array-like
+
+    '''
+
     freq = 1./((365.25)*24.*60.*60.)
     phi = wraparound_2pi(2.*pi*freq*DJD*(8.64*1.e4))
     return phi, np.zeros(len(phi))
 
 def matrix2x2_multi_xy(x,  y, phi):
+    '''
+    Roughly estimates the phase of the sun on the sky
+
+    Arguments
+    ---------
+    x : array-like
+
+    y : array-like
+
+    phi : array-like
+
+    Returns
+    -------
+    arr : array-like
+
+    '''
     cp, sp = np.cos(phi), np.sin(phi)
     return cp*x - sp*y, sp*x + cp*y
 
@@ -164,6 +224,10 @@ def ctime2DJD(ctime):
     return ctime / 86400. + (2440587.5 - 2415020)
 
 def ctime2bore(ctime):
+    '''
+    Generate boresight quaternion
+
+    '''
 
     theta_antisun = 45      # degrees
     theta_boresight = 50    # degrees
@@ -175,15 +239,9 @@ def ctime2bore(ctime):
     freq_antisun = 1. / (freq_antisun * 60.)
     freq_boresight = freq_boresight / 60.
 
-    # n_time = int(siad * sample_rate)
-    # sec2date = (1.e-4/8.64)
-    # time_julian = np.arange(n_time)/(n_time-1.)*siad*sec2date + today_julian # time in julian [day]
-
     # cal sun position
     DJD = convert_Julian2Dublin(ctime2DJD(ctime))
     phi_asp, theta_asp = sun_position_quick(DJD)
-
-    #time_i = time_julian / sec2date # time in [sec]
 
     # from ecliptic lat, lon convention to theta, phi convention
     theta_asp = pi/2. - theta_asp
@@ -201,20 +259,11 @@ def ctime2bore(ctime):
     phi_out = wraparound_npi(phi_out, 2.)
     psi_out = wraparound_2pi(p_out[3, :])
 
-    #theta_array[i*int(sample_rate*siad):(i+1)*int(sample_rate*siad)] = theta_out
-    #phi_array[i*int(sample_rate*siad):(i+1)*int(sample_rate*siad)] = phi_out
-
     ra = np.degrees(phi_out) - 180.
     dec = np.degrees(theta_out) - 90.
     psi = np.degrees(psi_out)
 
-    #print(np.shape(ra))
-    #print(np.shape(dec))
-    #print(np.shape(psi))
-
     q_bore = Q.radecpa2quat(ra, dec, psi)
-
-
 
     return q_bore
 
@@ -284,7 +333,6 @@ def main():
         phi_array[i*int(sample_rate*siad):(i+1)*int(sample_rate*siad)] = phi_out
 
         ####################################################
-
         # we don't really need the next lines, I just
         # wanted to look at the nhits map
         nbPix = hp.nsiade2npix(nsiade)
@@ -293,8 +341,8 @@ def main():
         nhits += np.bincount(ipix, minlength=nbPix)
         ipix=0
         runtime_f = time.time()
-        print ('day ', (i+1), ':', (time.time()-runtime_i), 'sec')
-        print ()
+        print('day ', (i+1), ':', (time.time()-runtime_i), 'sec')
+        print()
 
         today_julian += 1.
 
