@@ -11,7 +11,6 @@ import qpoint as qp
 import healpy as hp
 
 from . import scanning
-
 from . import tools
 from .detector import Beam
 
@@ -23,7 +22,7 @@ class MPIBase(object):
     def __init__(self, mpi=True, comm=None, **kwargs):
         '''
         Check if MPI is working by checking common
-        MPI environment variables and set MPI atrributes.
+        MPI environment variables and set MPI attributes.
 
         Keyword arguments
         ---------
