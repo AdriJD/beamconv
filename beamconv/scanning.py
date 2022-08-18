@@ -9,7 +9,8 @@ radeg = (180./pi)
 
 '''
 This module is used to generate scan strategies specifically for satellite missions.
-Code based on pyScan written Tomotake Matsumura at IPMU.
+Code based on pyScan written Tomotake Matsumura at IPMU. The below code fragments
+have been added here with the authors permission.
 See: https://github.com/tmatsumu/LB_SYSPL_v4.2
 '''
 
