@@ -97,9 +97,7 @@ def matrix2x2_multi_xy(x,  y, phi):
     Arguments
     ---------
     x : array-like
-
     y : array-like
-
     phi : array-like
 
     Returns
@@ -134,8 +132,11 @@ def deriv_phi(xi, yi, zi):
     return -np.sin(phi), np.cos(phi), phi*0.
 
 def LB_rotmatrix_multi2(theta_asp, phi_asp,
-                        theta_antisun, theta_boresight,
-                        omega_pre, omega_spin, time):
+        theta_antisun, theta_boresight, omega_pre, omega_spin, time):
+    '''
+    Rotation matrix multiplication for standarization
+
+    '''
 
     out = np.empty((4, theta_asp.shape[0]))
 
@@ -157,7 +158,9 @@ def LB_rotmatrix_multi2(theta_asp, phi_asp,
     x, z = matrix2x2_multi_xz( x, z, theta_boresight) # 3->4A
     x, y = matrix2x2_multi_xy( x, y, omega_spin_t) # 4A->4B
 
-    # pass the variable to calcualte the psi angle: psi is defined as the phi direction when the focal plane is rotating about the spin axis
+    # pass the variable to calculate the psi angle:
+    # psi is defined as the phi direction when the focal plane
+    # is rotating about the spin axis
     xii = x.copy()
     yii = y.copy()
     zii = z.copy()
@@ -223,16 +226,34 @@ def ctime2DJD(ctime):
 
     return ctime / 86400. + (2440587.5 - 2415020)
 
-def ctime2bore(ctime):
+def ctime2bore(ctime, theta_antisun=45., theta_boresight=50.,
+    freq_antisun=192.348, freq_boresight=0.314):
     '''
     Generate boresight quaternion
 
-    '''
+    Arguments
+    ---------
+    ctime : ndarray
+        The Unix time vector
 
-    theta_antisun = 45      # degrees
-    theta_boresight = 50    # degrees
-    freq_antisun = 192.348  # minutes
-    freq_boresight = 0.314  # radians per minutes
+
+    Keyword arguments
+    -----------------
+    theta_antisun : float
+        The theta anti-sun angle in degrees of the scanning strategy
+        (default : 45.)
+    theta_boresight : float
+        The theta boresight angle in degrees of the scanning strategy
+        (default : 50.)
+    freq_antisun : float
+        The rotation frequency of theta anti-sun in units of 1/min
+        (default : 192.348)
+    freq_boresight : float
+        The rotation frequency of theta boresight in units of radians/min
+        (default : 0.314)
+
+
+    '''
 
     theta_antisun = np.radians(theta_antisun)
     theta_boresight = np.radians(theta_boresight)
@@ -273,6 +294,9 @@ def main():
     # All the scanning parameters
     ####################################################
 
+    import time
+    import healpy as hp
+
     theta_antisun = 45      # degrees
     theta_boresight = 50    # degrees
     freq_antisun = 192.348  # minutes
@@ -281,7 +305,7 @@ def main():
     today_julian = 1        # I just set 1 by hand
     sample_rate = 19.1      # Hz
     ydays = 20              # duration of the mission (in days)
-    nsiade = 256
+    nside = 256
     runtime_i = time.time()
 
     theta_antisun = theta_antisun/radeg
@@ -296,7 +320,7 @@ def main():
 
     # we don't really need the next two lines, I just
     # wanted to look at the nhits map
-    npix = hp.nsiade2npix(nsiade)
+    npix = hp.nside2npix(nside)
     nhits = np.zeros(npix)
     theta_array = np.zeros(int(sample_rate * siad * ydays))
     phi_array = np.zeros(int(sample_rate * siad * ydays))
@@ -335,8 +359,8 @@ def main():
         ####################################################
         # we don't really need the next lines, I just
         # wanted to look at the nhits map
-        nbPix = hp.nsiade2npix(nsiade)
-        ipix = hp.ang2pix(nsiade,theta_out,phi_out)
+        nbPix = hp.nside2npix(nside)
+        ipix = hp.ang2pix(nside,theta_out,phi_out)
         beta=0; dphivec=0; dpvec=0; dtvec=0; theta_out=0; phi_out=0
         nhits += np.bincount(ipix, minlength=nbPix)
         ipix=0
