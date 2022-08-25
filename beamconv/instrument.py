@@ -1637,50 +1637,6 @@ class ScanStrategy(Instrument, qp.QMap):
 
         return subchunks
 
-    def scan_sync_subchunk(self, chunk):
-        '''
-        Split a chunk up into smaller chunks for each pass in an az direction.
-
-        Arguments
-        ---------
-        chunk : dict
-            Dictionary containing start, end indices (and optionally
-            cidx) keys
-
-        Returns
-        -------
-        subchunks : list of dicts
-            Subchunks for each continuous motion of the boresight. If input
-            chunk had a `cidx` key, every subchunk inherits this value.
-        '''
-
-        chunk_size = chunk['end'] - chunk['start']
-        subchunks = []
-
-        """
-        PSEUDOCODE
-        az_mins = az_min[chunck["start"]:chunk["end"]]
-        az_maxs = az_max[chunck["start"]:chunk["end"]]
-        els = els[chunck["start"]:chunk["end"]]
-        n_ces = els.size
-        
-        for i in range(n_ces):
-            find the indices of breaks (ces_size)
-            tsweep =  az_range/scan_speed
-            subs_per_break = ces_size/tsweep
-            sub_chunk0 = [ces_start:ces_start+ int(.5*tsweep)]
-            for j in range(1,subs_per_break-1):
-                sub_chunk.append[ces_start+j*tsweep:ces_start+(j+1)*tsweep]
-            sub_chunk.append[ces_start+(subs_per_break-1)*tsweep:ces_end]
-
-            
-
-
-        """
-
-        return subchunks
-
-
     def allocate_maps(self, nside=256):
         '''
         Allocate space in memory for binned output.
