@@ -2607,6 +2607,7 @@ class ScanStrategy(Instrument, qp.QMap):
         -----
         See Wallis et al., 2017, MNRAS, 466, 425.
         '''
+
         deg_per_day = 360.9863
         dt = 1 / float(self.fsamp)
         nsamp = self.ctime.size # ctime determines chunk size
@@ -2710,6 +2711,7 @@ class ScanStrategy(Instrument, qp.QMap):
         scan_speed : float
             Scan speed in degrees per second
         '''
+
         start = kwargs.pop('start')
         end = kwargs.pop('end')
 
@@ -2720,7 +2722,6 @@ class ScanStrategy(Instrument, qp.QMap):
         if kwargs:
             raise TypeError("strictly_az() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
-
 
         ctime = self.ctime
 
