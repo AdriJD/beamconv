@@ -1655,8 +1655,8 @@ class ScanStrategy(Instrument, qp.QMap):
         '''
 
         chunk_size = chunk['end'] - chunk['start']
-
         subchunks = []
+
         """
         PSEUDOCODE
         az_mins = az_min[chunck["start"]:chunk["end"]]
@@ -1677,6 +1677,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
         """
+
         return subchunks
 
 
@@ -2262,11 +2263,8 @@ class ScanStrategy(Instrument, qp.QMap):
         every other kwarg except `start` and `end`.
         '''
 
-
         start = kwargs.pop('start')
         end = kwargs.pop('end')
-
-
 
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
@@ -2285,11 +2283,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif use_l2_scan:
 
-            print('Implementing l2 scan')
+            print('Implementing L2 scan') # Lagrange point 2
             self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
             return
+
         elif use_strictly_az:
             
             ctime = np.arange(start, end, dtype=float)
@@ -2299,7 +2298,6 @@ class ScanStrategy(Instrument, qp.QMap):
             self.q_bore = q_bore_func(start=start, end=end, ground=ground,
                                                           **q_bore_kwargs)
             return
-
 
         ctime = np.arange(start, end, dtype=float)
         ctime /= float(self.fsamp)
@@ -2477,7 +2475,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
     def l2_ctime(self, **kwargs):
         '''
-        A function to produce unix time (ctime) for a given chunk
+        A function to produce unix time (ctime) for a given chunk. Used when
+        generating TODs for L2 (Lagrance point 2) scan strategies.
 
         Keyword arguments
         -----------------
@@ -2538,8 +2537,8 @@ class ScanStrategy(Instrument, qp.QMap):
         See Wallis et al., 2017, MNRAS, 466, 425.
         '''
 
-        siad = 86400.            # seconds in a day
-        today_julian = 1        # I just set 1 by hand
+        siad = 86400.           # seconds in a day
+        today_julian = 1        # Just set to 1 by hand
         sample_rate = 19.1      # Hz
         ydays = 20              # duration of the mission (in days)
         nsiade = 256
@@ -2564,15 +2563,6 @@ class ScanStrategy(Instrument, qp.QMap):
             sub_end = sub_start + sub_size[self.mpi_rank]
 
             q_bore = np.empty(chunk_size * 4, dtype=float)
-
-            # calculate section of q_bore
-            # q_boresub = self.azel2bore(az[sub_start:sub_end],
-            #                         el[sub_start:sub_end],
-            #                         None, None,
-            #                         lon[sub_start:sub_end],
-            #                         lat[sub_start:sub_end],
-            #                         self.ctime[sub_start:sub_end])
-
             q_boresub = scanning.ctime2bore(self.ctime[sub_start:sub_end])
             q_boresub = q_boresub.ravel()
 
@@ -2752,6 +2742,7 @@ class ScanStrategy(Instrument, qp.QMap):
         Populates scanning quaternions for a scan strategy with no 
         elevation change. Let boresight rotate at a given speed
         in azimuth.
+
         Keyword Arguments
         ---------
         el0 : float
