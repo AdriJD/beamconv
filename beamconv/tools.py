@@ -909,7 +909,8 @@ def filter_tod_hwp(tod, fsamp, hwp_freq):
 
 def filter_tod_highpass(tod, fsamp, w_c, m):
     '''
-    Convolve TOD with a high-pass butterworth filter
+    Convolve TOD with a high-pass butterworth filter.
+    Note, calculated in-place.
 
     Arguments
     ---------

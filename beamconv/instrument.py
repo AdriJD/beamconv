@@ -2459,6 +2459,7 @@ class ScanStrategy(Instrument, qp.QMap):
     def l2_scan(self, theta_antisun=45., theta_boresight = 50.,
         freq_antisun = 192.348, freq_boresight = 0.314, sample_rate = 19.1,
         jitter_amp=0.0, **kwargs):
+
         '''
         A function to simulate satellite scanning strategy.
 
@@ -2571,7 +2572,8 @@ class ScanStrategy(Instrument, qp.QMap):
         alpha_period=5400., beta_period=600., jitter_amp=0.0, return_all=False,
         **kwargs):
         '''
-        A function to simulate satellite scanning strategy.
+        A function to simulate satellite scanning strategy using a relatively
+        coarse trick in qpoint. For a more advanced implementation, see l2_scan.
 
         Keyword arguments
         -----------------
