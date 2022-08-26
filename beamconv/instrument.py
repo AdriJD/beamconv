@@ -1891,14 +1891,10 @@ class ScanStrategy(Instrument, qp.QMap):
                 pass
             elif hasattr(self, 'spinmaps') and reuse_spinmaps:
                 pass
-            elif ground_alm is not None:
-                self.init_detpair(alm, beam_a, beam_b=beam_b,
-                                input_v=input_v, beam_v=beam_v, ground_alm=ground_alm,
-                                **spinmaps_opts)
             else:
                 self.init_detpair(alm, beam_a, beam_b=beam_b,
-                                input_v=input_v, beam_v=beam_v,
-                                **spinmaps_opts)
+                                input_v=input_v, beam_v=beam_v, 
+                                ground_alm=ground_alm, **spinmaps_opts)
 
             if not hasattr(self, 'chunks'):
                 # Assume no chunking is needed and use full mission length.
