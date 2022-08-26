@@ -271,7 +271,7 @@ class Instrument(MPIBase):
 
         Notes
         -----
-        The Instrument holds an `beams` attribute that
+        The Instrument holds a `beams` attribute that
         consists of a nested list reprenting pairs of
         beamconv.Beam objects (detectors). `beams` is
         equal on all MPI ranks.
@@ -518,7 +518,6 @@ class Instrument(MPIBase):
         azs = np.linspace(-fov/2., fov/2., ncol)
         els = np.linspace(-fov/2., fov/2., nrow)
 
-
         for az_idx in range(azs.size):
             for el_idx in range(els.size):
 
@@ -533,7 +532,6 @@ class Instrument(MPIBase):
                               name=det_str+'B', polang=polang+90.,
                               dead=dead or no_pairs, pol='B',
                               idx=idx+1, **kwargs)
-
 
                 beams.append([beam_a, beam_b])
                 idx += 2
@@ -602,7 +600,6 @@ class Instrument(MPIBase):
             self.ndet = 2 * nrow * ncol # A and B detectors.
             idx = 0
 
-
         beams = []
         for i, (az, el, polang, dead) in enumerate(
                 zip(azs, els, polangs, deads)):
@@ -661,7 +658,7 @@ class Instrument(MPIBase):
             Polarization angle of A detector in pair [deg].
             Added to existing or provided polang. (default: 0.)
         polang_B : float
-            Polarization angle of b detector in pair [deg].
+            Polarization angle of B detector in pair [deg].
             Added to existing or provided polang. (default: 0.)
         file_names : list, None
             List of file names in directory that are loaded.
@@ -759,7 +756,6 @@ class Instrument(MPIBase):
                     beam_opts_a = beam_opts
                     beam_opts_b = copy.deepcopy(beam_opts)
 
-
                     if beam_opts.get('name'):
                         beam_opts_a['name'] += 'A'
                         beam_opts_b['name'] += 'B'
@@ -772,7 +768,6 @@ class Instrument(MPIBase):
 
                     beam_opts_a = beam_opts[0]
                     beam_opts_b = beam_opts[1]
-
 
                 # Overrule options with given kwargs
                 beam_opts_a.update(kwargs)
@@ -798,7 +793,6 @@ class Instrument(MPIBase):
 
                 beam_a = Beam(pol='A', **beam_opts_a)
                 beam_b = Beam(pol='B', **beam_opts_b)
-
 
                 beams.append([beam_a, beam_b])
 
@@ -1013,7 +1007,6 @@ class Instrument(MPIBase):
         no_A
             Do not set value for B beams. (default : False)
 
-
         Examples
         --------
         >>> S = Instrument()
@@ -1022,7 +1015,7 @@ class Instrument(MPIBase):
 
         Notes
         -----
-        Ghosts share random deviation with main beam.
+        Ghosts share property with main beam.
         '''
 
         beams = np.atleast_2d(self.beams) #2D: we have pairs
@@ -1133,7 +1126,7 @@ class Instrument(MPIBase):
 
         Notes
         -----
-        Ghosts share random deviation with main beam.
+        The attributes of ghosts and main beam are affected identically.
         '''
 
         beams = np.atleast_2d(self.beams) #2D: we have pairs
