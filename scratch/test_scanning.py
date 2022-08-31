@@ -1,8 +1,7 @@
 import numpy as np
 import healpy as hp
 import qpoint as qp
-
-from scanning import * 
+from beamconv.scanning import *
 
 def main():
 
