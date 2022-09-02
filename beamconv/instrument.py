@@ -2813,23 +2813,12 @@ class ScanStrategy(Instrument, qp.QMap):
 
             return (mjd - 40587.) * 86400.0
 
-        if schedule_file is None:
-
-            ### Placeholder while we debug the rest of the code
-            t0s = mjd2ctime(np.array([58484.000694, 58484.056944, 58484.132639]))
-            t1s = mjd2ctime(np.array([58484.055556, 58484.131250, 58484.186806]))
-            az0s = np.array([214.98, 202.93, 215.67])
-            az1s = np.array([250.28, 249.60, 250.24])
-            els = np.array([53.09, 59.63, 52.40])
-
-        else:
-
-            data = np.loadtxt(schedule_file)
-            t0s  = mjd2ctime(data[:, 0])
-            t1s  = mjd2ctime(data[:, 1])
-            az0s = data[:, 2]
-            az1s = data[:, 3]
-            els  = data[:, 4]
+        data = np.loadtxt(schedule_file)
+        t0s  = mjd2ctime(data[:, 0])
+        t1s  = mjd2ctime(data[:, 1])
+        az0s = data[:, 2]
+        az1s = data[:, 3]
+        els  = data[:, 4]
 
         N = len(az0s)
 
