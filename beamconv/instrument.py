@@ -1572,8 +1572,8 @@ class ScanStrategy(Instrument, qp.QMap):
         if not period:
         # No need for subchunks since the instrument is not rotating.
             return [chunk]
-
-        rot_chunk_size = self.rot_dict['rot_chunk_size'] # Samples in boresight
+        # Samples in boresight rotation period.
+        rot_chunk_size = self.rot_dict['rot_chunk_size'] 
         chunk_size = chunk['end'] - chunk['start'] # Samples in chunk.
 
         subchunks = []
