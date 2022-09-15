@@ -2877,7 +2877,7 @@ class ScanStrategy(Instrument, qp.QMap):
             for cidx in range(nchunks):
                 end = start + chunksize2use
                 if cidx == nchunks-1:
-                    end =  start + nsamp_full_ces
+                    end = nsamp_full_ces
 
                 chunks.append(dict(start=int(start), end=int(end),
                     cidx=int(chunknum + cidx)))
