@@ -149,7 +149,7 @@ def LB_rotmatrix_multi2(theta_asp, phi_asp,
     y = np.sin(theta_asp) * np.sin(phi_asp)
     z = np.cos(theta_asp)
 
-    # this is the temporary offset to compare with the Guillaume's code
+    # Fixed offset
     phi_prec_init_phase = 3./2.*pi
     phi_spin_init_phase = pi
 
@@ -163,14 +163,14 @@ def LB_rotmatrix_multi2(theta_asp, phi_asp,
     x, z = matrix2x2_multi_xz( x, z, theta_boresight) # 3->4A
     x, y = matrix2x2_multi_xy( x, y, omega_spin_t) # 4A->4B
 
-    # pass the variable to calculate the psi angle:
+    # Pass the variable to calculate the psi angle:
     # psi is defined as the phi direction when the focal plane
     # is rotating about the spin axis
     xii = x.copy()
     yii = y.copy()
     zii = z.copy()
 
-    # complete the rest of the boresight pointing calculation
+    # Complete the rest of the boresight pointing calculation
     x, z = matrix2x2_multi_xz( x, z, theta_antisun) # // 4B->8
     x, y = matrix2x2_multi_xy( x, y, omega_pre_t) # 8->9
     x, z = matrix2x2_multi_xz( x, z, pi/2.) # 9->10
@@ -180,7 +180,7 @@ def LB_rotmatrix_multi2(theta_asp, phi_asp,
     out[1,:] = y
     out[2,:] = z
 
-    # pick up the remaining calculation for psi
+    # Pick up the remaining calculation for psi
     xii, yii, zii = deriv_phi(xii,yii,zii)
     xii, zii = matrix2x2_multi_xz( xii, zii, theta_antisun) # 4B->8
     xii, yii = matrix2x2_multi_xy( xii, yii, omega_pre_t) # 8->9
@@ -193,12 +193,9 @@ def LB_rotmatrix_multi2(theta_asp, phi_asp,
     xo, yo, zo = deriv_phi(x,y,z)
     fpout_psi_phi = cosangle(xo,yo,zo,xii,yii,zii)
 
-    fpout_psi_theta = np.where(((fpout_psi_theta>0.)
-                            & (fpout_psi_theta<=1./2.*pi))
-                           & ((fpout_psi_phi>1./2.*pi)
-                            & (fpout_psi_phi<=pi)),
-                              -fpout_psi_theta,
-                               fpout_psi_theta)
+    fpout_psi_theta = np.where(((fpout_psi_theta > 0.) & (fpout_psi_theta <= 1./2.*pi))
+                           & ((fpout_psi_phi > 1./2.*pi) & (fpout_psi_phi <= pi)),
+                           -fpout_psi_theta, fpout_psi_theta)
     fpout_psi_theta = np.where(((fpout_psi_theta>1./2.*pi)
                             & (fpout_psi_theta<=pi))
                            & ((fpout_psi_phi>1./2.*pi)
