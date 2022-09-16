@@ -2877,21 +2877,23 @@ class ScanStrategy(Instrument, qp.QMap):
             for cidx in range(nchunks):
                 end = start + chunksize2use
                 if cidx == nchunks-1:
-                    end = nsamp_full_ces
+                    end = samplenum+nsamp_full_ces
+                if end >= nsamp:
+                    end = nsamp
+                if end!=start:
+                    chunks.append(dict(start=int(start), end=int(end),
+                        cidx=int(chunknum + cidx)))
 
-                chunks.append(dict(start=int(start), end=int(end),
-                    cidx=int(chunknum + cidx)))
+                    az0i.append(az0s[i])
+                    az1i.append(az1s[i])
+                    eli.append(els[i])
+                    t0i.append(t0s[i])
+                    t1i.append(t1s[i])
 
-                az0i.append(az0s[i])
-                az1i.append(az1s[i])
-                eli.append(els[i])
-                t0i.append(t0s[i])
-                t1i.append(t1s[i])
+                    ctime_starts.append(tstart)
 
-                ctime_starts.append(tstart)
-
-                start += chunksize2use
-                tstart += float(chunksize2use) / self.fsamp
+                    start += chunksize2use
+                    tstart += float(chunksize2use) / self.fsamp
 
                 if start >= nsamp:
                     done_chunking=True
