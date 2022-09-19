@@ -1917,12 +1917,15 @@ class ScanStrategy(Instrument, qp.QMap):
                 if bidx == 0:
                     self._allocate_hwp_data(save_point=save_point,
                                             **chunk)
+                azel_point = True if (ground_alm is not None) else False
                 if beam_a and not beam_a.dead:
-                    self._allocate_detector_data(beam_a, save_tod=save_tod,
-                                                save_point=save_point, **chunk)
+                    self._allocate_detector_data(beam_a, save_tod=save_tod, 
+                                                save_point=save_point, 
+                                                azel_point=azel_point, **chunk)
                 if beam_b and not beam_b.dead:
                     self._allocate_detector_data(beam_b, save_tod=save_tod,
-                                                save_point=save_point, **chunk)
+                                                save_point=save_point, 
+                                                azel_point=azel_point, **chunk)
 
                 # If required, loop over boresight rotations.
                 subchunks = self.subpart_chunk(chunk)
@@ -3194,8 +3197,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
             self._data[str(cidx)]['hwp_ang'] = hwp_ang
 
-    def _allocate_detector_data(self, beam, save_tod=False,
-                                save_point=False, **chunk):
+    def _allocate_detector_data(self, beam, save_tod=False, save_point=False, 
+                                    azel_point=False, **chunk):
         '''
         Allocate internal arrays for saving data for given chunk
         and beam.
@@ -3248,6 +3251,13 @@ class ScanStrategy(Instrument, qp.QMap):
             self._data[str(cidx)][str(beam.idx)]['tod'] = tod
             self._data[str(cidx)][str(beam.idx)]['pix'] = pix
             self._data[str(cidx)][str(beam.idx)]['pa'] = pa
+
+        if save_point and azel_point:
+            azel_pix = np.zeros(tod_size, dtype=int)
+            azel_pa = np.zeros(tod_size, dtype=float)
+            self._data[str(cidx)][str(beam.idx)]['azel_pix'] = azel_pix
+            self._data[str(cidx)][str(beam.idx)]['azel_pa'] = azel_pa
+
 
 
     def _scan_detector(self, beam, interp=False, save_tod=False,
@@ -3310,7 +3320,13 @@ class ScanStrategy(Instrument, qp.QMap):
 
         #Add ground tod.
         if 'ground' in kwargs:
-            self.scan(beam, interp=interp, add_to_tod=tod_exists, **kwargs)
+            azel_ret = self.scan(beam, interp=interp, add_to_tod=tod_exists,
+                return_point=save_point, **kwargs)
+            if save_point: 
+                azel_pix, azel_nside, azel_pa, azel_hwp = azel_ret
+                self._data[str(cidx)][str(beam.idx)]['azel_pix'][q_start:q_end] = azel_pix
+                self._data[str(cidx)][str(beam.idx)]['azel_pa'][q_start:q_end] = azel_pa
+
             kwargs.pop('ground')
             tod_exists = True
 
