@@ -321,7 +321,7 @@ def ctime2DJD(ctime):
     return ctime / 86400. + (2440587.5 - 2415020)
 
 def ctime2bore(ctime, theta_antisun=45., theta_boresight=50.,
-    freq_antisun=192.348, freq_boresight=0.314):
+    period_antisun=192.348, rate_boresight=0.05):
     '''
     Generate boresight quaternion at some Unix time, by feeding LiteBIRD-specific 
     arguments to LB_rotmatrix_multi2().     
@@ -339,20 +339,20 @@ def ctime2bore(ctime, theta_antisun=45., theta_boresight=50.,
     theta_boresight : float
         theta boresight angle in degrees of the scanning strategy
         (default : 50.)
-    freq_antisun : float
+    period_antisun : float
         rotation period of theta anti-Sun in minutes
         (default : 192.348)
-    freq_boresight : float
-        rotation frequency of theta boresight in radians/min
-        (default : 0.314)
+    rate_boresight : float
+        rotation rate of theta boresight in radians/min
+        (default : 0.05)
 
     '''
     
     # Angles in radians and frequencies in 1/sec
     theta_antisun = np.radians(theta_antisun)
     theta_boresight = np.radians(theta_boresight)
-    freq_antisun = 1. / (freq_antisun * 60.)
-    freq_boresight = freq_boresight / (2. * pi * 60.)
+    freq_antisun = 1. / (period_antisun * 60.)
+    freq_boresight = rate_boresight / 60.
 
     # Calculate Sun position at input Unix time
     DJD = convert_Julian2Dublin(ctime2DJD(ctime))
