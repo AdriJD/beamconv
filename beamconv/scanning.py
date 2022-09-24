@@ -343,7 +343,7 @@ def ctime2bore(ctime, theta_antisun=45., theta_boresight=50.,
         rotation period of theta anti-Sun in minutes
         (default : 192.348)
     rate_boresight : float
-        rotation rate of theta boresight in radians/min
+        rotation rate of theta boresight in rpm
         (default : 0.05)
 
     '''
