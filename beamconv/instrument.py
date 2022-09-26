@@ -3214,7 +3214,10 @@ class ScanStrategy(Instrument, qp.QMap):
             If set, allocate TOD. (default : False)
         save_point : bool
             If set, allocate hwp_angles [deg], pixel
-            numbers and position angles [deg]) (default : False)
+            numbers and position angles [deg] (default : False)
+        azel_point : bool
+            If set, and save_point is True, allocate pixel numbers and 
+            position angles [deg] in the horizontal frame (default : False)
         start : int
             Start index.
         end : int
