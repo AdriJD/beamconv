@@ -448,8 +448,8 @@ class Instrument(MPIBase):
         self.beams = new_beams
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           no_pairs=False, combine=True,
-                           scatter=False, **kwargs):
+                           no_pairs=False, ab_diff=90., 
+                           combine=True, scatter=False, **kwargs):
         '''
         Create Beam objects for orthogonally polarized
         detector pairs with pointing offsets lying on a
@@ -468,6 +468,10 @@ class Instrument(MPIBase):
             Do not create detector pairs, i.e. only create
             A detector and let B detector be dead
             (default : False)
+        ab_diff : float, optional
+            Difference between A and B detectors in degrees
+            e.g. if detector B is -Q to A the difference is 
+            90 degrees (default : 90.)
         combine : bool
             If some beams already exist, combine these new
             beams with them
@@ -529,7 +533,7 @@ class Instrument(MPIBase):
                               **kwargs)
 
                 beam_b = Beam(az=azs[az_idx], el=els[el_idx],
-                              name=det_str+'B', polang=polang+90.,
+                              name=det_str+'B', polang=polang+ab_diff,
                               dead=dead or no_pairs, pol='B',
                               idx=idx+1, **kwargs)
 
