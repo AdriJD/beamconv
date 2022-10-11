@@ -1194,8 +1194,6 @@ class ScanStrategy(Instrument, qp.QMap):
     scan the sky.
     '''
 
-    # qpoint version required.
-    _qp_version = (1, 10, 0)
 
     def __init__(self, duration=None, sample_rate=None, num_samples=None,
                  external_pointing=False, ctime0=None, **kwargs):
@@ -1282,12 +1280,6 @@ class ScanStrategy(Instrument, qp.QMap):
         self.set_hwp_mod()
 
         self._data = {}
-
-        # Checking qpoint version.
-        if qp.version() < self._qp_version:
-            raise RuntimeError(
-                 'qpoint version {} required, found version {}'.format(
-                     self._qp_version, qp.version()))
 
         # Set some useful qpoint/qmap options as default.
         qmap_opts = dict(pol=True,
