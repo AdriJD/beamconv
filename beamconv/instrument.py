@@ -2129,8 +2129,8 @@ class ScanStrategy(Instrument, qp.QMap):
     def implement_scan(self, ra0=-10, dec0=-57.5, az_throw=90, scan_speed=1,
         az_prf='triangle', check_interval=600, el_min=45, cut_el_min=False,
         use_precomputed=False, ground=False, q_bore_func=None,
-        q_bore_kwargs=None, ctime_func=None,ctime_kwargs=None, 
-        use_l2_scan=False, use_strictly_az=False,**kwargs):
+        q_bore_kwargs=None, ctime_func=None, ctime_kwargs=None, 
+        use_l2_scan=False, **kwargs):
 
         '''
         Populates scanning quaternions.
@@ -2228,16 +2228,6 @@ class ScanStrategy(Instrument, qp.QMap):
             self.ctime = ctime_func(start=start, end=end, **ctime_kwargs)
             self.q_bore = q_bore_func(start=start, end=end, **q_bore_kwargs)
 
-            return
-
-        elif use_strictly_az:
-            
-            ctime = np.arange(start, end, dtype=float)
-            ctime /= float(self.fsamp)
-            ctime += self.ctime0
-            self.ctime = ctime
-            self.q_bore = q_bore_func(start=start, end=end, ground=ground,
-                                                          **q_bore_kwargs)
             return
 
         ctime = np.arange(start, end, dtype=float)
@@ -2674,25 +2664,32 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def strictly_az(self, el0=35., az0=0., scan_speed=30., ground=False, 
+    def ballon_night_qbore(self, el0=35., az0=0., scan_speed=30., ground=False, 
                           **kwargs):
         '''
         Populates scanning quaternions for a scan strategy with no 
-        elevation change. Let boresight rotate at a given speed
+        elevation change. Let boresight sweep at a given speed
         in azimuth.
 
         Keyword Arguments
         -----------------
         el0 : float
             Boresight elevation in degrees
+            (default : 35.)
         az0 : float
             Boresight start azimuth in degrees
+            (default : 0.)
         scan_speed : float
             Scan speed in degrees per second
+            (default : 30.)
+        ground : bool
+            Whether to compute azel quaternions for a ground pickup scan
+            (default : False)
         '''
 
         start = kwargs.pop('start')
         end = kwargs.pop('end')
+        chunk_size = end-start
 
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
@@ -2702,18 +2699,27 @@ class ScanStrategy(Instrument, qp.QMap):
             raise TypeError("strictly_az() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
-        ctime = self.ctime
-
-        chunk_size = end - start
+        ctime = self.ctime[start:end]
 
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if scan_speed == 0:
             # Replace with small number to simulate staring.
             scan_speed = 1e-12
-
-        # Slightly complicated way to add az to az0
+        #Find scan breaks
+        scan_breaks = np.argwhere(ctime[1:]-ctime[:-1]>2*fsamp)
+        # Complicated way to add az to az0
         # while avoiding expanding az0 to p_len.
-        az = np.arange(chunk_size, dtype=float)
+        az = np.arange(0, -scan_breaks[0], -1)
+        for i in range(scan_breaks.size-1):
+            rot_sign = int(2*(i%2)-1)
+            interval = scan_breaks[i+1]-scan_breaks[i]
+            az = np.concatenate((az, 
+                np.arange(az[-1], az[-1]+interval*rot_sign, rot_sign)))
+        
+        last_leg = ctime.size-scan_breaks[-1]
+        az = np.concatenate((az, 
+            np.arange(az[-1], az[-1]-rot_sign*last_leg, -rot_sign)))
+
         az *= scan_speed
         az /= self.fsamp
         az += az0
