@@ -2700,6 +2700,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 "arguments '{}'".format(list(kwargs)))
 
         ctime = self.ctime[start:end]
+        lon = self.lon[start:end]
+        lat = self.lat[start:end]
 
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if scan_speed == 0:
@@ -2715,7 +2717,7 @@ class ScanStrategy(Instrument, qp.QMap):
             interval = scan_breaks[i+1]-scan_breaks[i]
             az = np.concatenate((az, 
                 np.arange(az[-1], az[-1]+interval*rot_sign, rot_sign)))
-        
+
         last_leg = ctime.size-scan_breaks[-1]
         az = np.concatenate((az, 
             np.arange(az[-1], az[-1]-rot_sign*last_leg, -rot_sign)))
@@ -2762,7 +2764,8 @@ class ScanStrategy(Instrument, qp.QMap):
             # Calculate section of q_bore.
             q_boresub = self.azel2bore(az[sub_start:sub_end],
                                        el[sub_start:sub_end],
-                                       None, None, self.lon, self.lat,
+                                       None, None, lon[sub_start:sub_end], 
+                                       lat[sub_start:sub_end],
                                        ctime[sub_start:sub_end])
             q_boresub = q_boresub.ravel()
 
@@ -2783,7 +2786,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
                 self.q_boreground = np.array([-saz*cel, caz*sel, 
                                           saz*sel, caz*cel]).swapaxes(0,1)
-            q_bore = self.azel2bore(az, el, None, None, self.lon, self.lat, ctime)
+            q_bore = self.azel2bore(az, el, None, None, lon, lat, ctime)
         self.flag = np.zeros_like(az, dtype=bool)
         return q_bore
 
