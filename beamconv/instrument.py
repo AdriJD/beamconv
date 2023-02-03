@@ -263,9 +263,9 @@ class Instrument(MPIBase):
                 atacama  : (lat=-22.96, lon=-67.79)
                 space    : (Fixed lat, time-variable lon)
             (default : spole)
-        lon : float, None
+        lon : float, vec, None
             Longitude in degrees. (default : None)
-        lat : float, None
+        lat : float, vec, None
             Latitude in degrees (default : None)
         kwargs : {mpi_opts}
 
@@ -289,12 +289,12 @@ class Instrument(MPIBase):
             self.lat = None
             self.lon = None
 
-        if lat:
+        if lat is not None:
             self.lat = lat
-        if lon:
+        if lon is not None:
             self.lon = lon
 
-        if (location != 'space') and (not self.lat or not self.lon):
+        if (location != 'space') and (not hasattr(self, 'lat') or not hasattr(self, 'lon')):
             raise ValueError('Specify location of telescope')
 
         self.beams = []
@@ -2664,7 +2664,7 @@ class ScanStrategy(Instrument, qp.QMap):
         else:
             return q_bore
 
-    def ballon_night_qbore(self, el0=35., az0=0., scan_speed=30., ground=False, 
+    def balloon_night_qbore(self, el0=35., az0=0., scan_speed=30., ground=False, 
                           **kwargs):
         '''
         Populates scanning quaternions for a scan strategy with no 
@@ -2699,28 +2699,36 @@ class ScanStrategy(Instrument, qp.QMap):
             raise TypeError("strictly_az() got unexpected "
                 "arguments '{}'".format(list(kwargs)))
 
-        ctime = self.ctime[start:end]
-        lon = self.lon[start:end]
-        lat = self.lat[start:end]
-
         # Scan boresight, note that it will slowly drift away from az0, el0.
         if scan_speed == 0:
             # Replace with small number to simulate staring.
             scan_speed = 1e-12
-        #Find scan breaks
-        scan_breaks = np.argwhere(ctime[1:]-ctime[:-1]>2*fsamp)
-        # Complicated way to add az to az0
-        # while avoiding expanding az0 to p_len.
-        az = np.arange(0, -scan_breaks[0], -1)
-        for i in range(scan_breaks.size-1):
-            rot_sign = int(2*(i%2)-1)
-            interval = scan_breaks[i+1]-scan_breaks[i]
-            az = np.concatenate((az, 
-                np.arange(az[-1], az[-1]+interval*rot_sign, rot_sign)))
+        #Find which night the chunk starts in, to select scan direction 
+        night_starts = np.argwhere(self.ctime[1:]-self.ctime[:-1]>2*self.fsamp)
+        night_starts = night_starts.flatten()+1
+        chunk_start_night = np.sum(start>night_starts)
+        rot_sign = int(2*(chunk_start_night%2)-1)
+        #Focus on chunk and find the scan breaks within it. 
+        ctime = self.ctime[start:end]
+        lon = self.lon[start:end]
+        lat = self.lat[start:end]
+        scan_breaks = np.argwhere(ctime[1:]-ctime[:-1]>2*self.fsamp).flatten()+1
+        #Create azimuth vector that reverses direction at every break
+        if (scan_breaks.size==0):
+            az = np.arange(start, start+(end-start)*rot_sign, rot_sign, 
+                           dtype=float)
+        else:
+            az = np.arange(0, rot_sign*scan_breaks[0], rot_sign, dtype=float)
+            for i in range(scan_breaks.size-1):
+                rot_sign *= -1
+                interval = scan_breaks[i+1]-scan_breaks[i]
+                interval_az = np.arange(az[-1], az[-1]+interval*rot_sign, 
+                    rot_sign, dtype=float)
+                az = np.concatenate((az, interval_az))
 
-        last_leg = ctime.size-scan_breaks[-1]
-        az = np.concatenate((az, 
-            np.arange(az[-1], az[-1]-rot_sign*last_leg, -rot_sign)))
+            last_leg = ctime.size-scan_breaks[-1]
+            az = np.concatenate((az, 
+                np.arange(az[-1], az[-1]-rot_sign*last_leg, -rot_sign)))
 
         az *= scan_speed
         az /= self.fsamp
