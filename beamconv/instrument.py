@@ -3493,18 +3493,20 @@ class ScanStrategy(Instrument, qp.QMap):
 
         # Offset quaternion defined without polang.
         # polang is applied at the beam level later.
-        az_off = beam.az
-        el_off = beam.el
+        az_off = beam.az_truth #True az for scanning
+        el_off = beam.el_truth #True el for scanning
         polang = beam.polang_truth # True polang for scanning.
-        q_off = self.det_offset(az_off, el_off, 0)
+        q_off_true = self.det_offset(az_off, el_off, 0)
+        q_off = self.det_offset(beam.az, beam.el, 0)
 
         # Rotate offset given rot_dict. Rotate the centroid
         # around the boresight. q_bore * q_rot * q_off.
         ang = np.radians(self.rot_dict['angle'])
         q_rot = np.asarray([np.cos(ang/2.), 0., 0., np.sin(ang/2.)])
+        q_off_true = tools.quat_left_mult(q_rot, q_off_true)
         q_off = tools.quat_left_mult(q_rot, q_off)
 
-        # Expose pointing offset for mapmaking. Not for ghosts.
+        # Expose estimated pointing offset for mapmaking. Not for ghosts.
         if not beam.ghost:
             beam.q_off = q_off
 
@@ -3553,14 +3555,14 @@ class ScanStrategy(Instrument, qp.QMap):
             pa = np.empty(tod_size, dtype=np.float64)
             #If ground, point the detector in horizontal coordinates.
             if 'ground' in kwargs:
-                self.bore2radec(q_off,
+                self.bore2radec(q_off_true,
                             self.ctime[qidx_start:qidx_end],
                             self.q_boreground[qidx_start:qidx_end],
                             q_hwp=None, sindec=False, return_pa=True,
                             ra=ra, dec=dec, pa=pa)
 
             else:
-                self.bore2radec(q_off,
+                self.bore2radec(q_off_true,
                             self.ctime[qidx_start:qidx_end],
                             self.q_bore[qidx_start:qidx_end],
                             q_hwp=None, sindec=False, return_pa=True,
@@ -3574,12 +3576,12 @@ class ScanStrategy(Instrument, qp.QMap):
             # In no interpolation is required, we can go straight
             # from quaternion to pix and pa.
             if 'ground' in kwargs:
-                pix, pa = self.bore2pix(q_off,
+                pix, pa = self.bore2pix(q_off_true,
                             self.ctime[qidx_start:qidx_end],
                             self.q_boreground[qidx_start:qidx_end],
                             q_hwp=None, nside=nside_spin, return_pa=True)
             else:
-                pix, pa = self.bore2pix(q_off,
+                pix, pa = self.bore2pix(q_off_true,
                             self.ctime[qidx_start:qidx_end],
                             self.q_bore[qidx_start:qidx_end],
                             q_hwp=None, nside=nside_spin, return_pa=True)

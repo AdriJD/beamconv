@@ -9,12 +9,11 @@ class Beam(object):
     A class representing detector and beam properties.
     '''
     def __init__(self, az=0., el=0., polang=0., name=None,
-                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, sensitive_freq = 150,
-                 dead=False, ghost=False, amplitude=1., po_file=None,
-                 eg_file=None, cross_pol=True, deconv_q=True,
-                 normalize=True, polang_error=0., idx=None,
-                 symmetric=False, hwp=None, 
-                 hwp_mueller=None):
+                 pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, 
+                 sensitive_freq = 150, dead=False, ghost=False, amplitude=1.,
+                 po_file=None, eg_file=None, cross_pol=True, deconv_q=True,
+                 normalize=True, az_error=0., el_error=0., polang_error=0., 
+                 idx=None, symmetric=False, hwp=None, hwp_mueller=None):
         '''
         Initialize a detector beam.
 
@@ -74,6 +73,14 @@ class Beam(object):
         normalize : bool
             Normalize loaded up blm's such that 00 component is 1.
             Done after deconv_q operation if that option is set.
+        az_error : float
+            Angle offset for azimuthal location in deg. Scanning is
+            done with `az_truth` = `az` + `az_error`, binning
+            can then be done with just `az`.
+        el_error : float
+            Angle offset for polarization angle in deg. Scanning is
+            done with `el_truth` = `el` + `el_error`, binning
+            can then be done with just `el`.
         polang_error : float
             Angle offset for polarization angle in deg. Scanning is
             done with `polang_truth` = `polang` + `polang_error`, binning
@@ -105,6 +112,8 @@ class Beam(object):
         self.fwhm = fwhm
         self.deconv_q = deconv_q
         self.normalize = normalize
+        self.az_error = az_error
+        self.el_error = el_error
         self.polang_error = polang_error
         self._idx = idx
         self.symmetric = symmetric
@@ -253,6 +262,14 @@ class Beam(object):
         del self.__blm
 
     @property
+    def az_truth(self):
+        return self.az + self.az_error
+
+    @property
+    def el_truth(self):
+        return self.el + self.el_error
+
+    @property
     def polang_truth(self):
         return self.polang + self.polang_error
 
@@ -262,7 +279,7 @@ class Beam(object):
             "    : {} arcmin \naz      : {} deg \nel      : {} deg "\
             "\npolang  : {} deg\npo_file : {} \n".\
             format(self.name, self.btype,
-                str(not self.dead), self.fwhm, self.az, self.el,
+                str(not self.dead), self.fwhm, self.az_truth, self.el_truth,
                 self.polang_truth, self.po_file)
 
     def gen_gaussian_blm(self):
@@ -544,7 +561,7 @@ class Beam(object):
         and azimuth with respect to the local horizon and meridian.
         '''
 
-        return self.az, self.el, self.polang_truth
+        return self.az_truth, self.el_truth, self.polang_truth
 
 
     def set_hwp_mueller(self, model_name=None, thicknesses=None, indices=None, losses=None, angles=None):
