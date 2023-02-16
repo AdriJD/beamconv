@@ -12,7 +12,7 @@ class Beam(object):
                  pol='A', btype='Gaussian', fwhm=None, lmax=700, mmax=None, 
                  sensitive_freq = 150, dead=False, ghost=False, amplitude=1.,
                  po_file=None, eg_file=None, cross_pol=True, deconv_q=True,
-                 normalize=True, az_error=0., el_error=0., polang_error=0., 
+                 normalize=True, az_bias=0., el_bias=0., polang_bias=0., 
                  idx=None, symmetric=False, hwp=None, hwp_mueller=None):
         '''
         Initialize a detector beam.
@@ -73,17 +73,17 @@ class Beam(object):
         normalize : bool
             Normalize loaded up blm's such that 00 component is 1.
             Done after deconv_q operation if that option is set.
-        az_error : float
+        az_bias : float
             Angle offset for azimuthal location in deg. Scanning is
-            done with `az_truth` = `az` + `az_error`, binning
+            done with `az_truth` = `az` - `az_bias`, binning
             can then be done with just `az`.
-        el_error : float
+        el_bias : float
             Angle offset for polarization angle in deg. Scanning is
-            done with `el_truth` = `el` + `el_error`, binning
+            done with `el_truth` = `el` - `el_bias`, binning
             can then be done with just `el`.
-        polang_error : float
+        polang_bias : float
             Angle offset for polarization angle in deg. Scanning is
-            done with `polang_truth` = `polang` + `polang_error`, binning
+            done with `polang_truth` = `polang` - `polang_bias`, binning
             can then be done with just `polang`.
         idx : int, None
             Identifier of beam. (default : None)
@@ -112,9 +112,9 @@ class Beam(object):
         self.fwhm = fwhm
         self.deconv_q = deconv_q
         self.normalize = normalize
-        self.az_error = az_error
-        self.el_error = el_error
-        self.polang_error = polang_error
+        self.az_bias = az_bias
+        self.el_bias = el_bias
+        self.polang_bias = polang_bias
         self._idx = idx
         self.symmetric = symmetric
         self.hwp = hwp
@@ -263,15 +263,15 @@ class Beam(object):
 
     @property
     def az_truth(self):
-        return self.az + self.az_error
+        return self.az - self.az_bias
 
     @property
     def el_truth(self):
-        return self.el + self.el_error
+        return self.el - self.el_bias
 
     @property
     def polang_truth(self):
-        return self.polang + self.polang_error
+        return self.polang - self.polang_bias
 
     def __str__(self):
 
@@ -473,7 +473,7 @@ class Beam(object):
                           cross_pol=self.cross_pol,
                           deconv_q=self.deconv_q,
                           normalize=self.normalize,
-                          polang_error=self.polang_error)
+                          polang_bias=self.polang_bias)
 
         # Note, amplitude is applied after normalization
         # update options with specified kwargs
@@ -547,7 +547,7 @@ class Beam(object):
             Elevation of offset in degrees.
         polang : float
             Polarization angle in degrees (with
-            polang_error included).
+            polang_bias included).
 
         Notes
         -----
