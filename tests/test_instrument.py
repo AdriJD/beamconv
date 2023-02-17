@@ -315,12 +315,12 @@ class TestTools(unittest.TestCase):
             for beam in pair:
                 self.assertEqual(beam.btype, 'PO')
 
-        instr.set_global_prop(dict(btype='EG', polang_error=10))
+        instr.set_global_prop(dict(btype='EG', polang_bias=10))
 
         for pair in instr.beams:
             for beam in pair:
                 self.assertEqual(beam.btype, 'EG')
-                self.assertEqual(beam.polang_error, 10)
+                self.assertEqual(beam.polang_bias, 10)
 
         # Add ghosts
         instr.create_reflected_ghosts()
@@ -330,15 +330,15 @@ class TestTools(unittest.TestCase):
             for beam in pair:
                 for ghost in beam.ghosts:
                     self.assertEqual(ghost.btype, 'EG')
-                    self.assertEqual(ghost.polang_error, 10)
+                    self.assertEqual(ghost.polang_bias, 10)
 
-        instr.set_global_prop(dict(btype='PO', polang_error=5))
+        instr.set_global_prop(dict(btype='PO', polang_bias=5))
 
         for pair in instr.beams:        
             for beam in pair:
                 for ghost in beam.ghosts:
                     self.assertEqual(beam.btype, 'PO')
-                    self.assertEqual(beam.polang_error, 5)
+                    self.assertEqual(beam.polang_bias, 5)
 
 
     def test_add_to_prop(self):
