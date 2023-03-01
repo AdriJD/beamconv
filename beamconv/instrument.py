@@ -2218,8 +2218,12 @@ class ScanStrategy(Instrument, qp.QMap):
         if self.ext_point and not use_l2_scan:
             # Use external pointing, so skip rest of function.
             self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
-            self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, **q_bore_kwargs)
-
+            if ground:
+                self.q_bore, self.q_boreground = q_bore_func(start=start, 
+                                                end=end, cidx=cidx, **q_bore_kwargs)
+            else:
+                self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, 
+                                                                    **q_bore_kwargs)
             return
 
         elif use_l2_scan:
@@ -2690,7 +2694,6 @@ class ScanStrategy(Instrument, qp.QMap):
         start = kwargs.pop('start')
         end = kwargs.pop('end')
         chunk_size = end-start
-
         # Complain when non-chunk kwargs are given.
         cidx = kwargs.pop('cidx', None)
         hwpang = kwargs.pop('hwpang', None)
@@ -2767,7 +2770,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 self._comm.Allgatherv(q_boresubground,
                                 [q_boreground, 4*sub_size, ground_offsets, 
                                  self._mpi_double])
-                self.q_boreground = q_boreground.reshape(chunk_size, 4)
+                q_boreground = q_boreground.reshape(chunk_size, 4)
 
             # Calculate section of q_bore.
             q_boresub = self.azel2bore(az[sub_start:sub_end],
@@ -2792,11 +2795,14 @@ class ScanStrategy(Instrument, qp.QMap):
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                self.q_boreground = np.array([-saz*cel, caz*sel, 
+                q_boreground = np.array([-saz*cel, caz*sel, 
                                           saz*sel, caz*cel]).swapaxes(0,1)
             q_bore = self.azel2bore(az, el, None, None, lon, lat, ctime)
         self.flag = np.zeros_like(az, dtype=bool)
-        return q_bore
+        if ground:
+            return q_bore, q_boreground
+        else:
+            return q_bore
 
 
     def parse_schedule_file(self, schedule_file=None):
@@ -3070,7 +3076,7 @@ class ScanStrategy(Instrument, qp.QMap):
                 ground_offsets[1:] = np.cumsum(4*sub_size)[:-1]
                 self._comm.Allgatherv(q_boresubground,
                                 [q_boreground, 4*sub_size, ground_offsets, self._mpi_double])
-                self.q_boreground = q_boreground.reshape(chunk_size, 4)
+                q_boreground = q_boreground.reshape(chunk_size, 4)
 
 
             # Calculate section of q_bore.
@@ -3098,16 +3104,21 @@ class ScanStrategy(Instrument, qp.QMap):
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                self.q_boreground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                q_boreground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
             q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, self.ctime)
 
         self.flag = np.zeros_like(az, dtype=bool)
 
-        if return_all:
+        if return_all and ground:
+            return az, el, self.lon, self.lat, q_bore, q_boreground
+        elif return_all and not ground:
             return az, el, self.lon, self.lat, q_bore
         else:
-            return q_bore
+            if ground:
+                return q_bore, q_boreground
+            else:
+                return q_bore
 
     def rotate_hwp(self, **kwargs):
         '''
