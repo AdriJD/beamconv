@@ -2217,13 +2217,15 @@ class ScanStrategy(Instrument, qp.QMap):
 
         if self.ext_point and not use_l2_scan:
             # Use external pointing, so skip rest of function.
-            self.ctime = ctime_func(start=start, end=end, cidx=cidx, **ctime_kwargs)
+            self.ctime = ctime_func(start=start, end=end, cidx=cidx, 
+                                                            **ctime_kwargs)
             if ground:
                 self.q_bore, self.q_boreground = q_bore_func(start=start, 
-                                                end=end, cidx=cidx, **q_bore_kwargs)
+                                                    end=end, cidx=cidx, 
+                                                    ground=True, **q_bore_kwargs)
             else:
                 self.q_bore = q_bore_func(start=start, end=end, cidx=cidx, 
-                                                                    **q_bore_kwargs)
+                                                                **q_bore_kwargs)
             return
 
         elif use_l2_scan:
@@ -3104,7 +3106,8 @@ class ScanStrategy(Instrument, qp.QMap):
                 saz = np.sin(np.radians(az)/2.)
                 cel = np.cos(np.pi/4.-np.radians(el)/2.)
                 sel = np.sin(np.pi/4.-np.radians(el)/2.)
-                q_boreground = np.array([-saz*cel, caz*sel, saz*sel, caz*cel]).swapaxes(0,1)
+                q_boreground = np.array([-saz*cel, caz*sel, 
+                                          saz*sel, caz*cel]).swapaxes(0,1)
             q_bore = self.azel2bore(az, el, None, None, self.lon,
                                          self.lat, self.ctime)
 
@@ -3344,6 +3347,12 @@ class ScanStrategy(Instrument, qp.QMap):
                           **kwargs)
 
         tod_exists = True if n > 0 else False
+        # Find indices to slice of chunk.
+        start = kwargs.get('start')
+        end = kwargs.get('end')
+        cidx = kwargs.get('cidx')
+
+        q_start, q_end = self._chunk2idx(start=start, end=end, cidx=cidx)
 
         #Add ground tod.
         if 'ground' in kwargs:
@@ -3364,12 +3373,6 @@ class ScanStrategy(Instrument, qp.QMap):
                         skip_scan=skip_scan,
                         **kwargs)
 
-        # Find indices to slice of chunk.
-        start = kwargs.get('start')
-        end = kwargs.get('end')
-        cidx = kwargs.get('cidx')
-
-        q_start, q_end = self._chunk2idx(start=start, end=end, cidx=cidx)
 
         if save_tod and not save_point:
             # Only TOD is returned.
