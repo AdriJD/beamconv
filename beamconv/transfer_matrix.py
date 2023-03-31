@@ -237,9 +237,9 @@ class transferMatrix(object):
 
         rot    = np.array(((cos(rotation), -1*sin(rotation),0),\
                         (sin(rotation), cos(rotation), 0),\
-                        (0, 0, 1)), dtype=np.complex)
+                        (0, 0, 1)), dtype=np.complex_)
         rotinv = inv(rot)
-        eps    = np.array(((nE**2, 0, 0),(0, nO**2, 0),(0, 0, nO**2)), dtype=np.complex)
+        eps    = np.array(((nE**2, 0, 0),(0, nO**2, 0),(0, 0, nO**2)), dtype=np.complex_)
         roteps = np.dot( rot, np.dot( eps, rotinv))
         rotepsinv = inv(roteps)
         self.dielectric_tensor = roteps
@@ -256,7 +256,7 @@ class transferMatrix(object):
         DenomDOrd = sqrt( cos(thetaO)**2 + sin(thetaO)**2 * sin(chi)**2)
         DOrd      = np.array(( -1*sin(chi)*cos(thetaO), \
                                cos(chi)*cos(thetaO), \
-                               sin(chi)*sin(thetaO)), dtype=np.complex)
+                               sin(chi)*sin(thetaO)), dtype=np.complex_)
         DOrd      = DOrd / DenomDOrd
         self.DOrd = DOrd
         self.EOrd = np.dot(roteps, DOrd)
@@ -266,7 +266,7 @@ class transferMatrix(object):
         DenomDExtra = sqrt( cos(chi)**2 *cos(thetaO)**2 + sin(chi)**2 * cos(thetaO-thetaE)**2)
         DExtra      = np.array(( 1*cos(chi)*cos(thetaO)*cos(thetaE), \
                                  1*sin(chi)*( sin(thetaO)*sin(thetaE) + cos(thetaO)*cos(thetaE)),\
-                                 - cos(chi)*cos(thetaE)*sin(thetaO)), dtype=np.complex)
+                                 - cos(chi)*cos(thetaE)*sin(thetaO)), dtype=np.complex_)
         DExtra      = DExtra / DenomDExtra
         self.DExtra = DExtra
         self.EExtra = np.dot(roteps, DExtra)
@@ -275,7 +275,7 @@ class transferMatrix(object):
         DenomHOrd = sqrt(cos(thetaO)**2 * cos(chi)**2 + sin(chi)**2)
         HOrd      = np.array(( -cos(thetaO)**2 * cos(chi),\
                                -sin(chi),\
-                               cos(thetaO)*sin(thetaO)*cos(chi)), dtype=np.complex)
+                               cos(thetaO)*sin(thetaO)*cos(chi)), dtype=np.complex_)
         HOrd      = HOrd / DenomHOrd
         self.HOrd = HOrd
 
@@ -284,7 +284,7 @@ class transferMatrix(object):
         HExtra      = np.array(( -cos(thetaO-thetaE) * cos(thetaE) * sin(chi),\
                                  1*cos(thetaO)*cos(chi),\
                                  1*cos(thetaO-thetaE) * sin(thetaE) * sin(chi)),\
-                               dtype=np.complex)
+                               dtype=np.complex_)
         HExtra      = HExtra / DenomHExtra
         self.HExtra = HExtra
 
@@ -305,7 +305,7 @@ class transferMatrix(object):
                         (HOrd[1]/nO, HExtra[1]/nE, -1*HOrd[1]/nO, -1*HExtra[1]/nE),\
                         (DOrd[1], DExtra[1], DOrd[1], DExtra[1]),\
                         (-1*HOrd[0]/nO, -1*HExtra[0]/nE, HOrd[0]/nO, HExtra[0]/nE)),\
-                      dtype=np.complex)
+                      dtype=np.complex_)
 
         # Form the matrix relating vII = (Dx,Hy,Dy,-Hx) at interface II to the four
         # D components at the interface in the material. These are formed
@@ -325,13 +325,13 @@ class transferMatrix(object):
         P  = np.array( ((exp(-1*deltaO), 0, 0, 0),\
                         (0, exp(-1*deltaE), 0, 0),\
                         (0, 0, exp(deltaO), 0),\
-                        (0, 0, 0, exp(deltaE))), dtype=np.complex)
+                        (0, 0, 0, exp(deltaE))), dtype=np.complex_)
 
         # Define the conversion matrix from D field components to those of E.
         Psi = np.array( ((rotepsinv[0,0], 0, rotepsinv[0,1], 0),\
                         (0, 1, 0, 0),\
                         (rotepsinv[1,0], 0, rotepsinv[1,1], 0),\
-                        (0, 0, 0, 1)), dtype=np.complex)
+                        (0, 0, 0, 1)), dtype=np.complex_)
 
         # Now compute the transfer matrix as Psi.Phi.inv(Psi.Phi.P)
         self.Phi = Phi
@@ -373,7 +373,7 @@ class stackTransferMatrix(object):
         angles      = stack.angles
 
         self.transfers = []
-        self.totalTransfer = np.eye(4, dtype=np.complex)
+        self.totalTransfer = np.eye(4, dtype=np.complex_)
 
         for layerNum in range(numLayers):
             material      = materials[layerNum]
@@ -431,12 +431,12 @@ def TranToJones(transfer):
     denom = (A+C)*(K+S)-(B+D)*(N+P) # Both matrices share a factor dividing all elements.
 
     # Transmitted Jones matrix.
-    Jtran = np.array(((K+S, -B-D),(-N-P, A+C)), dtype=np.complex) * 2 / denom
+    Jtran = np.array(((K+S, -B-D),(-N-P, A+C)), dtype=np.complex_) * 2 / denom
 
     # Reflected Jones matrix.
     Jref = np.array(( ((C-A)*(K+S)-(D-B)*(N+P), 2*(A*D - C*B)),\
                       (2*(N*S - P*K), (A+C)*(K-S) - (D+B)*(N-P))),\
-                    dtype=np.complex) / denom
+                    dtype=np.complex_) / denom
 
     return Jtran, Jref
 
@@ -452,10 +452,10 @@ def JonesToMueller(jones):
     # Stokes parameters. Note that to match up with Polarized Light by Goldstein,
     # I had to multiply the last Pauli matrix by -1, a change from the Jones et al paper.
     Sigma = []
-    Sigma.append( np.array(( (1,0),(0,1)), dtype=np.complex)) # identity matrix
-    Sigma.append( np.array(( (1,0),(0,-1)), dtype=np.complex))
-    Sigma.append( np.array(( (0,1),(1,0)), dtype=np.complex))
-    Sigma.append( np.array(( (0,-1j),(1j,0)), dtype=np.complex)) # Need to multiply by -1 to change back to normal.
+    Sigma.append( np.array(( (1,0),(0,1)), dtype=np.complex_)) # identity matrix
+    Sigma.append( np.array(( (1,0),(0,-1)), dtype=np.complex_))
+    Sigma.append( np.array(( (0,1),(1,0)), dtype=np.complex_))
+    Sigma.append( np.array(( (0,-1j),(1j,0)), dtype=np.complex_)) # Need to multiply by -1 to change back to normal.
 
     # Now the Mueller matrix elements are given by Mij = 1/2 * Tr(sigma[i]*J*sigma[j]*J^dagger)
     m = np.zeros((4,4), dtype=float)
@@ -698,7 +698,7 @@ def BandAveragedMueller( stack, spectrumFile, minFreq, maxFreq, reflected=False,
 
 def JonesRotation(jones, theta):
 
-    rot = np.array(((cos(theta*deg),-sin(theta*deg)),(sin(theta*deg),cos(theta*deg))),dtype=np.complex)
+    rot = np.array(((cos(theta*deg),-sin(theta*deg)),(sin(theta*deg),cos(theta*deg))),dtype=np.complex_)
 
     return np.dot(rot, np.dot( jones, inv(rot)))
 
