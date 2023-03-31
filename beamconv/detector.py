@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pickle
 import healpy as hp
 from beamconv import tools
 from . import transfer_matrix as tm
@@ -323,7 +324,7 @@ class Beam(object):
                 ext = '.npy'
             blm = np.load(os.path.join(pname+ext), allow_pickle=True)
 
-        except IOError:
+        except (IOError, pickle.UnpicklingError):
             if not ext:
                 # Assume .fits file instead
                 ext = '.fits'
