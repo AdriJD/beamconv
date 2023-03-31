@@ -197,7 +197,7 @@ class transferMatrix(object):
         self.nsin           = nsin
         self.rotation       = rotation
 
-        self.optic_axis     = np.array((cos(rotation),sin(rotation),0),dtype=np.float)
+        self.optic_axis     = np.array((cos(rotation),sin(rotation),0),dtype=float)
 
         # Pull quantities that will show up in equations below.
         chi     = rotation
@@ -458,7 +458,7 @@ def JonesToMueller(jones):
     Sigma.append( np.array(( (0,-1j),(1j,0)), dtype=np.complex)) # Need to multiply by -1 to change back to normal.
 
     # Now the Mueller matrix elements are given by Mij = 1/2 * Tr(sigma[i]*J*sigma[j]*J^dagger)
-    m = np.zeros((4,4), dtype=np.float)
+    m = np.zeros((4,4), dtype=float)
 
     for i in range(4):
         for j in range(4):
@@ -556,25 +556,25 @@ def BandAveragedMueller( stack, spectrumFile, minFreq, maxFreq, reflected=False,
     against the detector passband and the spectrum of the source being observed.
     """
 
-    frequencies = minFreq + np.arange(numFreqs, dtype=np.float) * (maxFreq - minFreq)/numFreqs
+    frequencies = minFreq + np.arange(numFreqs, dtype=float) * (maxFreq - minFreq)/numFreqs
 
     # Create arrays to hold the Mueller-matrix elements at each frequency.
-    MuellerII = np.zeros(numFreqs, dtype=np.float)
-    MuellerIU = np.zeros(numFreqs, dtype=np.float)
-    MuellerIQ = np.zeros(numFreqs, dtype=np.float)
-    MuellerIV = np.zeros(numFreqs, dtype=np.float)
-    MuellerQI = np.zeros(numFreqs, dtype=np.float)
-    MuellerQU = np.zeros(numFreqs, dtype=np.float)
-    MuellerQQ = np.zeros(numFreqs, dtype=np.float)
-    MuellerQV = np.zeros(numFreqs, dtype=np.float)
-    MuellerUI = np.zeros(numFreqs, dtype=np.float)
-    MuellerUU = np.zeros(numFreqs, dtype=np.float)
-    MuellerUQ = np.zeros(numFreqs, dtype=np.float)
-    MuellerUV = np.zeros(numFreqs, dtype=np.float)
-    MuellerVI = np.zeros(numFreqs, dtype=np.float)
-    MuellerVQ = np.zeros(numFreqs, dtype=np.float)
-    MuellerVU = np.zeros(numFreqs, dtype=np.float)
-    MuellerVV = np.zeros(numFreqs, dtype=np.float)
+    MuellerII = np.zeros(numFreqs, dtype=float)
+    MuellerIU = np.zeros(numFreqs, dtype=float)
+    MuellerIQ = np.zeros(numFreqs, dtype=float)
+    MuellerIV = np.zeros(numFreqs, dtype=float)
+    MuellerQI = np.zeros(numFreqs, dtype=float)
+    MuellerQU = np.zeros(numFreqs, dtype=float)
+    MuellerQQ = np.zeros(numFreqs, dtype=float)
+    MuellerQV = np.zeros(numFreqs, dtype=float)
+    MuellerUI = np.zeros(numFreqs, dtype=float)
+    MuellerUU = np.zeros(numFreqs, dtype=float)
+    MuellerUQ = np.zeros(numFreqs, dtype=float)
+    MuellerUV = np.zeros(numFreqs, dtype=float)
+    MuellerVI = np.zeros(numFreqs, dtype=float)
+    MuellerVQ = np.zeros(numFreqs, dtype=float)
+    MuellerVU = np.zeros(numFreqs, dtype=float)
+    MuellerVV = np.zeros(numFreqs, dtype=float)
 
     
     # Calculate the Mueller matrix of the stack at each of the frequencies. 
@@ -608,7 +608,7 @@ def BandAveragedMueller( stack, spectrumFile, minFreq, maxFreq, reflected=False,
     # Now read in the spectrum from the file.
     specFile = open( spectrumFile, 'r')
     specText = specFile.readlines()
-    spectrumData = np.zeros((2,len(specText)-2), dtype=np.float)
+    spectrumData = np.zeros((2,len(specText)-2), dtype=float)
 
 
     # Clip the first two lines of the spectrum. These are descriptive text.
@@ -628,7 +628,7 @@ def BandAveragedMueller( stack, spectrumFile, minFreq, maxFreq, reflected=False,
     # need to interpolate the data to the frequencies chosen above.
 
     if passBandFile==False:
-        passBand = np.zeros(numFreqs, dtype=np.float)
+        passBand = np.zeros(numFreqs, dtype=float)
         
         for i in range(numFreqs):
             passBand[i] = 1.0
@@ -636,7 +636,7 @@ def BandAveragedMueller( stack, spectrumFile, minFreq, maxFreq, reflected=False,
     else:
         bandFile = open( passBandFile, 'r')
         bandText = bandFile.readlines()
-        passBandData = np.zeros( (2,len(bandText)-2), dtype=np.float)
+        passBandData = np.zeros( (2,len(bandText)-2), dtype=float)
 
         for j in range(2, len(bandText)):
             freq, band = bandText[j].split()
@@ -691,7 +691,7 @@ def BandAveragedMueller( stack, spectrumFile, minFreq, maxFreq, reflected=False,
          (IntegratedMuellerQI,IntegratedMuellerQQ,IntegratedMuellerQU,IntegratedMuellerQV),\
          (IntegratedMuellerUI,IntegratedMuellerUQ,IntegratedMuellerUU,IntegratedMuellerUV),\
          (IntegratedMuellerVI,IntegratedMuellerVQ,IntegratedMuellerVU,IntegratedMuellerVV)),\
-        dtype=np.float)
+        dtype=float)
 
     return IntegratedMueller
     
