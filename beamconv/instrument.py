@@ -4145,14 +4145,16 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif mode == 's0a2':
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)            
-            blmm2 *= hwp_spin[0,2] * np.sqrt(2)
+            blmm2 *= hwp_spin[1,0] * np.sqrt(2)
             blmp2 *= hwp_spin[2,0] * np.sqrt(2)
+            blmm2, blmp2 = blmp2, blmm2
             return blmm2, blmp2
 
         elif mode == 's0a2_v':
             blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
-            blmm2_v *= hwp_spin[3,2] * np.sqrt(2)
+            blmm2_v *= hwp_spin[1,3] * np.sqrt(2)
             blmp2_v *= hwp_spin[2,3] * np.sqrt(2)
+            blmm2_v, blmp2_v = blmp2_v, blmm2_v
             return blmm2_v, blmp2_v
 
         elif mode == 's2a2':
@@ -4235,7 +4237,7 @@ class ScanStrategy(Instrument, qp.QMap):
             if s == 0: # Scalar transform.
 
                 flms = hp.almxfl(alm, bell, inplace=False)
-                func[sidx,:] = hp.alm2map(flms, nside, verbose=False)
+                func[sidx,:] = hp.alm2map(flms, nside)
 
             else: # Spin transforms.
 
@@ -4318,8 +4320,8 @@ class ScanStrategy(Instrument, qp.QMap):
 
             if s == 0:
                 # The (-1) factor for spin 0 is explained in HEALPix doc.
-                spinmaps = [hp.alm2map(-ps_flm_p, nside, verbose=False),
-                            hp.alm2map(ms_flm_m, nside, verbose=False)]
+                spinmaps = [hp.alm2map(-ps_flm_p, nside),
+                            hp.alm2map(ms_flm_m, nside)]
                 func_c[sidx,:] = spinmaps[0] + 1j * spinmaps[1]
 
             if s > 0:
