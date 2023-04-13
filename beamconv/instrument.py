@@ -4037,14 +4037,14 @@ class ScanStrategy(Instrument, qp.QMap):
             # s0a2.
             spinmap_dict['s0a2'] = {}
             blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
-            blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            blmE, blmB = tools.spin2eb(blmm2, blmp2)
             # Minus sign is because eb2spin applied to alm_I results in (-1) alm_I.
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
                 -alm[0], alm[0] * 0, blmE, blmB, spin_values_s0a2, nside)
 
             if input_v:
                 blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
-                blmE, blmB = tools.spin2eb(blmp2, blmm2)
+                blmE, blmB = tools.spin2eb(blmm2, blmp2)
                 spinmap_dict['s0a2']['maps'] += ScanStrategy._spinmaps_complex(
                     -alm[3], alm[3] * 0, blmE, blmB, spin_values_s0a2, nside)
             spinmap_dict['s0a2']['s_vals'] = spin_values_s0a2
@@ -4147,14 +4147,12 @@ class ScanStrategy(Instrument, qp.QMap):
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)            
             blmm2 *= hwp_spin[1,0] * np.sqrt(2)
             blmp2 *= hwp_spin[2,0] * np.sqrt(2)
-            blmm2, blmp2 = blmp2, blmm2
             return blmm2, blmp2
 
         elif mode == 's0a2_v':
             blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
             blmm2_v *= hwp_spin[1,3] * np.sqrt(2)
             blmp2_v *= hwp_spin[2,3] * np.sqrt(2)
-            blmm2_v, blmp2_v = blmp2_v, blmm2_v
             return blmm2_v, blmp2_v
 
         elif mode == 's2a2':
