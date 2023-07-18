@@ -1811,11 +1811,13 @@ class ScanStrategy(Instrument, qp.QMap):
         # nside_spin from init_spinmaps kwargs (if not None).
         max_spin = kwargs.pop('max_spin', None)
         nside_spin = kwargs.pop('nside_spin', None)
+        mu_con = kwargs.pop('mu_con', True)
         spinmaps_opts = {}
         if max_spin:
             spinmaps_opts.update({'max_spin' : max_spin})
         if nside_spin:
             spinmaps_opts.update({'nside_spin' : nside_spin})
+        spinmaps_opts.update({'mu_con' : mu_con})
 
         if verbose and self.mpi_rank == 0:
             print('Scanning with {:d} detectors'.format(
@@ -3799,7 +3801,7 @@ class ScanStrategy(Instrument, qp.QMap):
 
 
     def init_spinmaps(self, alm, beam, ground_alm=None, max_spin=5, nside_spin=256,
-                      symmetric=False, input_v=False, beam_v=False):
+                      symmetric=False, input_v=False, beam_v=False, mu_con=True):
         '''
         Compute appropriate spinmaps for beam and
         all its ghosts.
@@ -3827,6 +3829,9 @@ class ScanStrategy(Instrument, qp.QMap):
             include the 4th alm component
         beam_v : bool
             include the 4th blm component
+        mu_con : bool
+            Switch between the Mueller convolver matching 
+            spin-operations and the old (pre-July 2023) behavior
 
 
         Notes
@@ -3852,7 +3857,7 @@ class ScanStrategy(Instrument, qp.QMap):
         spinmap_dict = self._init_spinmaps(alm,
                     blm, max_s, nside_spin, symmetric=beam.symmetric,
                     hwp_mueller=beam.hwp_mueller, input_v=input_v,
-                    beam_v=beam_v)
+                    beam_v=beam_v, mu_con=mu_con)
 
         # Names: s0a0, s0a2, s2a0, s2a2, s2a4.
         # s refers to spin value under psi, a to spin value under HWP rot.
@@ -3886,20 +3891,20 @@ class ScanStrategy(Instrument, qp.QMap):
                 spinmap_dict = self._init_spinmaps(alm,
                             blm, max_s, nside_spin, symmetric=ghost.symmetric,
                             hwp_mueller=ghost.hwp_mueller,
-                            input_v=input_v, beam_v=beam_v)
+                            input_v=input_v, beam_v=beam_v, mu_con=mu_con)
                 self.spinmaps['ghosts'][u] = spinmap_dict
 
         if ground_alm is not None:
             self.spinmaps['ground'] = self._init_spinmaps(ground_alm,
                                     blm, max_s, nside_spin, symmetric=beam.symmetric,
                                     hwp_mueller=beam.hwp_mueller, input_v=input_v,
-                                    beam_v=beam_v)
+                                    beam_v=beam_v, mu_con=mu_con)
 
 
     @staticmethod
     def _init_spinmaps(alm, blm, max_spin, nside,
                        symmetric=False, hwp_mueller=None,
-                       input_v=False, beam_v=False):
+                       input_v=False, beam_v=False, mu_con=True):
         '''
         Compute convolution of map with different spin modes
         of the beam.
@@ -3928,6 +3933,10 @@ class ScanStrategy(Instrument, qp.QMap):
         beam_v : bool
             include the 4th blm component if
             it exists
+        mu_con : bool
+            Switch between the Mueller convolver matching 
+            spin-operations and the old (pre-July 2023) behavior
+
 
         returns
         -------
@@ -4036,15 +4045,21 @@ class ScanStrategy(Instrument, qp.QMap):
 
             # s0a2.
             spinmap_dict['s0a2'] = {}
-            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2')
-            blmE, blmB = tools.spin2eb(blmm2, blmp2)
+            blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2', mu_con=mu_con)
+            if mu_con==False:
+                blmE, blmB = tools.spin2eb(blmp2, blmm2)
+            else:
+                blmE, blmB = tools.spin2eb(blmm2, blmp2)
             # Minus sign is because eb2spin applied to alm_I results in (-1) alm_I.
             spinmap_dict['s0a2']['maps'] = ScanStrategy._spinmaps_complex(
                 -alm[0], alm[0] * 0, blmE, blmB, spin_values_s0a2, nside)
 
             if input_v:
-                blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v')
-                blmE, blmB = tools.spin2eb(blmm2, blmp2)
+                blmm2, blmp2 = ScanStrategy.blmxhwp(blm, hwp_spin, 's0a2_v', mu_con=mu_con)
+                if mu_con==False:
+                    blmE, blmB = tools.spin2eb(blmp2, blmm2)
+                else:
+                    blmE, blmB = tools.spin2eb(blmm2, blmp2)
                 spinmap_dict['s0a2']['maps'] += ScanStrategy._spinmaps_complex(
                     -alm[3], alm[3] * 0, blmE, blmB, spin_values_s0a2, nside)
             spinmap_dict['s0a2']['s_vals'] = spin_values_s0a2
@@ -4090,7 +4105,7 @@ class ScanStrategy(Instrument, qp.QMap):
         return spinmap_dict
 
     @staticmethod
-    def blmxhwp(blm, hwp_spin, mode, beam_v=False):
+    def blmxhwp(blm, hwp_spin, mode, beam_v=False, mu_con=True):
         '''
         Arguments
         ---------
@@ -4103,6 +4118,9 @@ class ScanStrategy(Instrument, qp.QMap):
             Pick between 's0a0', 's0a0_v', s2a4', 's0a2', 's0a2_v', 's2a2' or 's2a0'.
         beam_v : bool
             include the 4th blm component when constructing the spinmaps
+        mu_con : bool
+            Switch between the Mueller convolver matching 
+            spin-operations and the old (pre-July 2023) behavior
 
         Returns
         -------
@@ -4145,13 +4163,19 @@ class ScanStrategy(Instrument, qp.QMap):
 
         elif mode == 's0a2':
             blmm2, blmp2 = tools.shift_blm(blm[1], blm[2], 2, eb=False)            
-            blmm2 *= hwp_spin[1,0] * np.sqrt(2)
+            if mu_con == False:
+                blmm2 *= hwp_spin[0,2] * np.sqrt(2)
+            else:
+                blmm2 *= hwp_spin[1,0] * np.sqrt(2)
             blmp2 *= hwp_spin[2,0] * np.sqrt(2)
             return blmm2, blmp2
 
         elif mode == 's0a2_v':
             blmm2_v, blmp2_v = tools.shift_blm(blm[1], blm[2], 2, eb=False)
-            blmm2_v *= hwp_spin[1,3] * np.sqrt(2)
+            if mu_con == False:
+                blmm2_v *= hwp_spin[3,2] * np.sqrt(2)
+            else:
+                blmm2_v *= hwp_spin[1,3] * np.sqrt(2)
             blmp2_v *= hwp_spin[2,3] * np.sqrt(2)
             return blmm2_v, blmp2_v
 
