@@ -21,6 +21,53 @@ def make_full_random_alm(lmax, mmax, rng):
         ofs += lmax+1-s
     return res
 
+def get_gauss_beam_from_beamconv(fwhm, lmax):
+    import beamconv
+    blmT, blmm2 = beamconv.tools.gauss_blm(fwhm*180*60/np.pi, lmax, pol=True)
+    res = np.zeros((4,blmT.shape[0]), dtype=np.complex128)
+    blmE, blmB = beamconv.tools.spin2eb(blmm2, blmm2*0, spin=2)
+    res[0] = blmT
+    res[1] = blmE
+    res[2] = blmB
+    res[3] = blmT  # correct?
+    return res
+
+def blm_gauss_new(fwhm, lmax, pol=False):
+    fwhm = float(fwhm)
+    lmax = int(lmax)
+    pol = bool(pol)
+    mmax = 2 if pol else 0
+    ncomp = 3 if pol else 1
+    nval = hp.Alm.getsize(lmax, mmax)
+
+    if mmax > lmax:
+        raise ValueError("lmax value too small")
+
+    blm = np.zeros((ncomp, nval), dtype=np.complex128)
+    sigmasq = fwhm * fwhm / (8 * np.log(2.0))
+
+    for l in range(lmax+1):
+        blm[0, hp.Alm.getidx(lmax, l, 0)] = np.exp(-0.5*sigmasq*l*(l+1))
+
+    if pol:
+        for l in range(2, lmax+1):
+            blm[1, hp.Alm.getidx(lmax, l, 2)] = np.exp(-0.5 * sigmasq * (l*(l+1)-4))
+        blm[2] = 1j * blm[1]
+
+    return blm
+
+# blm_gauss_new times sqrt((2*l+1)/(4pi))
+def Blm_gauss_new(fwhm, lmax, pol=False):
+    blm = blm_gauss_new(fwhm, lmax, pol)
+    for l in range(lmax+1):
+        blm[0, hp.Alm.getidx(lmax, l, 0)] *= np.sqrt((2*l+1) / (4*np.pi))
+
+    if pol:
+        for l in range(2, lmax+1):
+            blm[1:3, hp.Alm.getidx(lmax, l, 2)] *= np.sqrt((2*l+1) / (4*np.pi))
+
+    return blm
+
 # code by Marta to get beamconv results for user-specified angles
 def get_beamconv_values(lmax, kmax, slm, blm, ptg, hwp_angles, mueller):
     import beamconv
@@ -65,7 +112,7 @@ def get_beamconv_values(lmax, kmax, slm, blm, ptg, hwp_angles, mueller):
         nside_spin *= 2
 
     S.scan_instrument_mpi(slm.copy(), save_tod=True, ctime_func=ctime_test, q_bore_func=q_bore_test,
-                      ctime_kwargs={'useless':0}, q_bore_kwargs={'useless':0},nside_spin=nside_spin, interp=True, input_v=True, beam_v=True, max_spin=kmax+4, binning=False, verbose=0)
+                      ctime_kwargs={'useless':0}, q_bore_kwargs={'useless':0},nside_spin=nside_spin, interp=True, input_v=True, beam_v=True, max_spin=kmax+4, binning=False, verbose=0, mu_con_hwp=True, mu_con_spin=True)
 
     return S.data(S.chunks[0], beam=beam, data_type='tod').copy()
 
