@@ -69,7 +69,8 @@ def Blm_gauss_new(fwhm, lmax, pol=False):
     return blm
 
 # code by Marta to get beamconv results for user-specified angles
-def get_beamconv_values(lmax, kmax, slm, blm, ptg, hwp_angles, mueller):
+def get_beamconv_values(lmax, kmax, slm, blm, ptg, hwp_angles, mueller,
+                        mu_con_hwp, mu_con_spin):
     import beamconv
     import qpoint as qp
 
@@ -87,7 +88,7 @@ def get_beamconv_values(lmax, kmax, slm, blm, ptg, hwp_angles, mueller):
     nsamp = ptg.shape[0]
 
     # from (theta,phi) to (ra,dec) convention
-    # also, all angles are converted in degrees
+    # also, all angles are converted to degrees
     ra = np.degrees(ptg[:,1])
     dec = 90. - np.degrees(ptg[:,0])
     # Adjustment for difference in convention between qpoint and MuellerConvolver?
@@ -112,7 +113,7 @@ def get_beamconv_values(lmax, kmax, slm, blm, ptg, hwp_angles, mueller):
         nside_spin *= 2
 
     S.scan_instrument_mpi(slm.copy(), save_tod=True, ctime_func=ctime_test, q_bore_func=q_bore_test,
-                      ctime_kwargs={'useless':0}, q_bore_kwargs={'useless':0},nside_spin=nside_spin, interp=True, input_v=True, beam_v=True, max_spin=kmax+4, binning=False, verbose=0, mu_con_hwp=True, mu_con_spin=True)
+                      ctime_kwargs={'useless':0}, q_bore_kwargs={'useless':0},nside_spin=nside_spin, interp=True, input_v=True, beam_v=True, max_spin=kmax+4, binning=False, verbose=0, mu_con_hwp=mu_con_hwp, mu_con_spin=mu_con_spin)
 
     return S.data(S.chunks[0], beam=beam, data_type='tod').copy()
 
@@ -130,6 +131,7 @@ mueller = np.random.uniform(-1,1,size=(4,4))
 #mueller[1:3,0]=mueller[1:3,-1] = 0
 #mueller[0,2]=mueller[2,0] = 0
 
+
 # completely random beam
 blm = make_full_random_alm(lmax, kmax, rng)
 
@@ -142,7 +144,10 @@ ptg[:,2]=np.random.uniform(0,2*np.pi,size=(nptg,))  # psi
 hwp_angles = np.random.uniform(0,2*np.pi,size=(nptg,))  # alpha
 
 # get the signal from beamconv
-signal_beamconv = get_beamconv_values(lmax=lmax, kmax=kmax, slm=slm, blm=blm, ptg=ptg, hwp_angles=hwp_angles, mueller=mueller)
+signal_beamconv_FF = get_beamconv_values(lmax=lmax, kmax=kmax, slm=slm, blm=blm, ptg=ptg, hwp_angles=hwp_angles, mueller=mueller, mu_con_hwp=False, mu_con_spin=False)
+signal_beamconv_FT = get_beamconv_values(lmax=lmax, kmax=kmax, slm=slm, blm=blm, ptg=ptg, hwp_angles=hwp_angles, mueller=mueller, mu_con_hwp=False, mu_con_spin=True)
+signal_beamconv_TF = get_beamconv_values(lmax=lmax, kmax=kmax, slm=slm, blm=blm, ptg=ptg, hwp_angles=hwp_angles, mueller=mueller, mu_con_hwp=True, mu_con_spin=False)
+signal_beamconv_TT = get_beamconv_values(lmax=lmax, kmax=kmax, slm=slm, blm=blm, ptg=ptg, hwp_angles=hwp_angles, mueller=mueller, mu_con_hwp=True, mu_con_spin=True)
 
 # Now do the same thing with MuellerConvolver
 fullconv = mueller_convolver.MuellerConvolver(
@@ -158,7 +163,14 @@ fullconv = mueller_convolver.MuellerConvolver(
 signal_muellerconvolver = fullconv.signal(ptg=ptg, alpha=hwp_angles)
 
 # L2 error
-print("L2 error between results:", ducc0.misc.l2error(signal_beamconv, signal_muellerconvolver))
-plt.plot(signal_beamconv)
-plt.plot(signal_muellerconvolver)
+print("L2 error to original beamconv:", ducc0.misc.l2error(signal_beamconv_FF, signal_muellerconvolver))
+print("L2 error to beamconv + HWP:", ducc0.misc.l2error(signal_beamconv_TF, signal_muellerconvolver))
+print("L2 error to beamconv + spin:", ducc0.misc.l2error(signal_beamconv_FT, signal_muellerconvolver))
+print("L2 error to beamconv + HWP + spin:", ducc0.misc.l2error(signal_beamconv_TT, signal_muellerconvolver))
+plt.plot(signal_beamconv_FF, label="beamconv, original")
+plt.plot(signal_beamconv_TF, label="beamconv + HWP")
+plt.plot(signal_beamconv_FT, label="beamconv + spin")
+plt.plot(signal_beamconv_TT, label="beamconv + HWP + spin")
+plt.plot(signal_muellerconvolver, label="MuellerConvolver")
+plt.legend()
 plt.show()
