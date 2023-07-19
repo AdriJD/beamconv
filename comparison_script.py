@@ -134,6 +134,10 @@ mueller = np.random.uniform(-1,1,size=(4,4))
 
 # completely random beam
 blm = make_full_random_alm(lmax, kmax, rng)
+# ... or use a Gauss beam
+#blmtmp = blm_gauss_new(np.radians(10.), lmax, True)
+#blm *= 0
+#blm [0:3, 0:blmtmp.shape[1]] = blmtmp
 
 nptg=100
 # completely random pointings
