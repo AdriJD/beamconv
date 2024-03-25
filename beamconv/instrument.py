@@ -448,10 +448,10 @@ class Instrument(MPIBase):
         self.beams = new_beams
 
     def create_focal_plane(self, nrow=1, ncol=1, fov=10.,
-                           no_pairs=False, ab_diff=90., 
+                           no_pairs=False, ab_diff=90., qu_alternate = False,
                            combine=True, scatter=False, **kwargs):
         '''
-        Create Beam objects for orthogonally polarized
+        Create Beam objects for polarized
         detector pairs with pointing offsets lying on a
         rectangular az-el grid on the sky.
 
@@ -472,6 +472,9 @@ class Instrument(MPIBase):
             Difference between A and B detectors in degrees
             e.g. if detector B is -Q to A the difference is 
             90 degrees (default : 90.)
+        qu_alternate : bool, optional
+            Alternate the sensitivity of detector A between two detector pairs 
+            e.g. if the first one is +Q the second is +U. (default : False)
         combine : bool
             If some beams already exist, combine these new
             beams with them
@@ -482,7 +485,7 @@ class Instrument(MPIBase):
 
         Notes
         -----
-        "B"-detector's polarization angle is A's angle + 90.
+        "B"-detector's polarization angle is A's angle + ab_diff.
 
         If a `beams` attribute already exists, this method
         will append the beams to that list.
@@ -491,7 +494,7 @@ class Instrument(MPIBase):
         assumed to hold for all beams created, with the
         exception of (`az`, `el`, `pol`, `name`, `ghost`),
         which are ignored. `polang` is used for A-detectors,
-        B-detectors get polang + 90.
+        B-detectors get polang + ab_diff.
         '''
 
         # Ignore these kwargs and warn user.
@@ -526,14 +529,15 @@ class Instrument(MPIBase):
             for el_idx in range(els.size):
 
                 det_str = 'r{:03d}c{:03d}'.format(el_idx, az_idx)
+                polang_a = polang+45*0.5*(idx%4) if qu_alternate else polang 
 
                 beam_a = Beam(az=azs[az_idx], el=els[el_idx],
-                              name=det_str+'A', polang=polang,
+                              name=det_str+'A', polang=polang_a,
                               dead=dead, pol='A', idx=idx,
                               **kwargs)
 
                 beam_b = Beam(az=azs[az_idx], el=els[el_idx],
-                              name=det_str+'B', polang=polang+ab_diff,
+                              name=det_str+'B', polang=polang_a+ab_diff,
                               dead=dead or no_pairs, pol='B',
                               idx=idx+1, **kwargs)
 
