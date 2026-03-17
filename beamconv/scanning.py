@@ -59,7 +59,7 @@ def wraparound_2pi(x):
     '''
 
     if len(x)==1: n = int(x/(2.*pi))
-    if len(x)>1: n = int_(x/(2.*pi))
+    if len(x)>1: n = np.int_(x/(2.*pi))
     arr = x - n * 2.*pi
     return arr
 
@@ -84,7 +84,7 @@ def wraparound_npi(x, n_):
         n_wrap = int(x/(n_*pi))
         if x<0: n_wrap-=1
     if len(x)>1:
-        n_wrap = int(x/(n_*pi))
+        n_wrap = np.int_(x/(n_*pi))
         ind = np.where((x<0))
         if len(ind[0]) != 0: n_wrap[ind[0]]-=1
     return x-n_wrap*n_*pi
